@@ -40,3 +40,4 @@ __pycache__
 
 # Docker
 docker-compose.override.yml
+ignored
