@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  TEAM_OWNER
+}
+
+enum Plan {
+  FREE
+  PROFESSIONAL
+  TEAM
+  ENTERPRISE
+}
+
+enum SessionStatus {
+  PENDING
+  NEGOTIATING
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum InputType {
+  TEXT
+  IMAGE
+  VOICE
+  FORM
+  PASTE
+}
+
+enum ScriptStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum KnowledgeStatus {
+  ACTIVE
+  ARCHIVED
+  REVIEW
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(USER)
+  plan      Plan      @default(FREE)
+  industry  String[]
+  teamId    String?
+  team      Team?     @relation(fields: [teamId], references: [id])
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  sessions      Session[]
+  scripts       Script[]
+  knowledge     KnowledgeItem[]
+  practices     PracticeSession[]
+  reviews       ReviewReport[]
+
+  @@map("users")
+}
+
+model Team {
+  id          String    @id @default(uuid())
+  name        String
+  ownerId     String    @unique @map("owner_id")
+  plan        Plan      @default(TEAM)
+  memberCount Int       @default(1) @map("member_count")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  members User[]
+  tasks   TeamTask[]
+
+  @@map("teams")
+}
+
+model Session {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  teamId    String?       @map("team_id")
+  name      String
+  industry  String?
+  status    SessionStatus @default(PENDING)
+  tags      String[]
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  messages Message[]
+  scripts  Script[]
+
+  @@map("sessions")
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  sessionId String      @map("session_id")
+  session   Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String      @db.Text
+  inputType InputType   @default(TEXT) @map("input_type")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@map("messages")
+}
+
+model Script {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  sessionId String?      @map("session_id")
+  content   String       @db.Text
+  style     String
+  tags      String[]
+  industry  String?
+  status    ScriptStatus @default(DRAFT)
+  weight    Float        @default(1.0)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@map("scripts")
+}
+
+model KnowledgeItem {
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  teamId    String?         @map("team_id")
+  source    String
+  content   String          @db.Text
+  tags      String[]
+  industry  String?
+  weight    Float           @default(1.0)
+  status    KnowledgeStatus @default(ACTIVE)
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  @@map("knowledge_items")
+}
+
+model PracticeSession {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  scenario  String
+  industry  String?
+  rounds    Int
+  score     Float
+  feedback  Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("practice_sessions")
+}
+
+model ReviewReport {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  sessionId       String?  @map("session_id")
+  summary         String   @db.Text
+  strengths       String[]
+  improvements    String[]
+  recommendations String[]
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("review_reports")
+}
+
+model IndustryPlugin {
+  id               String   @id @default(uuid())
+  name             String
+  industry         String   @unique
+  version          String
+  scripts          Json
+  scenarios        Json
+  knowledge        Json
+  customerProfiles Json     @map("customer_profiles")
+  bestPractices    Json     @map("best_practices")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("industry_plugins")
+}
+
+model TeamTask {
+  id         String     @id @default(uuid())
+  teamId     String     @map("team_id")
+  team       Team       @relation(fields: [teamId], references: [id])
+  assigneeId String     @map("assignee_id")
+  type       String
+  scenario   String
+  deadline   DateTime
+  status     TaskStatus @default(PENDING)
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@map("team_tasks")
+}

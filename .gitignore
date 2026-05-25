@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build output
+dist
+.next
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Prisma
+packages/api/src/prisma/*.db
+packages/api/src/prisma/*.db-journal
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Docker
+docker-compose.override.yml
