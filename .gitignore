@@ -40,4 +40,6 @@ __pycache__
 
 # Docker
 docker-compose.override.yml
-ignored
+
+# Claude worktrees
+.claude/worktrees/
