@@ -59,4 +59,36 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Create a message in a session
+router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res, next) => {
+  try {
+    const session = await prisma.session.findFirst({
+      where: { id: req.params.id, userId: req.user!.id },
+    });
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+
+    const { role, content, inputType = 'TEXT' } = req.body;
+    if (!role || !content) {
+      return res.status(400).json({ success: false, error: 'role and content are required' });
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        sessionId: req.params.id,
+        role,
+        content,
+        inputType,
+      },
+    });
+
+    // Update session's updatedAt
+    await prisma.session.update({
+      where: { id: req.params.id },
+      data: { updatedAt: new Date() },
+    });
+
+    res.status(201).json({ success: true, data: message });
+  } catch (err) { next(err); }
+});
+
 export default router;

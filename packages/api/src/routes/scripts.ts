@@ -13,9 +13,10 @@ router.post('/generate', authMiddleware, aiLimiter, async (req: AuthRequest, res
       input, inputType, industry, context, userId: req.user!.id,
     });
 
-    // Save generated scripts
+    // Save generated scripts and collect IDs
+    const createdIds: string[] = [];
     for (const style of result.speech_styles) {
-      await prisma.script.create({
+      const created = await prisma.script.create({
         data: {
           userId: req.user!.id,
           sessionId: sessionId || null,
@@ -25,9 +26,10 @@ router.post('/generate', authMiddleware, aiLimiter, async (req: AuthRequest, res
           industry: industry || null,
         },
       });
+      createdIds.push(created.id);
     }
 
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: result, scriptIds: createdIds });
   } catch (err) { next(err); }
 });
 
@@ -45,13 +47,19 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
 
 router.post('/:id/feedback', authMiddleware, async (req: AuthRequest, res, next) => {
   try {
-    const { type } = req.body as { type: 'up' | 'down' };
+    const { type, reason } = req.body as { type: 'up' | 'down'; reason?: string };
     const weightDelta = type === 'up' ? 0.1 : -0.2;
     const script = await prisma.script.updateMany({
       where: { id: req.params.id, userId: req.user!.id },
       data: { weight: { increment: weightDelta } },
     });
     if (script.count === 0) return res.status(404).json({ success: false, error: 'Script not found' });
+
+    // Log feedback reason for analytics (in production, store in a feedback table)
+    if (reason && type === 'down') {
+      console.log(`[Feedback] Script ${req.params.id}: ${reason}`);
+    }
+
     res.json({ success: true });
   } catch (err) { next(err); }
 });
