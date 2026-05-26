@@ -1,17 +1,11 @@
 import { useState } from 'react';
-import { Upload, Save, Key, Shield, Database, Download } from 'lucide-react';
+import { Upload, Save, Key, Shield, Database, Download, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { useAdminStore, type SystemUser } from '@/stores/adminStore';
+import { useAdminStore } from '@/stores/adminStore';
 import { cn } from '@/utils/cn';
-
-const mockUsers: SystemUser[] = [
-  { id: 'u1', name: '张伟', email: 'zhangwei@example.com', role: 'admin', status: 'active', lastLogin: '2025-05-24', plan: '企业版' },
-  { id: 'u2', name: '李娜', email: 'lina@example.com', role: 'user', status: 'active', lastLogin: '2025-05-23', plan: '专业版' },
-  { id: 'u3', name: '王芳', email: 'wangfang@example.com', role: 'user', status: 'active', lastLogin: '2025-05-22', plan: '基础版' },
-  { id: 'u4', name: '测试用户', email: 'test@example.com', role: 'user', status: 'disabled', lastLogin: '2025-04-15', plan: '基础版' },
-];
 
 const statusLabels: Record<string, string> = {
   active: '正常',
@@ -24,25 +18,19 @@ const statusVariants: Record<string, 'success' | 'danger'> = {
 };
 
 export function SystemSettings() {
-  const { systemName, setSystemName, systemUsers, setSystemUsers, toggleUserStatus } = useAdminStore();
-
-  if (systemUsers.length === 0) {
-    setSystemUsers(mockUsers);
-  }
-
-  const displayUsers = systemUsers.length > 0 ? systemUsers : mockUsers;
+  const { systemName, setSystemName, systemUsers, toggleUserStatus } = useAdminStore();
 
   const [siteName, setSiteName] = useState(systemName);
   const [logoUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredUsers = searchQuery
-    ? displayUsers.filter(
+    ? systemUsers.filter(
         (u) =>
           u.name.includes(searchQuery) ||
           u.email.includes(searchQuery),
       )
-    : displayUsers;
+    : systemUsers;
 
   const handleSaveSite = () => {
     setSystemName(siteName);
@@ -115,7 +103,18 @@ export function SystemSettings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredUsers.map((user) => (
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8">
+                    <EmptyState
+                      icon={<Users className="h-6 w-6" />}
+                      title={searchQuery ? '未找到匹配用户' : '暂无用户'}
+                      description={searchQuery ? '尝试其他搜索关键词' : '用户注册后，此处将显示用户列表'}
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <div>
@@ -150,7 +149,8 @@ export function SystemSettings() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>

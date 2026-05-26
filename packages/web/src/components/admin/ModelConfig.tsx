@@ -1,33 +1,11 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Save, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Save, AlertTriangle, Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/utils/cn';
 import { useAdminStore, type ModelConfig } from '@/stores/adminStore';
-
-const mockModels: ModelConfig[] = [
-  {
-    id: 'm1', name: 'Qwen-Max', provider: '阿里云', status: 'active',
-    temperature: 0.7, maxTokens: 4096, repetitionPenalty: 1.1,
-    apiKey: 'sk-xxxxxxxxxxxxxxxxxxxx', usageQuota: 1000000, usageCurrent: 420000, alertThreshold: 80,
-  },
-  {
-    id: 'm2', name: 'GPT-4o', provider: 'OpenAI', status: 'active',
-    temperature: 0.8, maxTokens: 8192, repetitionPenalty: 1.05,
-    apiKey: 'sk-proj-xxxxxxxxxxxxxxxx', usageQuota: 500000, usageCurrent: 180000, alertThreshold: 85,
-  },
-  {
-    id: 'm3', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', status: 'active',
-    temperature: 0.7, maxTokens: 4096, repetitionPenalty: 1.1,
-    apiKey: 'sk-ant-xxxxxxxxxxxxxxxx', usageQuota: 500000, usageCurrent: 120000, alertThreshold: 80,
-  },
-  {
-    id: 'm4', name: 'Minimax', provider: 'MiniMax', status: 'inactive',
-    temperature: 0.6, maxTokens: 4096, repetitionPenalty: 1.2,
-    apiKey: 'xxxxxxxxxxxxxxxx', usageQuota: 200000, usageCurrent: 50000, alertThreshold: 75,
-  },
-];
 
 const statusLabels: Record<string, string> = {
   active: '正常',
@@ -42,19 +20,25 @@ const statusVariants: Record<string, 'success' | 'default' | 'danger'> = {
 };
 
 export function ModelConfig() {
-  const { models, setModels, updateModel } = useAdminStore();
+  const { models, updateModel } = useAdminStore();
 
   if (models.length === 0) {
-    setModels(mockModels);
+    return (
+      <EmptyState
+        icon={<Cpu className="h-6 w-6" />}
+        title="暂无模型配置"
+        description="管理员添加AI模型配置后，此处将展示模型参数和用量"
+        className="py-20"
+      />
+    );
   }
 
-  const displayModels = models.length > 0 ? models : mockModels;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 
   return (
     <div className="space-y-4">
-      {displayModels.map((model) => {
+      {models.map((model) => {
         const isExpanded = expandedId === model.id;
         const usagePercentage = Math.round((model.usageCurrent / model.usageQuota) * 100);
         const isNearQuota = usagePercentage >= model.alertThreshold;

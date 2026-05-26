@@ -2,21 +2,12 @@ import { useState } from 'react';
 import { FileText, Upload, Globe, Mic, FileSpreadsheet, Presentation, Edit3, Check, X, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
+import { EmptyState } from '@/components/ui/EmptyState';import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/Dialog';
 import { useAdminStore, type KnowledgeItem } from '@/stores/adminStore';
-
-const mockKnowledgeItems: KnowledgeItem[] = [
-  { id: 'k1', title: 'SaaS销售方法论V2.0', category: '销售技巧', source: 'Word', status: 'approved', createdAt: '2025-05-20' },
-  { id: 'k2', title: '2025行业竞争分析报告', category: '市场分析', source: 'PDF', status: 'approved', createdAt: '2025-05-18' },
-  { id: 'k3', title: '客户异议处理FAQ', category: '话术模板', source: 'Excel', status: 'pending', createdAt: '2025-05-23' },
-  { id: 'k4', title: '产品培训PPT', category: '产品知识', source: 'PPT', status: 'pending', createdAt: '2025-05-22' },
-  { id: 'k5', title: '竞品价格对比表', category: '市场分析', source: 'Web', status: 'pending', createdAt: '2025-05-24' },
-  { id: 'k6', title: '销售录音转写文本', category: '实战记录', source: 'Audio', status: 'rejected', createdAt: '2025-05-19' },
-];
 
 const sourceIcons: Record<string, React.ReactNode> = {
   Word: <FileText className="h-4 w-4 text-blue-500" />,
@@ -55,14 +46,9 @@ const importMethods: { key: ImportMethod; label: string; icon: React.ReactNode; 
 export function KnowledgeAdmin() {
   const { knowledgeItems, setKnowledgeItems, approveKnowledge, rejectKnowledge } = useAdminStore();
 
-  if (knowledgeItems.length === 0) {
-    setKnowledgeItems(mockKnowledgeItems);
-  }
-
-  const displayItems = knowledgeItems.length > 0 ? knowledgeItems : mockKnowledgeItems;
-  const pendingItems = displayItems.filter((item) => item.status === 'pending');
-  const approvedItems = displayItems.filter((item) => item.status === 'approved');
-  const rejectedItems = displayItems.filter((item) => item.status === 'rejected');
+  const pendingItems = knowledgeItems.filter((item) => item.status === 'pending');
+  const approvedItems = knowledgeItems.filter((item) => item.status === 'approved');
+  const rejectedItems = knowledgeItems.filter((item) => item.status === 'rejected');
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importMethod, setImportMethod] = useState<ImportMethod | null>(null);
@@ -85,7 +71,7 @@ export function KnowledgeAdmin() {
         createdAt: new Date().toISOString().split('T')[0],
         content: manualContent,
       };
-      setKnowledgeItems([...displayItems, newItem]);
+      setKnowledgeItems([...knowledgeItems, newItem]);
       setManualTitle('');
       setManualContent('');
       setManualCategory('');
@@ -178,21 +164,30 @@ export function KnowledgeAdmin() {
           已审核 {approvedItems.length} 条 · 待审 {pendingItems.length} 条 · 已拒绝 {rejectedItems.length} 条
         </p>
         <div className="mt-4 divide-y divide-gray-100">
-          {displayItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between py-3">
-              <div className="flex items-center gap-3">
-                {sourceIcons[item.source] ?? <FileText className="h-4 w-4" />}
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                  <p className="text-xs text-gray-500">{item.category} · {item.source}</p>
+          {knowledgeItems.length === 0 ? (
+            <EmptyState
+              icon={<FileText className="h-6 w-6" />}
+              title="暂无知识条目"
+              description="通过上方导入方式添加行业知识"
+              className="py-8"
+            />
+          ) : (
+            knowledgeItems.map((item) => (
+              <div key={item.id} className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  {sourceIcons[item.source] ?? <FileText className="h-4 w-4" />}
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                    <p className="text-xs text-gray-500">{item.category} · {item.source}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-400">{item.createdAt}</span>
+                  <Badge variant={statusVariants[item.status]}>{statusLabels[item.status]}</Badge>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400">{item.createdAt}</span>
-                <Badge variant={statusVariants[item.status]}>{statusLabels[item.status]}</Badge>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
 

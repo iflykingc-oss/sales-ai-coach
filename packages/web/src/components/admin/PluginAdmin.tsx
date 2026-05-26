@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Plus, Edit3, Trash2, RotateCcw, Download, Users, Star, GitBranch } from 'lucide-react';
+import { Plus, Edit3, Trash2, RotateCcw, Download, Users, Star, GitBranch, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import {
@@ -10,42 +11,33 @@ import {
 import { useAdminStore, type PluginAdmin } from '@/stores/adminStore';
 import { cn } from '@/utils/cn';
 
-const mockAdminPlugins: PluginAdmin[] = [
-  {
-    id: 'ap1', name: 'SaaS软件行业包', version: '2.1.0', installCount: 1280,
-    activeRate: 68, reviewCount: 86, lastUpdated: '2025-05-20',
-    versions: [
-      { version: '2.1.0', date: '2025-05-20', changelog: '新增竞品分析模块' },
-      { version: '2.0.0', date: '2025-04-15', changelog: '重构话术模板结构' },
-      { version: '1.9.0', date: '2025-03-01', changelog: '新增关单场景' },
-    ],
-  },
-  {
-    id: 'ap2', name: '医疗器械行业包', version: '1.8.0', installCount: 960,
-    activeRate: 45, reviewCount: 72, lastUpdated: '2025-05-18',
-    versions: [
-      { version: '1.8.0', date: '2025-05-18', changelog: '更新合规知识库' },
-      { version: '1.7.0', date: '2025-04-10', changelog: '新增耗材销售场景' },
-    ],
-  },
-  {
-    id: 'ap3', name: '金融行业包', version: '2.0.0', installCount: 1100,
-    activeRate: 55, reviewCount: 95, lastUpdated: '2025-05-22',
-    versions: [
-      { version: '2.0.0', date: '2025-05-22', changelog: '全面升级理财销售模块' },
-      { version: '1.5.0', date: '2025-02-20', changelog: '新增保险话术' },
-    ],
-  },
-];
-
 export function PluginAdmin() {
-  const { adminPlugins, setAdminPlugins, addAdminPlugin } = useAdminStore();
+  const { adminPlugins, addAdminPlugin } = useAdminStore();
 
   if (adminPlugins.length === 0) {
-    setAdminPlugins(mockAdminPlugins);
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">行业插件包管理</h3>
+            <p className="mt-1 text-sm text-gray-500">管理所有行业插件包的发布和版本</p>
+          </div>
+          <Button size="sm" disabled>
+            <Plus className="mr-1.5 h-4 w-4" />
+            创建插件包
+          </Button>
+        </div>
+        <EmptyState
+          icon={<Package className="h-6 w-6" />}
+          title="暂无插件包"
+          description="创建行业插件包后，此处将展示插件管理和版本控制"
+          className="py-20"
+        />
+      </div>
+    );
   }
 
-  const displayPlugins = adminPlugins.length > 0 ? adminPlugins : mockAdminPlugins;
+  const displayPlugins = adminPlugins;
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showVersionsDialog, setShowVersionsDialog] = useState<string | null>(null);
