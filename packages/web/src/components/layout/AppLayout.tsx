@@ -50,13 +50,19 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[100] focus:rounded-b-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+      >
+        跳转到主要内容
+      </a>
       <Sidebar
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onMenuToggle={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4" role="main">
+        <main id="main-content" className="flex-1 overflow-y-auto p-4" role="main" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

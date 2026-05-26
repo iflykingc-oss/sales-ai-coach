@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { TeamDashboard } from '@/components/team/TeamDashboard';
 import { MemberList } from '@/components/team/MemberList';
 import { TaskManager } from '@/components/team/TaskManager';
@@ -11,24 +12,12 @@ export default function TeamPage() {
   const user = useUserStore((s) => s.user);
 
   useEffect(() => {
-    // Simulate loading team data from API
     setLoading(true);
     const timer = setTimeout(() => {
       setLoading(false);
     }, 500);
     return () => clearTimeout(timer);
   }, [setLoading]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-          <p className="mt-4 text-sm text-gray-500">加载团队数据...</p>
-        </div>
-      </div>
-    );
-  }
 
   const isOwner = user?.role === 'owner' || user?.role === 'admin';
 
@@ -41,7 +30,62 @@ export default function TeamPage() {
         </p>
       </div>
 
-      {isOwner ? (
+      {loading ? (
+        <div className="space-y-6">
+          {/* Stats cards skeleton */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-200 bg-white p-4">
+                <Skeleton className="mb-2 h-4 w-20" />
+                <Skeleton className="h-7 w-12" />
+              </div>
+            ))}
+          </div>
+          {/* Charts skeleton */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-200 bg-white p-6">
+                <Skeleton className="mb-4 h-5 w-32" />
+                <div className="space-y-3">
+                  {Array.from({ length: 4 }).map((_, j) => (
+                    <div key={j} className="flex gap-2">
+                      <Skeleton className="h-3 flex-1" />
+                      <Skeleton className="h-3 w-10" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Member table skeleton */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <Skeleton className="mb-4 h-5 w-24" />
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 flex-1" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Tasks skeleton */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <Skeleton className="mb-4 h-5 w-24" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 flex-1" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : isOwner ? (
         <>
           <TeamDashboard />
           <MemberList />

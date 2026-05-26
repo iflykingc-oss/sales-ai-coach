@@ -1,4 +1,4 @@
-import { Menu } from 'lucide-react';
+import { Menu, User } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
 
 interface HeaderProps {
@@ -15,8 +15,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
           onClick={onMenuToggle}
           className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 md:hidden"
           aria-label="打开菜单"
+          aria-expanded="false"
+          aria-controls="sidebar-navigation"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
         <div className="text-sm text-gray-500">
           {user ? (
@@ -29,9 +31,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
       <div className="flex items-center gap-2">
         <div
           className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700"
+          role="img"
           aria-label={`用户: ${user?.name || '未登录'}`}
         >
-          {user?.name?.charAt(0) || 'U'}
+          <User className="h-4 w-4" aria-hidden="true" />
         </div>
       </div>
     </header>
