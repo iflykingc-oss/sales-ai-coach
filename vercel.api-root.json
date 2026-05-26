@@ -3,21 +3,21 @@
   "builds": [
     {
       "src": "packages/api/src/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 30,
-        "zeroConfig": true
-      }
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
+      "src": "/health",
+      "dest": "packages/api/src/index.ts"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "packages/api/src/index.ts"
+    },
+    {
       "src": "/(.*)",
       "dest": "packages/api/src/index.ts"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production",
-    "NODE_OPTIONS": "--no-warnings"
-  }
+  ]
 }
