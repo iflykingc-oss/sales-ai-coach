@@ -2,21 +2,7 @@ import { Star, Download, FileText, Target, BookOpen, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { usePluginStore, type Plugin } from '@/stores/pluginStore';
-
-const mockScripts = [
-  { id: '1', title: '首访开场白', content: '您好，我是XX公司的顾问，今天来帮您解决...', scenario: '初次拜访' },
-  { id: '2', title: '价格异议处理', content: '我理解您的顾虑，让我们来看看这个投资回报...', scenario: '价格谈判' },
-  { id: '3', title: '竞品对比回应', content: '您提到的竞品确实不错，不过我们的差异在于...', scenario: '竞品分析' },
-  { id: '4', title: '需求挖掘提问', content: '在使用现有方案时，您遇到过哪些痛点呢？', scenario: '需求挖掘' },
-  { id: '5', title: '关单促成话术', content: '如果今天的方案您觉得合适，我们可以先...', scenario: '关单' },
-];
-
-const mockScenarios = [
-  { id: 's1', name: '新客户首次拜访', difficulty: 'beginner' as const, description: '模拟与新客户的初次见面场景' },
-  { id: 's2', name: '价格谈判与折扣', difficulty: 'intermediate' as const, description: '处理客户对价格的异议和折扣要求' },
-  { id: 's3', name: '竞品对比分析', difficulty: 'intermediate' as const, description: '当客户提到竞品时如何应对' },
-  { id: 's4', name: '高压关单场景', difficulty: 'advanced' as const, description: '在客户犹豫不决时促成成交' },
-];
+import { getPluginScripts, getPluginScenarios } from '@/data/pluginContent';
 
 const difficultyLabels: Record<string, string> = {
   beginner: '入门',
@@ -30,6 +16,17 @@ const difficultyVariants: Record<string, 'success' | 'warning' | 'danger'> = {
   advanced: 'danger',
 };
 
+const pluginCategoryKnowledge: Record<string, string[]> = {
+  p1: ['企业级SaaS功能架构与权限设计', 'B端客户决策链分析与关键人策略', '免费试用→付费转化的最佳实践'],
+  p2: ['医疗器械法规与NMPA注册流程', '医院采购流程与招标政策解读', '临床学术推广与KOL关系建立'],
+  p3: ['教育行业政策与"双减"合规要求', 'K12学员心理与学习动机分析', '家校沟通策略与续费率提升'],
+  p4: ['房地产调控政策与限购限贷解读', '按揭贷款计算与税费知识', '客户带看技巧与房源匹配策略'],
+  p5: ['金融产品合规销售与适当性管理', '保险条款解读与理赔流程', '市场波动下的客户沟通策略'],
+  p6: ['Shopee/Amazon平台规则与优化', '供应链管理与海外仓选品', '东南亚消费者行为分析'],
+  p7: ['B2B SaaS metrics (MRR, ARR, NRR)', 'MEDDPIC sales qualification framework', 'Product-led growth (PLG) motion'],
+  p8: ['TikTok Shop直播带货运营指南', 'Shopee/Lazada大促活动策划', '东南亚多语言客服标准'],
+};
+
 interface PluginDetailProps {
   plugin: Plugin;
   onClose: () => void;
@@ -37,9 +34,12 @@ interface PluginDetailProps {
 
 export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
   const { installPlugin, setActivePlugin } = usePluginStore();
+  const scripts = getPluginScripts(plugin.id);
+  const scenarios = getPluginScenarios(plugin.id);
+  const knowledge = pluginCategoryKnowledge[plugin.id] || ['行业知识加载中...'];
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm animate-fade-in">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-4">
@@ -74,12 +74,12 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
         </div>
         <div className="rounded-lg bg-gray-50 p-3 text-center">
           <FileText className="mx-auto h-5 w-5 text-gray-400" />
-          <p className="mt-1 text-lg font-semibold text-gray-900">{plugin.scriptCount}</p>
+          <p className="mt-1 text-lg font-semibold text-gray-900">{scripts.length}</p>
           <p className="text-xs text-gray-500">话术数量</p>
         </div>
         <div className="rounded-lg bg-gray-50 p-3 text-center">
           <Target className="mx-auto h-5 w-5 text-gray-400" />
-          <p className="mt-1 text-lg font-semibold text-gray-900">{plugin.scenarioCount}</p>
+          <p className="mt-1 text-lg font-semibold text-gray-900">{scenarios.length}</p>
           <p className="text-xs text-gray-500">场景数量</p>
         </div>
         <div className="rounded-lg bg-gray-50 p-3 text-center">
@@ -96,7 +96,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
           行业话术预览
         </h4>
         <div className="space-y-2">
-          {mockScripts.map((script) => (
+          {scripts.map((script) => (
             <div key={script.id} className="rounded-lg border border-gray-100 p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-900">{script.title}</span>
@@ -115,7 +115,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
           陪练场景
         </h4>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {mockScenarios.map((scenario) => (
+          {scenarios.map((scenario) => (
             <div key={scenario.id} className="rounded-lg border border-gray-100 p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-900">{scenario.name}</span>
@@ -137,18 +137,12 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
         </h4>
         <div className="rounded-lg bg-primary-50 p-4">
           <ul className="space-y-2 text-sm text-gray-700">
-            <li className="flex items-start gap-2">
-              <span className="mt-1 text-primary-600">&#8226;</span>
-              {plugin.category === 'domestic' ? '国内行业政策法规与合规要求' : 'International regulations and compliance'}
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1 text-primary-600">&#8226;</span>
-              {plugin.category === 'domestic' ? '行业Top10企业销售方法论' : 'Top enterprise sales methodologies'}
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1 text-primary-600">&#8226;</span>
-              {plugin.category === 'domestic' ? '客户画像与消费行为分析' : 'Customer profiling and behavior analysis'}
-            </li>
+            {knowledge.map((item, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="mt-1 text-primary-600">&#8226;</span>
+                {item}
+              </li>
+            ))}
           </ul>
         </div>
       </div>
