@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware, optionalAuth } from '../middleware/auth.js';
+import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
@@ -7,7 +7,7 @@ import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
 const router = Router();
 
 // Harness-powered endpoints (direct proxy to AI service)
-router.post('/init', optionalAuth, async (req: Request, res, next) => {
+router.post('/init', authMiddleware, async (req: Request, res, next) => {
   try {
     const { scenario, industry, mode, maxRounds, sessionId } = req.body;
     const result = await callAiService({
@@ -18,7 +18,7 @@ router.post('/init', optionalAuth, async (req: Request, res, next) => {
         mode: mode || 'scenario',
         maxRounds: maxRounds || 10,
         sessionId: sessionId || '',
-        userId: req.user?.id || '',
+        userId: req.user!.id,
       },
     });
     res.status(201).json({ success: true, data: result });

@@ -35,6 +35,32 @@ router.post('/', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/import', authMiddleware, async (req: Request, res, next) => {
+  try {
+    const { industry, tags } = req.body;
+    const tagList = tags ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : ['导入'];
+
+    // Handle multipart file metadata — actual parsing requires multer middleware
+    const files = req.body.files ? (Array.isArray(req.body.files) ? req.body.files : [req.body.files]) : [];
+    const imported = await Promise.all(
+      files.map((fileName: string) =>
+        prisma.knowledgeItem.create({
+          data: {
+            userId: req.user!.id,
+            source: 'file',
+            content: `待解析: ${fileName}`,
+            tags: tagList,
+            industry: industry || null,
+            weight: 5,
+          },
+        }),
+      ),
+    );
+
+    res.status(201).json({ success: true, data: imported, count: imported.length });
+  } catch (err) { next(err); }
+});
+
 router.put('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const { content, tags, status, weight } = req.body;

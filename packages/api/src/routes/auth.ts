@@ -5,6 +5,14 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { registerSchema, loginSchema } from '@sales-ai-coach/shared/schemas';
 
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return secret || 'dev-secret-do-not-use-in-production';
+}
+
 const router = Router();
 
 router.post('/register', authLimiter, async (req: Request, res: Response, next: NextFunction) => {
@@ -27,7 +35,7 @@ router.post('/register', authLimiter, async (req: Request, res: Response, next: 
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'dev-secret-change-in-prod',
+      getJwtSecret(),
       { expiresIn: '7d' },
     );
 
@@ -53,7 +61,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response, next: Nex
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'dev-secret-change-in-prod',
+      getJwtSecret(),
       { expiresIn: '7d' },
     );
 
@@ -79,7 +87,7 @@ router.get('/me', async (req: Request, res: Response, next: NextFunction) => {
     const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ success: false, error: 'Not authenticated' });
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret-change-in-prod') as { id: string };
+    const decoded = jwt.verify(token, getJwtSecret()) as { id: string };
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       select: {
