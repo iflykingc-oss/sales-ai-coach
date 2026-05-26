@@ -8,6 +8,7 @@ import { PracticeChat } from '@/components/practice/PracticeChat';
 import { PracticeSummary } from '@/components/practice/PracticeSummary';
 import { usePracticeStore, type PracticeMode } from '@/stores/practiceStore';
 import { useActivityStore } from '@/stores/activityStore';
+import { toast } from '@/hooks/useToast';
 import { api } from '@/services/api';
 import { practiceScenarios } from '@/data/practiceScenarios';
 
@@ -105,6 +106,7 @@ export default function PracticePage() {
       });
     } catch (error) {
       console.error('Failed to initialize practice session:', error);
+      toast('AI服务连接失败', { description: '无法连接AI陪练服务，已启动本地模式', variant: 'warning' });
       // Fallback: create local session without API
       setSession({
         id: `session-${Date.now()}`,

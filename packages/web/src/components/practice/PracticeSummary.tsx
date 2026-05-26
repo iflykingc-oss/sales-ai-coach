@@ -226,63 +226,65 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
       )}
 
       {/* Strengths */}
-      <Card>
-        <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-700">
-          <CheckCircle className="h-4 w-4" />
-          亮点 (Strengths)
-        </h4>
-        <ul className="space-y-2">
-          {(summary?.strengths ?? [
-            '能够主动提问挖掘客户需求',
-            '善用共情回应化解客户抵触情绪',
-            '产品介绍逻辑清晰，重点突出',
-          ]).map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-              <span className="mt-0.5 text-green-500">&#10004;</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {summary && summary.strengths.length > 0 && (
+        <Card>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-700">
+            <CheckCircle className="h-4 w-4" />
+            亮点 (Strengths)
+          </h4>
+          <ul className="space-y-2">
+            {summary.strengths.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="mt-0.5 text-green-500">&#10004;</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Improvements */}
-      <Card>
-        <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-amber-700">
-          <Wrench className="h-4 w-4" />
-          改进建议 (Improvements)
-        </h4>
-        <ul className="space-y-2">
-          {(summary?.improvements ?? [
-            '促单时机把握不够准确，可以尝试更早地推动决策',
-            '面对价格异议时缺少具体数据支撑',
-            '可以更多使用客户案例增强说服力',
-          ]).map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-              <span className="mt-0.5 text-amber-500">&#128295;</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {summary && summary.improvements.length > 0 && (
+        <Card>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-amber-700">
+            <Wrench className="h-4 w-4" />
+            改进建议 (Improvements)
+          </h4>
+          <ul className="space-y-2">
+            {summary.improvements.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="mt-0.5 text-amber-500">&#128295;</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Recommendations */}
-      <Card>
-        <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-700">
-          <Lightbulb className="h-4 w-4" />
-          推荐训练
-        </h4>
-        <ul className="space-y-2">
-          {(summary?.recommendations ?? [
-            '建议针对"促单技巧"进行专项突破训练',
-            '复习知识库中"价格谈判"相关话术',
-          ]).map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-              <span className="text-blue-500">&#9679;</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {summary && summary.recommendations.length > 0 && (
+        <Card>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-700">
+            <Lightbulb className="h-4 w-4" />
+            推荐训练
+          </h4>
+          <ul className="space-y-2">
+            {summary.recommendations.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="text-blue-500">&#9679;</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* No data message */}
+      {summary && summary.strengths.length === 0 && summary.improvements.length === 0 && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center">
+          <p className="text-sm text-gray-500">本次陪练暂未生成详细反馈，请完成更多轮对话</p>
+        </div>
+      )}
 
       {/* Action */}
       <div className="flex justify-center">

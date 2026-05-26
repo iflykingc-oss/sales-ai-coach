@@ -53,6 +53,14 @@ router.get('/search', authMiddleware, async (req: Request, res: Response, next: 
       ];
     }
 
+    if (category === 'domestic' || category === 'overseas') {
+      where.category = category;
+    }
+
+    let orderBy: Record<string, 'asc' | 'desc'> = { createdAt: 'desc' };
+    if (sort === 'rating') orderBy = { rating: 'desc' };
+    else if (sort === 'installs') orderBy = { installCount: 'desc' };
+
     const plugins = await prisma.industryPlugin.findMany({ where, orderBy });
     res.json({ success: true, data: plugins });
   } catch (err) { next(err); }

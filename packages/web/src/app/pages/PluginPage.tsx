@@ -13,6 +13,7 @@ export default function PluginPage() {
   useEffect(() => {
     setLoading(true);
     const timer = setTimeout(() => setLoading(false), 500);
+    usePluginStore.getState().fetchPlugins();
     return () => clearTimeout(timer);
   }, [setLoading]);
 

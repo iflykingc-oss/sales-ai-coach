@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware, optionalAuth } from from '../middleware/auth.js';
+import { authMiddleware, optionalAuth } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { sendPracticeMessage, callAiService } from '../services/ai.service.js';

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware } from from '../middleware/auth.js';
+import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import type { CreateSessionInput, UpdateSessionInput } from '@sales-ai-coach/shared';
 
