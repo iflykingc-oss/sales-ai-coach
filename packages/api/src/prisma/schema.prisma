@@ -101,6 +101,7 @@ model Team {
 model Session {
   id        String        @id @default(uuid())
   userId    String        @map("user_id")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   teamId    String?       @map("team_id")
   name      String
   industry  String?
@@ -130,7 +131,9 @@ model Message {
 model Script {
   id        String       @id @default(uuid())
   userId    String       @map("user_id")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessionId String?      @map("session_id")
+  session   Session?     @relation(fields: [sessionId], references: [id])
   content   String       @db.Text
   style     String
   tags      String[]
@@ -145,6 +148,7 @@ model Script {
 model KnowledgeItem {
   id        String          @id @default(uuid())
   userId    String          @map("user_id")
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   teamId    String?         @map("team_id")
   source    String
   content   String          @db.Text
@@ -160,6 +164,7 @@ model KnowledgeItem {
 model PracticeSession {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scenario  String
   industry  String?
   rounds    Int
@@ -173,6 +178,7 @@ model PracticeSession {
 model ReviewReport {
   id              String   @id @default(uuid())
   userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessionId       String?  @map("session_id")
   summary         String   @db.Text
   strengths       String[]
