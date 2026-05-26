@@ -1,22 +1,45 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { z } from 'zod';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useUserStore } from '@/stores/userStore';
+import { useActivityStore } from '@/stores/activityStore';
 import { toast } from '@/hooks/useToast';
+import { useFormValidation } from '@/hooks/useFormValidation';
+
+const loginSchema = z.object({
+  email: z.string().email('请输入有效的邮箱地址'),
+  password: z.string().min(1, '请输入密码'),
+});
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { setUser } = useUserStore();
+  const { addActivity } = useActivityStore();
+
+  const { fields, setFieldValue, validateField, validateAll, getVariant, getErrorMessage } = useFormValidation(
+    loginSchema,
+    { email: '', password: '' },
+  );
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!validateAll()) {
+      toast.error('请检查表单', { description: '请修正错误后再提交' });
+      return;
+    }
+
+    const data = loginSchema.parse({
+      email: fields.email.value,
+      password: fields.password.value,
+    });
+
     setLoading(true);
 
     try {
@@ -24,7 +47,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(data),
       });
 
       const json = await res.json();
@@ -35,6 +58,7 @@ export default function LoginPage() {
       }
 
       setUser(json.data.user);
+      addActivity({ type: 'login', title: '用户登录', description: json.data.user.name });
       toast.success('登录成功', { description: `欢迎回来，${json.data.user.name}` });
       navigate('/');
     } catch {
@@ -57,18 +81,19 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4" noValidate>
           <div>
             <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-gray-700">邮箱</label>
             <Input
               id="login-email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={fields.email.value}
+              onChange={(e) => setFieldValue('email', e.target.value)}
+              onBlur={(e) => validateField('email', e.target.value)}
               placeholder="your@email.com"
-              required
               autoComplete="email"
-              variant={error ? 'error' : undefined}
+              variant={getVariant('email')}
+              errorMessage={getErrorMessage('email')}
             />
           </div>
           <div>
@@ -76,12 +101,13 @@ export default function LoginPage() {
             <Input
               id="login-password"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={fields.password.value}
+              onChange={(e) => setFieldValue('password', e.target.value)}
+              onBlur={(e) => validateField('password', e.target.value)}
               placeholder="输入密码"
-              required
               autoComplete="current-password"
-              variant={error ? 'error' : undefined}
+              variant={getVariant('password')}
+              errorMessage={getErrorMessage('password')}
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>

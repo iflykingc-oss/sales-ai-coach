@@ -8,10 +8,13 @@ import SessionTabBar from '@/components/session/SessionTabBar';
 import MessageList from '@/components/session/MessageList';
 import InputBar from '@/components/session/InputBar';
 import ScriptDisplay from '@/components/script/ScriptDisplay';
+import ActivityFeed from '@/components/dashboard/ActivityFeed';
+import { useActivityStore } from '@/stores/activityStore';
 
 export default function SessionPage() {
   const { setSessions, activeSessionId, setActiveSessionId } = useSessionStore();
   const { setCurrentScript, setGeneratedScriptIds, reset: resetScript } = useScriptStore();
+  const { addActivity } = useActivityStore();
 
   // Fetch sessions on mount
   const { data: sessionsData } = useQuery({
@@ -90,6 +93,11 @@ export default function SessionPage() {
           const data = json.data as GenerateScriptOutput;
           setCurrentScript(data);
           setGeneratedScriptIds(json.scriptIds || []);
+          addActivity({
+            type: 'script_generate',
+            title: '话术生成',
+            description: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
+          });
 
           // Add assistant message to chat
           const assistantMsg = {
@@ -130,6 +138,11 @@ export default function SessionPage() {
 
       {/* Input bar */}
       <InputBar onSend={handleSend} />
+
+      {/* Activity feed sidebar */}
+      <div className="border-t border-gray-200 bg-white p-3">
+        <ActivityFeed />
+      </div>
     </div>
   );
 }

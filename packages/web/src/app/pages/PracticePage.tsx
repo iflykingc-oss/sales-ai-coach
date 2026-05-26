@@ -6,6 +6,7 @@ import { PracticeModeSetup } from '@/components/practice/PracticeChat';
 import { PracticeChat } from '@/components/practice/PracticeChat';
 import { PracticeSummary } from '@/components/practice/PracticeSummary';
 import { usePracticeStore, type PracticeMode } from '@/stores/practiceStore';
+import { useActivityStore } from '@/stores/activityStore';
 import { api } from '@/services/api';
 
 type PracticeView = 'setup' | 'chat' | 'summary';
@@ -39,6 +40,7 @@ export default function PracticePage() {
   const [view, setView] = useState<PracticeView>('setup');
   const [isStarting, setIsStarting] = useState(false);
   const { resetPractice, setSession } = usePracticeStore();
+  const { addActivity } = useActivityStore();
 
   const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string }) => {
     setIsStarting(true);
@@ -104,6 +106,11 @@ export default function PracticePage() {
       }
 
       setView('chat');
+      addActivity({
+        type: 'practice_session',
+        title: '开始陪练',
+        description: scenario?.name || (mode === 'freeform' ? '自由对练' : '专项练习'),
+      });
     } catch (error) {
       console.error('Failed to initialize practice session:', error);
       // Fallback: create local session without API
@@ -122,6 +129,11 @@ export default function PracticePage() {
         startedAt: Date.now(),
       });
       setView('chat');
+      addActivity({
+        type: 'practice_session',
+        title: '开始陪练',
+        description: '自由对练',
+      });
     } finally {
       setIsStarting(false);
     }
