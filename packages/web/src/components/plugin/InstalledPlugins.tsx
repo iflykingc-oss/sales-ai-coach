@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Check, Power } from 'lucide-react';
+import { Check, Power, Puzzle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Select, SelectItem,
 } from '@/components/ui/Select';
@@ -50,12 +51,12 @@ export function InstalledPlugins() {
 
   if (installedPlugins.length === 0) {
     return (
-      <Card>
-        <div className="py-8 text-center">
-          <p className="text-sm text-gray-400">暂无已安装的插件</p>
-          <p className="mt-1 text-xs text-gray-400">前往插件市场安装行业插件包</p>
-        </div>
-      </Card>
+      <EmptyState
+        icon={<Puzzle className="h-6 w-6" />}
+        title="暂无已安装的插件"
+        description="前往插件市场安装行业插件包"
+        action={{ label: '浏览插件市场', onClick: () => window.location.hash = '#/plugins' }}
+      />
     );
   }
 

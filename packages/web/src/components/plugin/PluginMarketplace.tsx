@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Package } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { usePluginStore, type Plugin } from '@/stores/pluginStore';
 import { industryDefinitions } from '@/data/pluginContent';
 import { PluginCard } from './PluginCard';
@@ -81,10 +82,12 @@ export function PluginMarketplace() {
       </div>
 
       {filteredPlugins.length === 0 && (
-        <div className="py-16 text-center">
-          <Package className="mx-auto h-12 w-12 text-gray-300" />
-          <p className="mt-4 text-sm text-gray-400">该分类下暂无插件</p>
-        </div>
+        <EmptyState
+          icon={<Package className="h-6 w-6" />}
+          title="该分类下暂无插件"
+          description="切换其他分类查看行业插件包"
+          className="py-12"
+        />
       )}
     </div>
   );
