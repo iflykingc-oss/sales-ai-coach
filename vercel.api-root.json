@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "packages/api/src/index.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 30
+      }
     }
   ],
   "routes": [
@@ -13,6 +16,7 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "VERCEL_ANALYZE_BUILD_OUTPUT": "1"
   }
 }
