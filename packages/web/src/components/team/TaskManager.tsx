@@ -1,37 +1,15 @@
 import { useState } from 'react';
-import { Plus, Calendar, User } from 'lucide-react';
+import { Plus, Calendar, User, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectItem } from '@/components/ui/Select';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/Dialog';
 import { useTeamStore, type TeamTask } from '@/stores/teamStore';
 import { cn } from '@/utils/cn';
-
-const mockTasks: TeamTask[] = [
-  {
-    id: 't1', title: '竞品分析话术练习', type: 'practice', assigneeId: '3', assigneeName: '王芳',
-    deadline: '2025-06-01', status: 'in_progress', createdAt: '2025-05-20',
-    description: '完成3组竞品对比场景话术练习',
-  },
-  {
-    id: 't2', title: '价格异议场景模拟', type: 'scenario', assigneeId: '4', assigneeName: '刘洋',
-    deadline: '2025-05-28', status: 'pending', createdAt: '2025-05-22',
-    description: '模拟客户对价格敏感的场景',
-  },
-  {
-    id: 't3', title: '开场白技巧提升', type: 'practice', assigneeId: '5', assigneeName: '陈静',
-    deadline: '2025-05-15', status: 'expired', createdAt: '2025-05-10',
-    description: '练习5种不同行业的开场白',
-  },
-  {
-    id: 't4', title: '关单流程演练', type: 'scenario', assigneeId: '3', assigneeName: '王芳',
-    deadline: '2025-06-10', status: 'completed', createdAt: '2025-05-18',
-    description: '完整模拟从需求挖掘到关单的全流程',
-  },
-];
 
 const statusLabels: Record<TeamTask['status'], string> = {
   pending: '待处理',
@@ -55,21 +33,7 @@ const typeLabels: Record<TeamTask['type'], string> = {
 type TaskFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'expired';
 
 export function TaskManager() {
-  const { tasks, setTasks, addTask, updateTaskStatus, members, setMembers } = useTeamStore();
-
-  if (tasks.length === 0) {
-    setTasks(mockTasks);
-  }
-  if (members.length === 0) {
-    setMembers([
-      { id: '3', name: '王芳', email: 'wangfang@example.com', role: 'member', status: 'online', joinedAt: '2025-02-10', stats: { scriptsGenerated: 22, practiceScore: 75, sessionsCompleted: 18, growthTrend: [] } },
-      { id: '4', name: '刘洋', email: 'liuyang@example.com', role: 'member', status: 'online', joinedAt: '2025-03-01', stats: { scriptsGenerated: 15, practiceScore: 68, sessionsCompleted: 12, growthTrend: [] } },
-      { id: '5', name: '陈静', email: 'chenjing@example.com', role: 'member', status: 'offline', joinedAt: '2025-03-15', stats: { scriptsGenerated: 10, practiceScore: 82, sessionsCompleted: 8, growthTrend: [] } },
-    ]);
-  }
-
-  const displayTasks = tasks.length > 0 ? tasks : mockTasks;
-  const displayMembers = members.length > 0 ? members : [];
+  const { tasks, addTask, updateTaskStatus, members } = useTeamStore();
 
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [showDialog, setShowDialog] = useState(false);
@@ -77,13 +41,11 @@ export function TaskManager() {
     title: '', type: 'practice' as TeamTask['type'], assigneeId: '', deadline: '', description: '',
   });
 
-  const filteredTasks = filter === 'all'
-    ? displayTasks
-    : displayTasks.filter((t) => t.status === filter);
+  const filteredTasks = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter);
 
   const handleCreateTask = () => {
     if (!newTask.title || !newTask.assigneeId || !newTask.deadline) return;
-    const assignee = displayMembers.find((m) => m.id === newTask.assigneeId);
+    const assignee = members.find((m) => m.id === newTask.assigneeId);
     const task: TeamTask = {
       id: `t${Date.now()}`,
       title: newTask.title,
@@ -105,7 +67,7 @@ export function TaskManager() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-base font-semibold text-gray-900">任务分配</h3>
-          <p className="mt-1 text-sm text-gray-500">共 {displayTasks.length} 个任务</p>
+          <p className="mt-1 text-sm text-gray-500">共 {tasks.length} 个任务</p>
         </div>
         <Button onClick={() => setShowDialog(true)} size="sm">
           <Plus className="mr-1.5 h-4 w-4" />
@@ -171,7 +133,12 @@ export function TaskManager() {
           </div>
         ))}
         {filteredTasks.length === 0 && (
-          <p className="py-6 text-center text-sm text-gray-400">暂无任务</p>
+          <EmptyState
+            icon={<ClipboardList className="h-6 w-6" />}
+            title="暂无任务"
+            description="为团队成员分配陪练或场景模拟任务"
+            action={{ label: '分配任务', onClick: () => setShowDialog(true) }}
+          />
         )}
       </div>
 
@@ -218,7 +185,7 @@ export function TaskManager() {
                 onValueChange={(v) => setNewTask({ ...newTask, assigneeId: v })}
                 placeholder="选择成员"
               >
-                {displayMembers.map((m) => (
+                {members.map((m) => (
                   <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                 ))}
               </Select>

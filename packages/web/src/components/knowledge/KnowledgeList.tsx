@@ -3,6 +3,7 @@ import { Plus, Upload, Search, Filter, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { KnowledgeCard } from './KnowledgeCard';
 import { useKnowledgeStore, type KnowledgeItem } from '@/stores/knowledgeStore';
 import { api } from '@/services/api';
@@ -102,11 +103,13 @@ export function KnowledgeList() {
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <Card className="py-12 text-center">
-          <FileText className="mx-auto h-12 w-12 text-gray-300" />
-          <p className="mt-3 text-sm text-gray-500">暂无知识条目</p>
-          <p className="mt-1 text-xs text-gray-400">点击「新增」或「导入」添加知识</p>
-        </Card>
+        <EmptyState
+          icon={<FileText className="h-6 w-6" />}
+          title="暂无知识条目"
+          description="点击「新增」或「导入」添加行业知识"
+          action={{ label: '新增知识', onClick: () => { setEditingItem(null); setIsFormOpen(true); } }}
+          shortcut="N"
+        />
       ) : (
         <div className="space-y-3">
           {filteredItems.map((item: KnowledgeItem) => (

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Badge, Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useReviewStore } from '@/stores/reviewStore';
 import { api } from '@/services/api';
 import { cn } from '@/utils/cn';
@@ -65,10 +66,12 @@ export function ReviewHistory() {
       </div>
 
       {filteredHistory.length === 0 ? (
-        <Card className="py-8 text-center">
-          <Calendar className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-2 text-sm text-gray-500">暂无历史复盘记录</p>
-        </Card>
+        <EmptyState
+          icon={<Calendar className="h-6 w-6" />}
+          title="暂无历史复盘记录"
+          description="完成陪练对练后，系统会自动生成复盘报告"
+          action={{ label: '开始陪练', onClick: () => window.location.hash = '#/practice' }}
+        />
       ) : (
         <div className="space-y-3">
           {/* Timeline */}

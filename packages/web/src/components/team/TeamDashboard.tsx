@@ -1,23 +1,8 @@
 import { Users, Activity, FileText, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/MiniChart';
-import { useTeamStore, type TeamScenario } from '@/stores/teamStore';
-
-const mockTeamStats = {
-  totalMembers: 12,
-  activeToday: 8,
-  totalScriptsGenerated: 347,
-  avgPracticeScore: 82,
-};
-
-const mockWeakScenarios: TeamScenario[] = [
-  { name: '价格异议', weakness: 78 },
-  { name: '竞品对比', weakness: 65 },
-  { name: '需求挖掘', weakness: 52 },
-  { name: '异议处理', weakness: 45 },
-  { name: '关单技巧', weakness: 38 },
-  { name: '开场白', weakness: 25 },
-];
+import { useTeamStore } from '@/stores/teamStore';
 
 const colorMap: Record<number, string> = {
   0: '#ef4444',
@@ -29,19 +14,21 @@ const colorMap: Record<number, string> = {
 };
 
 export function TeamDashboard() {
-  const { teamStats, weakScenarios, setTeamStats, setWeakScenarios, members } = useTeamStore();
+  const { teamStats, weakScenarios, members } = useTeamStore();
 
-  // Use mock data if store is empty (simulating API response)
-  const stats = teamStats.totalMembers > 0 ? teamStats : mockTeamStats;
-  const scenarios = weakScenarios.length > 0 ? weakScenarios : mockWeakScenarios;
+  const hasData = teamStats.totalMembers > 0;
+  const maxWeakness = weakScenarios.length > 0 ? Math.max(...weakScenarios.map((s) => s.weakness)) : 100;
 
-  // Populate store if empty
-  if (teamStats.totalMembers === 0) {
-    setTeamStats(mockTeamStats);
-    setWeakScenarios(mockWeakScenarios);
+  if (!hasData) {
+    return (
+      <EmptyState
+        icon={<Users className="h-6 w-6" />}
+        title="暂无团队数据"
+        description="团队成员加入后，此处将展示团队统计数据"
+        className="py-20"
+      />
+    );
   }
-
-  const maxWeakness = Math.max(...scenarios.map((s) => s.weakness));
 
   return (
     <div className="space-y-6">
@@ -49,25 +36,25 @@ export function TeamDashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="团队成员"
-          value={stats.totalMembers}
+          value={teamStats.totalMembers}
           icon={<Users className="h-5 w-5" />}
           trend={{ value: 8, label: '较上月' }}
         />
         <StatCard
           title="今日活跃"
-          value={stats.activeToday}
+          value={teamStats.activeToday}
           icon={<Activity className="h-5 w-5" />}
           trend={{ value: 12, label: '较昨日' }}
         />
         <StatCard
           title="话术生成"
-          value={stats.totalScriptsGenerated}
+          value={teamStats.totalScriptsGenerated}
           icon={<FileText className="h-5 w-5" />}
           trend={{ value: 23, label: '较上周' }}
         />
         <StatCard
           title="平均陪练分数"
-          value={`${stats.avgPracticeScore}`}
+          value={`${teamStats.avgPracticeScore}`}
           icon={<TrendingUp className="h-5 w-5" />}
           trend={{ value: 5, label: '较上周' }}
         />
@@ -78,7 +65,7 @@ export function TeamDashboard() {
         <Card>
           <h3 className="mb-4 text-base font-semibold text-gray-900">团队薄弱场景</h3>
           <div className="space-y-3">
-            {scenarios.map((scenario, index) => (
+            {weakScenarios.map((scenario, index) => (
               <div key={scenario.name} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-700">{scenario.name}</span>
