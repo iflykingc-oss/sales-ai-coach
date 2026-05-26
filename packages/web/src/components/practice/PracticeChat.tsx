@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Send, Lightbulb, BookOpen, Brain, Loader2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
@@ -11,29 +11,7 @@ import {
 } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { api } from '@/services/api';
-
-const industryScenarios: Record<string, { id: string; name: string; industry: string }[]> = {
-  realEstate: [
-    { id: 're-1', name: '首次看房接待', industry: '房地产' },
-    { id: 're-2', name: '价格谈判', industry: '房地产' },
-    { id: 're-3', name: '处理客户犹豫', industry: '房地产' },
-  ],
-  auto: [
-    { id: 'au-1', name: '新车介绍', industry: '汽车' },
-    { id: 'au-2', name: '竞品对比', industry: '汽车' },
-    { id: 'au-3', name: '试驾后促单', industry: '汽车' },
-  ],
-  saas: [
-    { id: 'sa-1', name: '需求挖掘', industry: 'SaaS' },
-    { id: 'sa-2', name: '方案演示', industry: 'SaaS' },
-    { id: 'sa-3', name: '处理预算异议', industry: 'SaaS' },
-  ],
-  insurance: [
-    { id: 'in-1', name: '保险需求分析', industry: '保险' },
-    { id: 'in-2', name: '方案推荐', industry: '保险' },
-    { id: 'in-3', name: '处理理赔担忧', industry: '保险' },
-  ],
-};
+import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
 
 const skillFocusOptions = [
   { id: 'objection', name: '异议处理' },
@@ -51,19 +29,24 @@ interface PracticeModeSelectorProps {
 export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   const [selectedMode, setSelectedMode] = useState<PracticeMode | null>(null);
   const [selectedScenario, setSelectedScenario] = useState('');
-  const [selectedIndustry, setSelectedIndustry] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('');
+  const { recentScenarioIds } = usePracticeStore();
+
+  const recentScenarios = useMemo(() => {
+    return recentScenarioIds
+      .map((id) => practiceScenarios.find((s) => s.id === id))
+      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+  }, [recentScenarioIds]);
 
   const handleModeSelect = (mode: PracticeMode) => {
     setSelectedMode(mode);
     setSelectedScenario('');
-    setSelectedIndustry('');
     setSelectedSkill('');
   };
 
   const handleStart = () => {
     if (!selectedMode) return;
-    const scenario = industryScenarios[selectedIndustry]?.find((s) => s.id === selectedScenario);
+    const scenario = practiceScenarios.find((s) => s.id === selectedScenario);
     onStart(selectedMode, {
       scenarioId: selectedScenario || undefined,
       industry: scenario?.industry,
@@ -82,8 +65,8 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
         <h3 className="mb-3 text-lg font-semibold text-gray-900">选择陪练模式</h3>
         <div className="grid gap-3 sm:grid-cols-3">
           {[
-            { mode: 'scenario' as const, icon: '🎯', title: '场景模拟', desc: '行业场景模拟' },
-            { mode: 'freeform' as const, icon: '💬', title: '实战对练', desc: '自由对话对练' },
+            { mode: 'scenario' as const, icon: '\u{1F3AF}', title: '场景模拟', desc: '行业场景模拟' },
+            { mode: 'freeform' as const, icon: '\u{1F4AC}', title: '实战对练', desc: '自由对话对练' },
             { mode: 'special' as const, icon: '⚡', title: '专项突破', desc: '专项技能强化' },
           ].map((m) => (
             <button
@@ -105,33 +88,60 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
       </div>
 
       {selectedMode === 'scenario' && (
-        <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <h4 className="font-medium text-gray-900">选择行业场景</h4>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {Object.entries(industryScenarios).map(([key, scenarios]) => (
-              <div key={key} className="space-y-2">
-                <span className="text-sm font-medium text-gray-600">{scenarios[0]?.industry}</span>
-                <div className="space-y-1">
-                  {scenarios.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        setSelectedScenario(s.id);
-                        setSelectedIndustry(s.industry);
-                      }}
-                      className={cn(
-                        'block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                        selectedScenario === s.id
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300',
-                      )}
-                    >
-                      {s.name}
-                    </button>
-                  ))}
-                </div>
+        <div className="space-y-4">
+          {/* Recent scenarios */}
+          {recentScenarios.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <h4 className="mb-3 flex items-center gap-2 font-medium text-gray-900">
+                <Clock className="h-4 w-4 text-gray-400" />
+                最近使用
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {recentScenarios.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedScenario(s.id)}
+                    className={cn(
+                      'rounded-full border px-4 py-2 text-sm transition-colors',
+                      selectedScenario === s.id
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300',
+                    )}
+                  >
+                    {s.name}
+                    <span className="ml-1 text-xs text-gray-400">({s.industry})</span>
+                  </button>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* All scenarios by industry */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h4 className="mb-3 font-medium text-gray-900">全部场景</h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {industries.map((industry) => (
+                <div key={industry} className="space-y-2">
+                  <span className="text-sm font-medium text-gray-600">{industry}</span>
+                  <div className="space-y-1">
+                    {getScenariosByIndustry(industry).map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedScenario(s.id)}
+                        className={cn(
+                          'block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                          selectedScenario === s.id
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300',
+                        )}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

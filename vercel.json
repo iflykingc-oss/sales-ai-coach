@@ -1,7 +1,7 @@
 {
-  "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @sales-ai-coach/web... build",
+  "framework": "vite",
+  "buildCommand": "pnpm --filter @sales-ai-coach/web... build",
   "outputDirectory": "packages/web/dist",
-  "installCommand": "pnpm install",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

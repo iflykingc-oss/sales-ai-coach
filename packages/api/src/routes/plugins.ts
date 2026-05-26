@@ -40,4 +40,47 @@ router.post('/install', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/search', authMiddleware, async (req: AuthRequest, res, next) => {
+  try {
+    const { q, category, sort } = req.query;
+    const where: Record<string, any> = {};
+
+    if (q) {
+      const query = q as string;
+      where.OR = [
+        { name: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
+        { industry: { contains: query, mode: 'insensitive' } },
+      ];
+    }
+
+    if (category && category !== 'all') {
+      where.category = category;
+    }
+
+    const orderBy: Record<string, 'asc' | 'desc'> = {};
+    const sortStr = sort as string;
+    if (sortStr === 'rating') orderBy.rating = 'desc';
+    else if (sortStr === 'installs') orderBy.installCount = 'desc';
+    else orderBy.createdAt = 'desc';
+
+    const plugins = await prisma.industryPlugin.findMany({ where, orderBy });
+    res.json({ success: true, data: plugins });
+  } catch (err) { next(err); }
+});
+
+router.post('/:id/uninstall', authMiddleware, async (req: AuthRequest, res, next) => {
+  try {
+    const plugin = await prisma.industryPlugin.findUnique({ where: { id: req.params.id } });
+    if (!plugin) return res.status(404).json({ success: false, error: 'Plugin not found' });
+
+    await prisma.industryPlugin.update({
+      where: { id: req.params.id },
+      data: { installCount: { decrement: 1 } },
+    });
+
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
 export default router;

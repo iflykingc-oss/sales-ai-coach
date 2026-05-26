@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 
 export interface RadarDimension {
   label: string;
@@ -13,6 +13,8 @@ interface RadarChartProps {
   labelColor?: string;
   gridColor?: string;
   className?: string;
+  onClick?: (dimension: RadarDimension) => void;
+  highlightedDimension?: string;
 }
 
 export function RadarChart({
@@ -23,6 +25,8 @@ export function RadarChart({
   labelColor = '#374151',
   gridColor = '#e5e7eb',
   className,
+  onClick,
+  highlightedDimension,
 }: RadarChartProps) {
   const center = size / 2;
   const radius = size / 2 - 40;
@@ -32,10 +36,10 @@ export function RadarChart({
     const angleStep = (2 * Math.PI) / dimensions.length;
     return dimensions.map((dim, i) => {
       const angle = i * angleStep - Math.PI / 2;
-      const r = (dim.score / 100) * radius;
+      const r = dim.score > 0 ? (dim.score / 100) * radius : 0;
       return {
-        x: center + r * Math.cos(angle),
-        y: center + r * Math.sin(angle),
+        x: dim.score > 0 ? center + r * Math.cos(angle) : center,
+        y: dim.score > 0 ? center + r * Math.sin(angle) : center,
         labelX: center + (radius + 20) * Math.cos(angle),
         labelY: center + (radius + 20) * Math.sin(angle),
         label: dim.label,
@@ -43,6 +47,18 @@ export function RadarChart({
       };
     });
   }, [dimensions, center, radius]);
+
+  const hasAnyScore = dimensions.some((d) => d.score > 0);
+  const effectiveFillColor = hasAnyScore ? fillColor : 'rgba(156, 163, 175, 0.1)';
+  const effectiveStrokeColor = hasAnyScore ? strokeColor : '#9ca3af';
+  const effectiveStrokeDash = hasAnyScore ? undefined : '4,4';
+
+  const handlePointClick = useCallback(
+    (dim: RadarDimension) => {
+      onClick?.(dim);
+    },
+    [onClick],
+  );
 
   const polygonPoints = points.map((p) => `${p.x},${p.y}`).join(' ');
 
@@ -99,17 +115,48 @@ export function RadarChart({
       {/* Data polygon */}
       <polygon
         points={polygonPoints}
-        fill={fillColor}
-        stroke={strokeColor}
+        fill={effectiveFillColor}
+        stroke={effectiveStrokeColor}
         strokeWidth={2}
+        strokeDasharray={effectiveStrokeDash}
       />
       {/* Data points */}
-      {points.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={4} fill={strokeColor} />
-      ))}
+      {points.map((p, i) => {
+        const isHighlighted = highlightedDimension === p.label;
+        return (
+          <g key={i}>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={isHighlighted ? 7 : p.score > 0 ? 4 : 4}
+              fill={isHighlighted ? '#f59e0b' : p.score > 0 ? strokeColor : '#9ca3af'}
+              stroke={isHighlighted ? '#d97706' : p.score > 0 ? 'none' : '#6b7280'}
+              strokeWidth={isHighlighted ? 2 : p.score > 0 ? 0 : 1.5}
+              strokeDasharray={p.score > 0 ? 'none' : '2,2'}
+              className={onClick ? 'cursor-pointer' : ''}
+              onClick={() => onClick && handlePointClick(dimensions[i])}
+            >
+              <title>{p.label}: {p.score}分</title>
+            </circle>
+            {isHighlighted && (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={12}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth={1.5}
+                strokeDasharray="2,2"
+                opacity={0.5}
+              />
+            )}
+          </g>
+        );
+      })}
       {/* Labels */}
       {points.map((p, i) => {
         const angle = (i * 2 * Math.PI) / dimensions.length - Math.PI / 2;
+        const isHighlighted = highlightedDimension === p.label;
         const isRight = Math.cos(angle) > 0.1;
         const isLeft = Math.cos(angle) < -0.1;
         const isTop = Math.sin(angle) < -0.3;
@@ -127,10 +174,12 @@ export function RadarChart({
               y={p.labelY}
               textAnchor={anchor}
               dominantBaseline="middle"
-              fill={labelColor}
-              fontSize="11"
-              fontWeight="500"
+              fill={isHighlighted ? '#d97706' : labelColor}
+              fontSize={isHighlighted ? '12' : '11'}
+              fontWeight={isHighlighted ? '700' : '500'}
               dy={dy}
+              className={onClick ? 'cursor-pointer' : ''}
+              onClick={() => onClick && handlePointClick(dimensions[i])}
             >
               {p.label}
             </text>
@@ -139,7 +188,7 @@ export function RadarChart({
               y={p.labelY}
               textAnchor={anchor}
               dominantBaseline="middle"
-              fill={strokeColor}
+              fill={p.score > 0 ? strokeColor : '#9ca3af'}
               fontSize="10"
               fontWeight="600"
               dy={Number(dy) + (isTop ? -0.8 : isBottom ? 1.2 : 1)}

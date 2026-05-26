@@ -1243,7 +1243,7 @@ function generateScenarios(config: typeof DOMESTIC_CONFIGS[0], isOverseas: boole
 // 构建完整数据映射
 // ============================================================
 
-const allConfigs = [...DOMESTIC_CONFIGS, ...OVERSEAS_CONFIGS];
+export const allConfigs = [...DOMESTIC_CONFIGS, ...OVERSEAS_CONFIGS];
 
 export const pluginContentMap: Record<string, { scripts: PluginScript[]; scenarios: PluginScenario[] }> = {};
 

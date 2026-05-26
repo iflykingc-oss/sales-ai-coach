@@ -9,7 +9,13 @@ interface PluginCardProps {
 }
 
 export function PluginCard({ plugin, onDetail }: PluginCardProps) {
-  const { installPlugin, uninstallPlugin, setActivePlugin } = usePluginStore();
+  const { installPluginPersisted, uninstallPluginPersisted, setActivePlugin } = usePluginStore();
+
+  const handleUninstall = async () => {
+    if (window.confirm(`确定要卸载「${plugin.name}」吗？`)) {
+      await uninstallPluginPersisted(plugin.id);
+    }
+  };
 
   return (
     <div className="group flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-primary-200 hover:shadow-md">
@@ -66,7 +72,7 @@ export function PluginCard({ plugin, onDetail }: PluginCardProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => uninstallPlugin(plugin.id)}
+                onClick={handleUninstall}
               >
                 卸载
               </Button>
@@ -77,7 +83,7 @@ export function PluginCard({ plugin, onDetail }: PluginCardProps) {
             variant="primary"
             size="sm"
             className="flex-1"
-            onClick={() => installPlugin(plugin.id)}
+            onClick={() => installPluginPersisted(plugin.id)}
           >
             <Download className="mr-1.5 h-3.5 w-3.5" />
             安装

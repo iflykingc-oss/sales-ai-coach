@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type PracticeMode = 'scenario' | 'freeform' | 'special';
 export type EmotionType = 'interest' | 'hesitate' | 'resist' | 'empathy';
@@ -46,6 +47,7 @@ interface PracticeState {
   isGeneratingSummary: boolean;
   isLoading: boolean;
   error: string | null;
+  recentScenarioIds: string[];
 
   setSession: (session: PracticeSession) => void;
   addMessage: (message: ChatMessage) => void;
@@ -57,56 +59,68 @@ interface PracticeState {
   setIsGeneratingSummary: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
+  addRecentScenario: (scenarioId: string) => void;
 }
 
-export const usePracticeStore = create<PracticeState>((set) => ({
-  session: null,
-  summary: null,
-  isGeneratingSummary: false,
-  isLoading: false,
-  error: null,
+export const usePracticeStore = create<PracticeState>()(
+  persist(
+    (set) => ({
+      session: null,
+      summary: null,
+      isGeneratingSummary: false,
+      isLoading: false,
+      error: null,
+      recentScenarioIds: [],
 
-  setSession: (session) => set({ session }),
-  addMessage: (message) =>
-    set((state) => {
-      if (!state.session) return state;
-      return {
-        session: {
-          ...state.session,
-          messages: [...state.session.messages, message],
-        },
-      };
+      setSession: (session) => set({ session }),
+      addMessage: (message) =>
+        set((state) => {
+          if (!state.session) return state;
+          return {
+            session: {
+              ...state.session,
+              messages: [...state.session.messages, message],
+            },
+          };
+        }),
+      incrementRound: () =>
+        set((state) => {
+          if (!state.session) return state;
+          return {
+            session: {
+              ...state.session,
+              round: state.session.round + 1,
+            },
+          };
+        }),
+      setCustomerEmotion: (emotion) =>
+        set((state) => {
+          if (!state.session) return state;
+          return { session: { ...state.session, customerEmotion: emotion } };
+        }),
+      completePractice: () =>
+        set((state) => {
+          if (!state.session) return state;
+          return {
+            session: {
+              ...state.session,
+              state: 'completed',
+              completedAt: Date.now(),
+            },
+          };
+        }),
+      resetPractice: () =>
+        set({ session: null, summary: null, error: null, isGeneratingSummary: false }),
+      setSummary: (summary) => set({ summary }),
+      setIsGeneratingSummary: (loading) => set({ isGeneratingSummary: loading }),
+      setError: (error) => set({ error }),
+      setLoading: (loading) => set({ isLoading: loading }),
+      addRecentScenario: (scenarioId) =>
+        set((state) => {
+          const recent = [scenarioId, ...state.recentScenarioIds.filter((id) => id !== scenarioId)].slice(0, 10);
+          return { recentScenarioIds: recent };
+        }),
     }),
-  incrementRound: () =>
-    set((state) => {
-      if (!state.session) return state;
-      return {
-        session: {
-          ...state.session,
-          round: state.session.round + 1,
-        },
-      };
-    }),
-  setCustomerEmotion: (emotion) =>
-    set((state) => {
-      if (!state.session) return state;
-      return { session: { ...state.session, customerEmotion: emotion } };
-    }),
-  completePractice: () =>
-    set((state) => {
-      if (!state.session) return state;
-      return {
-        session: {
-          ...state.session,
-          state: 'completed',
-          completedAt: Date.now(),
-        },
-      };
-    }),
-  resetPractice: () =>
-    set({ session: null, summary: null, error: null, isGeneratingSummary: false }),
-  setSummary: (summary) => set({ summary }),
-  setIsGeneratingSummary: (loading) => set({ isGeneratingSummary: loading }),
-  setError: (error) => set({ error }),
-  setLoading: (loading) => set({ isLoading: loading }),
-}));
+    { name: 'practice-state' },
+  ),
+);

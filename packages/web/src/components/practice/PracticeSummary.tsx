@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
-import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Badge';
 import { RadarChart } from '@/components/ui/RadarChart';
 import type { RadarDimension } from '@/components/ui/RadarChart';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { usePracticeStore } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { api } from '@/services/api';
+import EmotionTimeline from './EmotionTimeline';
+import RoundScores from './RoundScores';
 
 const defaultDimensions: string[] = [
   '需求挖掘',
@@ -26,6 +29,11 @@ interface PracticeSummaryProps {
 export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const { session, summary, setSummary, setIsGeneratingSummary } = usePracticeStore();
   const [loading, setLoading] = useState(true);
+  const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
+
+  const handleDimensionClick = useCallback((dim: RadarDimension) => {
+    setSelectedDimension((prev) => (prev === dim.label ? null : dim.label));
+  }, []);
 
   useEffect(() => {
     if (!session || summary) {
@@ -67,7 +75,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
 
   const radarDimensions: RadarDimension[] = defaultDimensions.map((label) => ({
     label,
-    score: summary?.radarScores[label] ?? Math.floor(Math.random() * 40 + 60),
+    score: summary?.radarScores[label] ?? 0,
   }));
 
   const totalScore = summary?.totalScore ?? Math.floor(
@@ -84,13 +92,28 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
 
   const gradeInfo = getScoreGrade(totalScore);
 
+  // Extract per-round emotion and score data from session messages
+  const roundData = useMemo(() => {
+    if (!session) return { emotions: [], scores: [] };
+    let round = 0;
+    const emotions: Array<{ round: number; emotion: string }> = [];
+    const scores: Array<{ round: number; score: number }> = [];
+    for (const msg of session.messages) {
+      if (msg.role === 'assistant') {
+        round++;
+        if (msg.emotion) emotions.push({ round, emotion: msg.emotion });
+        if (msg.roundScore != null) scores.push({ round, score: msg.roundScore });
+      }
+    }
+    return { emotions, scores };
+  }, [session]);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-gray-400" />
-          <p className="mt-4 text-sm text-gray-500">正在生成复盘报告...</p>
-        </div>
+      <div className="space-y-6">
+        <Skeleton.Card />
+        <Skeleton.Card />
+        <Skeleton.Card />
       </div>
     );
   }
@@ -119,13 +142,91 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
         )}
       </Card>
 
+      {/* Emotion Timeline + Round Scores */}
+      {(roundData.emotions.length > 0 || roundData.scores.length > 0) && (
+        <Card>
+          <div className="space-y-6">
+            <EmotionTimeline emotions={roundData.emotions} />
+            {roundData.scores.length > 0 && (
+              <div className="border-t border-gray-100 pt-4">
+                <RoundScores scores={roundData.scores} />
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Radar Chart */}
       <Card>
         <h4 className="mb-4 text-sm font-medium text-gray-700">能力雷达图</h4>
         <div className="flex justify-center">
-          <RadarChart dimensions={radarDimensions} size={280} />
+          <RadarChart
+            dimensions={radarDimensions}
+            size={280}
+            onClick={handleDimensionClick}
+            highlightedDimension={selectedDimension ?? undefined}
+          />
         </div>
+        <p className="mt-2 text-center text-xs text-gray-400">点击维度查看详情</p>
       </Card>
+
+      {/* Dimension Detail Panel */}
+      {selectedDimension && (
+        <Card className="border-primary-200 bg-primary-50/30">
+          <div className="flex items-start justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-primary-800">{selectedDimension}</h4>
+              <div className="mt-1 flex items-center gap-3">
+                <span className="text-2xl font-bold text-primary-600">
+                  {summary?.radarScores[selectedDimension] ?? 0}分
+                </span>
+                <span className="text-xs text-gray-500">/ 100</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedDimension(null)}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mt-4 space-y-3">
+            {/* Relevant strengths/improvements */}
+            {summary && summary.strengths.length > 0 && (
+              <div>
+                <h5 className="mb-1 text-xs font-medium text-green-700">相关优势</h5>
+                <ul className="space-y-1">
+                  {summary.strengths.slice(0, 2).map((item, i) => (
+                    <li key={i} className="text-xs text-gray-600">• {item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {summary && summary.improvements.length > 0 && (
+              <div>
+                <h5 className="mb-1 text-xs font-medium text-amber-700">改进建议</h5>
+                <ul className="space-y-1">
+                  {summary.improvements.slice(0, 2).map((item, i) => (
+                    <li key={i} className="text-xs text-gray-600">• {item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* Action button */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setSelectedDimension(null);
+                // Reset practice and go back to setup with this skill pre-selected
+                onRestart();
+              }}
+            >
+              前往专项训练
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Strengths */}
       <Card>
