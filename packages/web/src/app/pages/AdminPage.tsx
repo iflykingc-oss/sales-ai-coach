@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { AdminStats } from '@/components/admin/AdminStats';
@@ -8,18 +8,47 @@ import { PluginAdmin } from '@/components/admin/PluginAdmin';
 import { SystemSettings } from '@/components/admin/SystemSettings';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
+import { api } from '@/services/api';
 
 export default function AdminPage() {
-  const { activeTab, setActiveTab, loading, setLoading } = useAdminStore();
+  const { activeTab, setActiveTab, loading, setLoading, setStats, setModels, setSystemUsers } = useAdminStore();
   const user = useUserStore((s) => s.user);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, [setLoading]);
+    try {
+      const [statsRes, usersRes, modelsRes] = await Promise.all([
+        api.get('/admin/stats'),
+        api.get('/admin/users'),
+        api.get('/admin/models'),
+      ]);
+      const stats = statsRes.data;
+      setStats({
+        totalUsers: stats.totalUsers,
+        dailyActiveUsers: stats.dailyActiveUsers,
+        totalScriptsGenerated: stats.totalScriptsGenerated,
+        dailyScriptsGenerated: stats.dailyScriptsGenerated,
+        modelUsage: stats.modelUsage || [],
+        userGrowthTrend: stats.userGrowthTrend || [],
+        scriptUsageTrend: stats.scriptUsageTrend || [],
+        topIndustries: stats.topIndustries || [],
+      });
+      setSystemUsers(usersRes.data || []);
+      setModels(modelsRes.data || []);
+    } catch (e) {
+      console.error('Failed to fetch admin data:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [setLoading, setStats, setSystemUsers, setModels]);
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'owner';
+  useEffect(() => {
+    if (user?.role === 'ADMIN' || user?.role === 'TEAM_OWNER') {
+      fetchData();
+    }
+  }, [user, fetchData]);
+
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'TEAM_OWNER';
 
   if (!isAdmin) {
     return (

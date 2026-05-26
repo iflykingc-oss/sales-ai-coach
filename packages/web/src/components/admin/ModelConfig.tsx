@@ -6,6 +6,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/utils/cn';
 import { useAdminStore, type ModelConfig } from '@/stores/adminStore';
+import { api } from '@/services/api';
+import { toast } from '@/hooks/useToast';
 
 const statusLabels: Record<string, string> = {
   active: '正常',
@@ -21,6 +23,19 @@ const statusVariants: Record<string, 'success' | 'default' | 'danger'> = {
 
 export function ModelConfig() {
   const { models, updateModel } = useAdminStore();
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const handleSave = async (model: ModelConfig) => {
+    setSaving(model.id);
+    try {
+      await api.put(`/admin/models/${model.id}`, model);
+      toast('模型配置已保存', { variant: 'success' });
+    } catch {
+      toast('保存失败', { variant: 'error' });
+    } finally {
+      setSaving(null);
+    }
+  };
 
   if (models.length === 0) {
     return (
@@ -176,9 +191,13 @@ export function ModelConfig() {
 
                 {/* Save Button */}
                 <div className="mt-4 flex justify-end">
-                  <Button size="sm">
+                  <Button
+                    size="sm"
+                    disabled={saving === model.id}
+                    onClick={(e) => { e.stopPropagation(); handleSave(model); }}
+                  >
                     <Save className="mr-1.5 h-4 w-4" />
-                    保存设置
+                    {saving === model.id ? '保存中...' : '保存设置'}
                   </Button>
                 </div>
               </div>
