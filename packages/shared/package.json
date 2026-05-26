@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schemas": "./src/schemas/index.ts",
-    "./schemas/*": "./src/schemas/*.ts"
+    "./schemas/*": "./src/schemas/*.ts",
+    "./data": "./src/data/salesLogicFrameworks.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

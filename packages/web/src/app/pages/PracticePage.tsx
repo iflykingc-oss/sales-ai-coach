@@ -28,7 +28,7 @@ export default function PracticePage() {
   const { resetPractice, setSession, addRecentScenario } = usePracticeStore();
   const { addActivity } = useActivityStore();
 
-  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string }) => {
+  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string }) => {
     setIsStarting(true);
 
     try {
@@ -47,6 +47,7 @@ export default function PracticePage() {
         industry: options?.industry || '',
         mode: mode === 'freeform' ? 'freestyle' : 'scenario',
         maxRounds: 10,
+        logicFramework: options?.logicFramework || '',
       });
 
       const initData = response.data.data;
@@ -58,6 +59,7 @@ export default function PracticePage() {
         scenarioName: scenario?.name,
         industry: options?.industry,
         skillFocus: options?.skillFocus,
+        logicFramework: options?.logicFramework,
         messages: [],
         round: 0,
         maxRounds: 10,
@@ -75,6 +77,7 @@ export default function PracticePage() {
           scenarioName: scenario?.name,
           industry: options?.industry,
           skillFocus: options?.skillFocus,
+          logicFramework: options?.logicFramework,
           messages: [
             {
               id: `msg-${Date.now()}`,
@@ -110,6 +113,7 @@ export default function PracticePage() {
         scenarioName: options?.scenarioId ? practiceScenarios.find((s) => s.id === options.scenarioId)?.name : undefined,
         industry: options?.industry,
         skillFocus: options?.skillFocus,
+        logicFramework: options?.logicFramework,
         messages: [],
         round: 0,
         maxRounds: 10,

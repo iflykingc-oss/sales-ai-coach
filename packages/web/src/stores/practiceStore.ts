@@ -23,6 +23,8 @@ export interface PracticeSession {
   scenarioName?: string;
   industry?: string;
   skillFocus?: string;
+  logicFramework?: string;
+  logicStage?: string;
   messages: ChatMessage[];
   round: number;
   maxRounds: number;
@@ -60,6 +62,7 @@ interface PracticeState {
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
   addRecentScenario: (scenarioId: string) => void;
+  setLogicFramework: (frameworkId: string) => void;
 }
 
 export const usePracticeStore = create<PracticeState>()(
@@ -119,6 +122,11 @@ export const usePracticeStore = create<PracticeState>()(
         set((state) => {
           const recent = [scenarioId, ...state.recentScenarioIds.filter((id) => id !== scenarioId)].slice(0, 10);
           return { recentScenarioIds: recent };
+        }),
+      setLogicFramework: (frameworkId) =>
+        set((state) => {
+          if (!state.session) return state;
+          return { session: { ...state.session, logicFramework: frameworkId } };
         }),
     }),
     { name: 'practice-state' },

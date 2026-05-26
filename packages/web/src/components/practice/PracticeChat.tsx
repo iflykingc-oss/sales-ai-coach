@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Loader2, Clock } from 'lucide-react';
+import { Send, Lightbulb, BookOpen, Brain, Loader2, Clock, Target } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
@@ -12,6 +12,7 @@ import {
 import { cn } from '@/utils/cn';
 import { api } from '@/services/api';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
+import { salesLogicFrameworks, getFrameworkById } from '@sales-ai-coach/shared';
 
 const skillFocusOptions = [
   { id: 'objection', name: '异议处理' },
@@ -23,13 +24,14 @@ const skillFocusOptions = [
 ];
 
 interface PracticeModeSelectorProps {
-  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string }) => void;
+  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string }) => void;
 }
 
 export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   const [selectedMode, setSelectedMode] = useState<PracticeMode | null>(null);
   const [selectedScenario, setSelectedScenario] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('');
+  const [selectedFramework, setSelectedFramework] = useState('');
   const { recentScenarioIds } = usePracticeStore();
 
   const recentScenarios = useMemo(() => {
@@ -42,6 +44,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
     setSelectedMode(mode);
     setSelectedScenario('');
     setSelectedSkill('');
+    setSelectedFramework('');
   };
 
   const handleStart = () => {
@@ -51,6 +54,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
       scenarioId: selectedScenario || undefined,
       industry: scenario?.industry,
       skillFocus: selectedSkill || undefined,
+      logicFramework: selectedFramework || undefined,
     });
   };
 
@@ -168,6 +172,50 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
         </div>
       )}
 
+      {/* Logic Framework Selector */}
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-center gap-2">
+          <Target className="h-4 w-4 text-gray-400" />
+          <h4 className="font-medium text-gray-900">销售逻辑框架（可选）</h4>
+        </div>
+        <p className="text-xs text-gray-500">选择销售逻辑框架，AI客户将识别你的话术逻辑并做出更真实的反应</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {salesLogicFrameworks.map((fw) => (
+            <button
+              key={fw.id}
+              onClick={() => setSelectedFramework(selectedFramework === fw.id ? '' : fw.id)}
+              className={cn(
+                'rounded-lg border-2 p-3 text-left transition-all',
+                selectedFramework === fw.id
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">{fw.name}</span>
+                <span className="text-xs text-gray-400">{fw.stages.length}阶段</span>
+              </div>
+              <p className="mt-1 line-clamp-1 text-xs text-gray-500">{fw.description}</p>
+              <div className="mt-2 flex gap-1">
+                {fw.stages.map((stage) => (
+                  <span
+                    key={stage.id}
+                    className={cn(
+                      'rounded px-1.5 py-0.5 text-[10px]',
+                      selectedFramework === fw.id
+                        ? 'bg-primary-100 text-primary-700'
+                        : 'bg-gray-100 text-gray-500',
+                    )}
+                  >
+                    {stage.name}
+                  </span>
+                ))}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex justify-end">
         <Button size="lg" onClick={handleStart} disabled={!canStart}>
           开始陪练
@@ -245,6 +293,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
       const response = await api.post('/practices/message', {
         sessionId: session.id,
         message: userMessage.content,
+        logicFramework: session.logicFramework || '',
       });
 
       const data = response.data.data;
@@ -317,6 +366,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
   if (!session) return null;
 
   const isMaxRounds = session.round >= session.maxRounds;
+  const currentFramework = session.logicFramework ? getFrameworkById(session.logicFramework) : null;
 
   return (
     <div className="flex h-[calc(100vh-12rem)] flex-col">
@@ -330,6 +380,11 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           {session.scenarioName && (
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
               {session.scenarioName}
+            </span>
+          )}
+          {currentFramework && (
+            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-600">
+              {currentFramework.name}
             </span>
           )}
         </div>
@@ -361,6 +416,40 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
       </div>
 
       {/* Auxiliary panels */}
+      {currentFramework && (
+        <div className="border-b border-gray-200 bg-gradient-to-r from-primary-50 to-blue-50 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="h-3.5 w-3.5 text-primary-500" />
+            <span className="text-xs font-medium text-primary-700">销售逻辑框架</span>
+            <span className="text-xs text-primary-600">{currentFramework.name}</span>
+          </div>
+          <div className="flex gap-2">
+            {currentFramework.stages.map((stage, idx) => {
+              const isActive = session.round >= idx * 2 && session.round < (idx + 1) * 2;
+              const isPast = session.round >= (idx + 1) * 2;
+              return (
+                <div
+                  key={stage.id}
+                  className={cn(
+                    'flex flex-1 items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors',
+                    isActive
+                      ? 'bg-primary-500 text-white shadow-sm'
+                      : isPast
+                        ? 'bg-primary-100 text-primary-600'
+                        : 'bg-white/60 text-gray-400',
+                  )}
+                >
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/30 text-[10px] font-bold">
+                    {isPast ? '✓' : idx + 1}
+                  </span>
+                  <span className="truncate">{stage.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {showPsychology && (
         <div className="border-b border-gray-200 bg-amber-50 px-4 py-3">
           <h4 className="text-sm font-medium text-amber-800">客户心理分析</h4>

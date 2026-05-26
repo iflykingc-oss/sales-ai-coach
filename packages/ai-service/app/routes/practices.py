@@ -16,11 +16,13 @@ class PracticeInitRequest(BaseModel):
     sessionId: str = ""
     maxRounds: int = 10
     userId: str = ""
+    logicFramework: str = ""  # Sales logic framework to use
 
 
 class PracticeMessageRequest(BaseModel):
     sessionId: str
     message: str
+    logicFramework: str = ""  # Current logic framework stage
 
 
 class PracticeReportRequest(BaseModel):
@@ -59,7 +61,7 @@ async def send_message(req: PracticeMessageRequest):
     if not harness:
         return PracticeResponse(success=False, data={"error": "会话不存在或已结束"})
 
-    result = await harness.respond(req.message)
+    result = await harness.respond(req.message, logic_framework=req.logicFramework)
     return PracticeResponse(success=True, data=result)
 
 

@@ -139,9 +139,13 @@ class PracticeHarness:
             "max_rounds": self.max_rounds,
         }
 
-    async def respond(self, sales_message: str) -> dict:
+    async def respond(self, sales_message: str, logic_framework: str = "") -> dict:
         """
         Process a sales message and return customer response + evaluation.
+
+        Args:
+            sales_message: The sales rep's message
+            logic_framework: Current sales logic framework being used (e.g., "预期同步法-现状确认")
 
         Returns:
             {
@@ -152,6 +156,7 @@ class PracticeHarness:
                 "round_score": float | None,
                 "evaluation_feedback": str | None,
                 "emotion_history": [...],
+                "logicFramework": str,
             }
         """
         if not self.is_active:
@@ -165,11 +170,12 @@ class PracticeHarness:
         # Parse customer persona
         persona = json.loads(self.customer_persona)
 
-        # Generate customer response
+        # Generate customer response with logic framework context
         customer_result = await self._generate_customer_response(
             sales_message=sales_message,
             persona=persona,
             emotion=self.emotion_history[-1] if self.emotion_history else "中立",
+            logic_framework=logic_framework,
         )
 
         # Track emotion
@@ -187,6 +193,7 @@ class PracticeHarness:
                 customer_response=customer_result["response"],
                 emotion=customer_result["emotion"],
                 persona=persona,
+                logic_framework=logic_framework,
             )
             round_score = eval_result.get("score")
             eval_feedback = eval_result.get("feedback")
@@ -211,6 +218,7 @@ class PracticeHarness:
             "round_score": round_score,
             "evaluation_feedback": eval_feedback,
             "emotion_history": list(self.emotion_history),
+            "logicFramework": logic_framework,
         }
 
     async def generate_report(self) -> dict:
@@ -287,8 +295,23 @@ class PracticeHarness:
         sales_message: str,
         persona: dict,
         emotion: str = "中立",
+        logic_framework: str = "",
     ) -> dict:
         """Generate the customer's response in the roleplay."""
+
+        # Build logic framework context
+        framework_context = ""
+        if logic_framework:
+            framework_context = f"""
+销售逻辑框架提示:
+当前销售正在使用「{logic_framework}」逻辑框架。
+请根据该框架的特点做出合理反应：
+- 如果销售在了解现状/痛点，应配合回答，情绪偏向犹豫
+- 如果销售在设定目标/规划路径，应表达期望，情绪偏向兴趣
+- 如果销售在展示价值/案例，应产生信任，情绪偏向共情
+- 如果销售在推演后果/放大痛点，应感到紧迫感，情绪偏向犹豫→兴趣
+"""
+
         system_prompt = f"""你正在扮演一个客户角色，与销售进行对话。
 
 客户画像:
@@ -300,15 +323,17 @@ class PracticeHarness:
 - 痛点: {persona.get('pain_points', '待确认')}
 - 态度: {persona.get('attitude', '观望')}
 
-当前情绪: {emotion}
+当前情绪: {emotion}{framework_context}
 
 要求:
 1. 保持角色一致性，像真实客户一样回复
 2. 回复简短自然，50-150字，像微信聊天
 3. 根据销售的话和你的情绪做出真实反应
-4. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/共情/感兴趣/犹豫/抗拒/敷衍/满意/生气
-5. 如果销售表现很差，情绪会升级
-6. 如果销售表现很好，情绪会改善"""
+4. 识别销售使用的逻辑框架，做出符合该阶段的情绪反应
+5. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/共情/感兴趣/犹豫/抗拒/敷衍/满意/生气
+6. 如果销售表现很差，情绪会升级
+7. 如果销售表现很好，情绪会改善
+8. 情绪变化应遵循: 抗拒→犹豫→兴趣→共情 的正常路径"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -347,13 +372,22 @@ class PracticeHarness:
         customer_response: str,
         emotion: str,
         persona: dict,
+        logic_framework: str = "",
     ) -> dict:
         """Evaluate the sales rep's performance in this round."""
+
+        framework_eval = ""
+        if logic_framework:
+            framework_eval = f"""
+逻辑框架评估:
+销售当前使用的逻辑框架: {logic_framework}
+请评估销售是否正确运用了该框架的核心逻辑。"""
+
         eval_prompt = f"""评估销售在这轮对话中的表现。
 
 客户画像: {persona.get('name', '')} ({persona.get('personality', '')})
 客户当前情绪: {emotion}
-客户回复: {customer_response}
+客户回复: {customer_response}{framework_eval}
 
 销售的话: {sales_message}
 
@@ -362,6 +396,7 @@ class PracticeHarness:
 2. 语气是否恰当、专业
 3. 是否推进了销售进程
 4. 是否避免了常见销售错误
+5. 是否正确运用了销售逻辑框架（如适用）
 
 请输出JSON: {{"score": 0.75, "feedback": "一句话反馈"}}
 score范围0-1，0.7以上为合格。"""
