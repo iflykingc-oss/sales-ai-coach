@@ -49,20 +49,9 @@ router.get('/search', authMiddleware, async (req: Request, res: Response, next: 
       const query = q as string;
       where.OR = [
         { name: { contains: query, mode: 'insensitive' } },
-        { description: { contains: query, mode: 'insensitive' } },
         { industry: { contains: query, mode: 'insensitive' } },
       ];
     }
-
-    if (category && category !== 'all') {
-      where.category = category;
-    }
-
-    const orderBy: Record<string, 'asc' | 'desc'> = {};
-    const sortStr = sort as string;
-    if (sortStr === 'rating') orderBy.rating = 'desc';
-    else if (sortStr === 'installs') orderBy.installCount = 'desc';
-    else orderBy.createdAt = 'desc';
 
     const plugins = await prisma.industryPlugin.findMany({ where, orderBy });
     res.json({ success: true, data: plugins });
