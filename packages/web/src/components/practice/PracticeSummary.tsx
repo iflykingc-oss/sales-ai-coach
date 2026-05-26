@@ -1,10 +1,12 @@
-import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Badge';
 import { RadarChart } from '@/components/ui/RadarChart';
 import type { RadarDimension } from '@/components/ui/RadarChart';
 import { usePracticeStore } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
+import { api } from '@/services/api';
 
 const defaultDimensions: string[] = [
   '需求挖掘',
@@ -22,7 +24,46 @@ interface PracticeSummaryProps {
 }
 
 export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
-  const { session, summary } = usePracticeStore();
+  const { session, summary, setSummary, setIsGeneratingSummary } = usePracticeStore();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!session || summary) {
+      setLoading(false);
+      return;
+    }
+
+    // Fetch report from the harness-powered API
+    const fetchReport = async () => {
+      setIsGeneratingSummary(true);
+      try {
+        const response = await api.post('/practices/report', {
+          sessionId: session.id,
+        });
+
+        const report = response.data.data;
+        if (report && report.radarScores) {
+          setSummary({
+            sessionId: session.id,
+            totalScore: Math.round(report.overall_score * 100),
+            strengths: report.strengths || [],
+            improvements: report.weaknesses || [],
+            recommendations: report.recommendations?.map((r: any) =>
+              `${r.dimension}: ${r.advice}`,
+            ) || [],
+            radarScores: report.radarScores,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch practice report:', error);
+      } finally {
+        setIsGeneratingSummary(false);
+        setLoading(false);
+      }
+    };
+
+    fetchReport();
+  }, [session, summary]);
 
   const radarDimensions: RadarDimension[] = defaultDimensions.map((label) => ({
     label,
@@ -42,6 +83,17 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   };
 
   const gradeInfo = getScoreGrade(totalScore);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-gray-400" />
+          <p className="mt-4 text-sm text-gray-500">正在生成复盘报告...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

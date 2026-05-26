@@ -1,15 +1,36 @@
+import { Menu } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
 
-export function Header() {
+interface HeaderProps {
+  onMenuToggle: () => void;
+}
+
+export function Header({ onMenuToggle }: HeaderProps) {
   const { user } = useUserStore();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4">
-      <div className="text-sm text-gray-500">
-        欢迎回来，{user?.name || '用户'}
+    <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4" role="banner">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMenuToggle}
+          className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 md:hidden"
+          aria-label="打开菜单"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="text-sm text-gray-500">
+          {user ? (
+            <>欢迎回来，<span className="font-medium text-gray-700">{user.name}</span></>
+          ) : (
+            '加载中...'
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-2">
-        <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-sm font-medium text-primary-700">
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700"
+          aria-label={`用户: ${user?.name || '未登录'}`}
+        >
           {user?.name?.charAt(0) || 'U'}
         </div>
       </div>

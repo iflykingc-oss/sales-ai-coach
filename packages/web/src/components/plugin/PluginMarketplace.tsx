@@ -48,11 +48,7 @@ const mockPlugins: Plugin[] = [
 ];
 
 export function PluginMarketplace() {
-  const { plugins, setPlugins, categoryFilter, setCategoryFilter } = usePluginStore();
-
-  if (plugins.length === 0) {
-    setPlugins(mockPlugins);
-  }
+  const { plugins, categoryFilter, setCategoryFilter, setSelectedPlugin } = usePluginStore();
 
   const displayPlugins = plugins.length > 0 ? plugins : mockPlugins;
 
@@ -89,7 +85,7 @@ export function PluginMarketplace() {
       {/* Plugin Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredPlugins.map((plugin) => (
-          <PluginCard key={plugin.id} plugin={plugin} />
+          <PluginCard key={plugin.id} plugin={plugin} onDetail={(p) => setSelectedPlugin(p)} />
         ))}
       </div>
 

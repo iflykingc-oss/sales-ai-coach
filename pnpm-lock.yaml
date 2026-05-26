@@ -128,7 +128,7 @@ importers:
         specifier: ^7.1.0
         version: 7.15.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       tailwind-merge:
-        specifier: ^2.6.0
+        specifier: ^2.6.1
         version: 2.6.1
       zustand:
         specifier: ^5.0.0

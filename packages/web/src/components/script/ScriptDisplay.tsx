@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Copy, Check, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
+import { Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
 import ScriptFeedback from './ScriptFeedback';
@@ -166,6 +166,37 @@ export default function ScriptDisplay() {
                   style={{ width: `${currentScript.confidence_score * 100}%` }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Quality report from Harness Evaluator */}
+          {(currentScript as any).quality_report && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-blue-700">
+                <CheckCircle className="h-4 w-4" />
+                质量评估报告
+              </h4>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-blue-600">评分: </span>
+                <span className="font-medium text-blue-800">
+                  {Math.round((currentScript as any).quality_report.score * 100)}%
+                </span>
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-xs',
+                    (currentScript as any).quality_report.passed
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-amber-100 text-amber-700',
+                  )}
+                >
+                  {(currentScript as any).quality_report.passed ? '质量通过' : '质量待改进'}
+                </span>
+              </div>
+              {(currentScript as any).quality_report.feedback && (
+                <p className="mt-2 text-xs text-blue-600">
+                  {(currentScript as any).quality_report.feedback}
+                </p>
+              )}
             </div>
           )}
 

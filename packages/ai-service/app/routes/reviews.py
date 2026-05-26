@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from app.services.review_analyzer import analyze_conversations
+from app.services.review_harness import ReviewAnalyzer
+from app.core.logging import logger
 
 router = APIRouter()
 
@@ -8,10 +9,18 @@ router = APIRouter()
 class ReviewAnalyzeRequest(BaseModel):
     conversations: list[dict]
     userId: str = ""
+    history: str = ""  # Previous review reports for trend analysis
 
 
 @router.post("/analyze")
 async def analyze_review(req: ReviewAnalyzeRequest):
-    """Analyze conversations and generate review report."""
-    result = await analyze_conversations(conversations=req.conversations)
+    """Analyze conversations with harness-powered quality evaluation."""
+    analyzer = ReviewAnalyzer()
+    result = await analyzer.analyze(
+        conversations=req.conversations,
+        history=req.history,
+    )
+    logger.info(
+        f"Review analyzed: quality={result.get('quality', {}).get('score', 'N/A')}"
+    )
     return {"success": True, "data": result}

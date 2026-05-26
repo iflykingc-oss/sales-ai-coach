@@ -10,6 +10,7 @@ import {
   type PracticeMode,
 } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
+import { api } from '@/services/api';
 
 const industryScenarios: Record<string, { id: string; name: string; industry: string }[]> = {
   realEstate: [
@@ -229,32 +230,51 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
     setInput('');
     setIsLoading(true);
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
-      const emotions: EmotionType[] = ['interest', 'hesitate', 'resist', 'empathy'];
-      const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-      setCustomerEmotion(randomEmotion);
+    try {
+      // Call the harness-powered practice API
+      const response = await api.post('/practices/message', {
+        sessionId: session.id,
+        message: userMessage.content,
+      });
 
-      const aiResponses: Record<EmotionType, string> = {
-        interest: '听起来不错，能再详细介绍一下吗？我对这个方案挺感兴趣的。',
-        hesitate: '我需要考虑一下，这个价格对我来说有点高了...',
-        resist: '我觉得现在不需要，而且你们的产品跟竞品相比也没有什么特别的。',
-        empathy: '我理解你的意思，不过我之前也遇到过类似的情况，结果不太好。',
+      const data = response.data.data;
+      const emotionMap: Record<string, EmotionType> = {
+        '共情': 'empathy',
+        '感兴趣': 'interest',
+        '犹豫': 'hesitate',
+        '抗拒': 'resist',
+        '敷衍': 'resist',
+        '中立': 'interest',
+        '满意': 'interest',
       };
+
+      setCustomerEmotion(emotionMap[data.emotion] || 'interest');
 
       const aiMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: 'assistant',
-        content: aiResponses[randomEmotion],
+        content: data.response || '...',
         timestamp: Date.now(),
+        emotion: data.emotion,
+        roundScore: data.round_score,
+        evaluationFeedback: data.evaluation_feedback,
       };
       addMessage(aiMessage);
-      setIsLoading(false);
 
-      if (session.round + 1 >= session.maxRounds) {
+      if (data.is_complete) {
         completePractice();
       }
-    }, 1000);
+    } catch (error) {
+      // Fallback error message
+      addMessage({
+        id: `msg-${Date.now() + 1}`,
+        role: 'assistant',
+        content: '抱歉，AI服务暂时不可用，请稍后再试。',
+        timestamp: Date.now(),
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSuggestion = () => {

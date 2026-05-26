@@ -38,11 +38,7 @@ const mockScripts: SharedScript[] = [
 ];
 
 export function ScriptSharing() {
-  const { sharedScripts, setSharedScripts, toggleScriptLike, approveScript } = useTeamStore();
-
-  if (sharedScripts.length === 0) {
-    setSharedScripts(mockScripts);
-  }
+  const { sharedScripts, toggleScriptLike, approveScript, rejectScript } = useTeamStore();
 
   const displayScripts = sharedScripts.length > 0 ? sharedScripts : mockScripts;
   const sortedScripts = [...displayScripts].sort((a, b) => b.likes - a.likes);
@@ -79,7 +75,11 @@ export function ScriptSharing() {
                     <CheckCircle className="mr-1 h-3.5 w-3.5 text-green-600" />
                     通过
                   </Button>
-                  <Button variant="ghost" size="sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => rejectScript(script.id)}
+                  >
                     <XCircle className="mr-1 h-3.5 w-3.5 text-red-600" />
                     拒绝
                   </Button>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Upload, FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useReviewStore, type ConversationUpload } from '@/stores/reviewStore';
 import { cn } from '@/utils/cn';
@@ -16,12 +15,16 @@ export function ReviewUploader() {
     if (selectedFiles && uploads.length < 3) {
       Array.from(selectedFiles).forEach((file) => {
         if (uploads.length < 3) {
-          addUpload({
-            id: `upload-${Date.now()}-${file.name}`,
-            fileName: file.name,
-            content: '',
-            uploadedAt: new Date(),
-          });
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            addUpload({
+              id: `upload-${Date.now()}-${file.name}`,
+              fileName: file.name,
+              content: typeof ev.target?.result === 'string' ? ev.target.result : '',
+              uploadedAt: new Date(),
+            });
+          };
+          reader.readAsText(file);
         }
       });
     }
@@ -33,12 +36,16 @@ export function ReviewUploader() {
     if (uploads.length >= 3) return;
     Array.from(e.dataTransfer.files).forEach((file) => {
       if (uploads.length < 3) {
-        addUpload({
-          id: `upload-${Date.now()}-${file.name}`,
-          fileName: file.name,
-          content: '',
-          uploadedAt: new Date(),
-        });
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          addUpload({
+            id: `upload-${Date.now()}-${file.name}`,
+            fileName: file.name,
+            content: typeof ev.target?.result === 'string' ? ev.target.result : '',
+            uploadedAt: new Date(),
+          });
+        };
+        reader.readAsText(file);
       }
     });
   };

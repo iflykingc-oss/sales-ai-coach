@@ -10,6 +10,9 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   suggestion?: string;
+  emotion?: string;
+  roundScore?: number;
+  evaluationFeedback?: string;
 }
 
 export interface PracticeSession {

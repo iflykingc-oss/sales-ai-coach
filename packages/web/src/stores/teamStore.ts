@@ -63,6 +63,7 @@ interface TeamState {
   setSharedScripts: (scripts: SharedScript[]) => void;
   toggleScriptLike: (id: string) => void;
   approveScript: (id: string) => void;
+  rejectScript: (id: string) => void;
 
   // Team stats
   teamStats: {
@@ -113,6 +114,10 @@ export const useTeamStore = create<TeamState>((set) => ({
       sharedScripts: state.sharedScripts.map((s) =>
         s.id === id ? { ...s, approved: true } : s,
       ),
+    })),
+  rejectScript: (id) =>
+    set((state) => ({
+      sharedScripts: state.sharedScripts.filter((s) => s.id !== id),
     })),
 
   teamStats: { totalMembers: 0, activeToday: 0, totalScriptsGenerated: 0, avgPracticeScore: 0 },

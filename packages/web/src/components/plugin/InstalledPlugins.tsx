@@ -8,14 +8,9 @@ import { usePluginStore } from '@/stores/pluginStore';
 import { cn } from '@/utils/cn';
 
 export function InstalledPlugins() {
-  const { plugins, setPlugins, setActivePlugin, togglePluginActive } = usePluginStore();
+  const { plugins, setActivePlugin } = usePluginStore();
 
-  if (plugins.length === 0) {
-    setPlugins([]);
-  }
-
-  const displayPlugins = plugins.length > 0 ? plugins : [];
-  const installedPlugins = displayPlugins.filter((p) => p.installed);
+  const installedPlugins = plugins.filter((p) => p.installed);
   const activePlugin = installedPlugins.find((p) => p.active);
 
   if (installedPlugins.length === 0) {

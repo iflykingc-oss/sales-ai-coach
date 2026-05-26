@@ -33,7 +33,7 @@ export function SystemSettings() {
   const displayUsers = systemUsers.length > 0 ? systemUsers : mockUsers;
 
   const [siteName, setSiteName] = useState(systemName);
-  const [logoUrl, setLogoUrl] = useState('');
+  const [logoUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredUsers = searchQuery

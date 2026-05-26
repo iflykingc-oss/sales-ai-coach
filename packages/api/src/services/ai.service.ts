@@ -18,7 +18,9 @@ export async function callAiService<T>({ path, method = 'POST', body }: AiServic
     throw new Error(`AI service error (${response.status}): ${error}`);
   }
 
-  return response.json() as Promise<T>;
+  const data = (await response.json()) as { success?: boolean; data?: T };
+  // AI service wraps all responses in { success, data }
+  return (data.data ?? data) as T;
 }
 
 export interface ScriptGenerationInput {
@@ -35,12 +37,23 @@ export interface ScriptGenerationOutput {
   pitfalls: Array<{ action: string; reason: string }>;
   knowledge_source: string;
   confidence_score: number;
+  quality_report?: {
+    score: number;
+    feedback: string;
+    passed: boolean;
+    suggestions: string[];
+  };
+  execution_report?: {
+    task_id: string;
+    elapsed_seconds: number;
+    retries: number;
+  };
 }
 
 export async function generateScript(input: ScriptGenerationInput): Promise<ScriptGenerationOutput> {
   return callAiService<ScriptGenerationOutput>({
     path: '/scripts/generate',
-    body: input,
+    body: input as unknown as Record<string, unknown>,
   });
 }
 
@@ -68,13 +81,14 @@ export interface PracticeOutput {
 export async function sendPracticeMessage(input: PracticeInput): Promise<PracticeOutput> {
   return callAiService<PracticeOutput>({
     path: '/practices/message',
-    body: input,
+    body: input as unknown as Record<string, unknown>,
   });
 }
 
 export interface ReviewInput {
   conversations: Array<{ content: string; role: string }>;
   userId: string;
+  history?: string;
 }
 
 export interface ReviewOutput {
@@ -84,11 +98,15 @@ export interface ReviewOutput {
   recommendations: string[];
   actionItems: string[];
   radarScores: Record<string, number>;
+  quality?: {
+    score: number;
+    feedback: string;
+  };
 }
 
 export async function analyzeReview(input: ReviewInput): Promise<ReviewOutput> {
   return callAiService<ReviewOutput>({
     path: '/reviews/analyze',
-    body: input,
+    body: input as unknown as Record<string, unknown>,
   });
 }

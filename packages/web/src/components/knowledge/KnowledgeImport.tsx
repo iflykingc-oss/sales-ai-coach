@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/Dialog';
-import { useKnowledgeStore, type KnowledgeItem } from '@/stores/knowledgeStore';
+import { useKnowledgeStore } from '@/stores/knowledgeStore';
 import { api } from '@/services/api';
 import { cn } from '@/utils/cn';
 

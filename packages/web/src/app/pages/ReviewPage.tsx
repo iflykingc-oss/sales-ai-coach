@@ -18,28 +18,32 @@ export default function ReviewPage() {
       return api.post('/reviews/generate', data);
     },
     onSuccess: (data: unknown) => {
-      const reviewData = (data as Record<string, unknown>)?.data || data;
+      const reviewData = data as Record<string, unknown> | undefined;
+      const nested = reviewData && typeof reviewData === 'object' && 'data' in reviewData
+        ? reviewData.data as Record<string, unknown> | undefined
+        : reviewData;
+      const rd = nested || reviewData || {};
       const reportData: ReviewReport = {
-        id: (reviewData?.id as string) || `review-${Date.now()}`,
-        date: (reviewData?.date as string) || new Date().toLocaleDateString('zh-CN'),
-        overallScore: (reviewData?.overallScore as number) || Math.floor(Math.random() * 20 + 70),
-        summary: (reviewData?.summary as string) || '今日对话整体表现不错，在需求挖掘方面有明显进步，但在促单环节仍需加强。',
-        strengths: (reviewData?.strengths as string[]) || [
+        id: (rd.id as string) || `review-${Date.now()}`,
+        date: (rd.date as string) || new Date().toLocaleDateString('zh-CN'),
+        overallScore: (rd.overallScore as number) || Math.floor(Math.random() * 20 + 70),
+        summary: (rd.summary as string) || '今日对话整体表现不错，在需求挖掘方面有明显进步，但在促单环节仍需加强。',
+        strengths: (rd.strengths as string[]) || [
           '能够主动倾听客户诉求，回应及时恰当',
           '产品知识扎实，回答客户问题准确',
           '善于运用共情技巧化解客户抵触',
         ],
-        improvements: (reviewData?.improvements as string[]) || [
+        improvements: (rd.improvements as string[]) || [
           '促单时机把握可以更主动',
           '价格异议时缺少具体数据支撑',
           '可以更多使用客户案例增强说服力',
         ],
-        actionItems: (reviewData?.actionItems as string[]) || [
+        actionItems: (rd.actionItems as string[]) || [
           '复习知识库中的"促单话术"章节，明天实战应用',
           '准备3个典型客户案例，下次对话时引用',
           '针对价格异议，提前准备竞品对比数据',
         ],
-        radarScores: (reviewData?.radarScores as Record<string, number>) || {
+        radarScores: (rd.radarScores as Record<string, number>) || {
           '需求挖掘': 82,
           '异议处理': 75,
           '促单能力': 65,
@@ -49,7 +53,7 @@ export default function ReviewPage() {
           '信任建立': 80,
           '价值传递': 73,
         },
-        scenarioType: reviewData?.scenarioType as string | undefined,
+        scenarioType: rd.scenarioType as string | undefined,
       };
       setReport(reportData);
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
