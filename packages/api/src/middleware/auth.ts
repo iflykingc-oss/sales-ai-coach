@@ -1,15 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: string;
-  };
-}
-
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
 
   if (!token) {
@@ -29,7 +21,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   }
 }
 
-export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
   if (token) {
     try {
@@ -46,7 +38,7 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
   next();
 }
 
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.user?.role !== 'ADMIN') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }

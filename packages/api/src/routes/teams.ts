@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { authMiddleware } from from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
-router.post('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const { name } = req.body;
     const team = await prisma.team.create({
@@ -18,14 +18,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/my', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/my', authMiddleware, async (req: Request, res, next) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id }, include: { team: true } });
     res.json({ success: true, data: user?.team });
   } catch (err) { next(err); }
 });
 
-router.get('/:id/dashboard', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/:id/dashboard', authMiddleware, async (req: Request, res, next) => {
   try {
     const team = await prisma.team.findFirst({
       where: { id: req.params.id, ownerId: req.user!.id },
@@ -41,7 +41,7 @@ router.get('/:id/dashboard', authMiddleware, async (req: AuthRequest, res, next)
   } catch (err) { next(err); }
 });
 
-router.post('/:id/tasks', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/:id/tasks', authMiddleware, async (req: Request, res, next) => {
   try {
     const { assigneeId, type, scenario, deadline } = req.body;
     const task = await prisma.teamTask.create({
@@ -51,7 +51,7 @@ router.post('/:id/tasks', authMiddleware, async (req: AuthRequest, res, next) =>
   } catch (err) { next(err); }
 });
 
-router.get('/:id/tasks', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/:id/tasks', authMiddleware, async (req: Request, res, next) => {
   try {
     const tasks = await prisma.teamTask.findMany({
       where: { teamId: req.params.id },

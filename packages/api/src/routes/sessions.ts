@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { authMiddleware } from from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import type { CreateSessionInput, UpdateSessionInput } from '@sales-ai-coach/shared';
 
 const router = Router();
 
-router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const sessions = await prisma.session.findMany({
       where: { userId: req.user!.id },
@@ -16,7 +16,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const session = await prisma.session.findFirst({
       where: { id: req.params.id, userId: req.user!.id },
@@ -27,7 +27,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const { name, industry, tags } = req.body as CreateSessionInput;
     const session = await prisma.session.create({
@@ -37,7 +37,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.put('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const { name, industry, status, tags } = req.body as UpdateSessionInput;
     const session = await prisma.session.updateMany({
@@ -49,7 +49,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.delete('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const result = await prisma.session.deleteMany({
       where: { id: req.params.id, userId: req.user!.id },
@@ -60,7 +60,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
 });
 
 // Create a message in a session
-router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/:id/messages', authMiddleware, async (req: Request, res, next) => {
   try {
     const session = await prisma.session.findFirst({
       where: { id: req.params.id, userId: req.user!.id },

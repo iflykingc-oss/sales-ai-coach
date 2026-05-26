@@ -1,10 +1,10 @@
-import { Router } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { Router, Request, Response, NextFunction } from 'express';
+import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
-router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const plugins = await prisma.industryPlugin.findMany({
       orderBy: { createdAt: 'desc' },
@@ -13,7 +13,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/:id', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const plugin = await prisma.industryPlugin.findUnique({ where: { id: req.params.id } });
     if (!plugin) return res.status(404).json({ success: false, error: 'Plugin not found' });
@@ -21,7 +21,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/install', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/install', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { pluginId } = req.body;
     const plugin = await prisma.industryPlugin.findUnique({ where: { id: pluginId } });
@@ -40,7 +40,7 @@ router.post('/install', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/search', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/search', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { q, category, sort } = req.query;
     const where: Record<string, any> = {};
@@ -69,7 +69,7 @@ router.get('/search', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/uninstall', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/:id/uninstall', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const plugin = await prisma.industryPlugin.findUnique({ where: { id: req.params.id } });
     if (!plugin) return res.status(404).json({ success: false, error: 'Plugin not found' });

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import bcrypt from 'bcrypt';
@@ -7,7 +7,7 @@ import { registerSchema, loginSchema } from '@sales-ai-coach/shared/schemas';
 
 const router = Router();
 
-router.post('/register', authLimiter, async (req, res, next) => {
+router.post('/register', authLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = registerSchema.parse(req.body);
     const hashedPassword = await bcrypt.hash(data.password, 12);
@@ -42,7 +42,7 @@ router.post('/register', authLimiter, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/login', authLimiter, async (req, res, next) => {
+router.post('/login', authLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: data.email } });
@@ -69,12 +69,12 @@ router.post('/login', authLimiter, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/logout', (req, res) => {
+router.post('/logout', (req: Request, res: Response) => {
   res.clearCookie('accessToken');
   res.json({ success: true });
 });
 
-router.get('/me', async (req, res, next) => {
+router.get('/me', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ success: false, error: 'Not authenticated' });

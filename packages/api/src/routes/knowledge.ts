@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { authMiddleware } from from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
-router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const { tag, industry } = req.query;
     const where: Record<string, unknown> = { userId: req.user!.id, status: 'ACTIVE' };
@@ -19,7 +19,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const { source, content, tags, industry } = req.body;
     const item = await prisma.knowledgeItem.create({
@@ -35,7 +35,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.put('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const { content, tags, status, weight } = req.body;
     const result = await prisma.knowledgeItem.updateMany({
@@ -47,7 +47,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.delete('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const result = await prisma.knowledgeItem.deleteMany({
       where: { id: req.params.id, userId: req.user!.id },

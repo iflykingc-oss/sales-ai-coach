@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { authMiddleware } from from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { generateScript } from '../services/ai.service.js';
 
 const router = Router();
 
-router.post('/generate', authMiddleware, aiLimiter, async (req: AuthRequest, res, next) => {
+router.post('/generate', authMiddleware, aiLimiter, async (req: Request, res, next) => {
   try {
     const { input, inputType, industry, context, sessionId } = req.body;
     const result = await generateScript({
@@ -33,7 +33,7 @@ router.post('/generate', authMiddleware, aiLimiter, async (req: AuthRequest, res
   } catch (err) { next(err); }
 });
 
-router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const { sessionId, tag } = req.query;
     const where: Record<string, unknown> = { userId: req.user!.id };
@@ -45,7 +45,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/feedback', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/:id/feedback', authMiddleware, async (req: Request, res, next) => {
   try {
     const { type, reason } = req.body as { type: 'up' | 'down'; reason?: string };
     const weightDelta = type === 'up' ? 0.1 : -0.2;

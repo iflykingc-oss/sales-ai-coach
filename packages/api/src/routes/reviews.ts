@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { authMiddleware } from from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { analyzeReview } from '../services/ai.service.js';
 
 const router = Router();
 
-router.post('/generate', authMiddleware, aiLimiter, async (req: AuthRequest, res, next) => {
+router.post('/generate', authMiddleware, aiLimiter, async (req: Request, res, next) => {
   try {
     const { conversations, sessionId } = req.body;
     const analysis = await analyzeReview({
@@ -29,7 +29,7 @@ router.post('/generate', authMiddleware, aiLimiter, async (req: AuthRequest, res
   } catch (err) { next(err); }
 });
 
-router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const reports = await prisma.reviewReport.findMany({
       where: { userId: req.user!.id },
@@ -39,7 +39,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const report = await prisma.reviewReport.findFirst({
       where: { id: req.params.id, userId: req.user!.id },

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware, optionalAuth, AuthRequest } from '../middleware/auth.js';
+import { authMiddleware, optionalAuth } from from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
@@ -7,7 +7,7 @@ import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
 const router = Router();
 
 // Harness-powered endpoints (direct proxy to AI service)
-router.post('/init', optionalAuth, async (req: AuthRequest, res, next) => {
+router.post('/init', optionalAuth, async (req: Request, res, next) => {
   try {
     const { scenario, industry, mode, maxRounds, sessionId } = req.body;
     const result = await callAiService({
@@ -25,7 +25,7 @@ router.post('/init', optionalAuth, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/message', authMiddleware, aiLimiter, async (req: AuthRequest, res, next) => {
+router.post('/message', authMiddleware, aiLimiter, async (req: Request, res, next) => {
   try {
     const { sessionId, message } = req.body;
     const result = await callAiService({
@@ -36,7 +36,7 @@ router.post('/message', authMiddleware, aiLimiter, async (req: AuthRequest, res,
   } catch (err) { next(err); }
 });
 
-router.post('/report', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/report', authMiddleware, async (req: Request, res, next) => {
   try {
     const { sessionId } = req.body;
     const result = await callAiService({
@@ -48,7 +48,7 @@ router.post('/report', authMiddleware, async (req: AuthRequest, res, next) => {
 });
 
 // Legacy DB-backed endpoints (still available)
-router.post('/start', authMiddleware, async (req: AuthRequest, res, next) => {
+router.post('/start', authMiddleware, async (req: Request, res, next) => {
   try {
     const { scenario, industry, mode } = req.body;
     const practice = await prisma.practiceSession.create({
@@ -65,7 +65,7 @@ router.post('/start', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/message', authMiddleware, aiLimiter, async (req: AuthRequest, res, next) => {
+router.post('/:id/message', authMiddleware, aiLimiter, async (req: Request, res, next) => {
   try {
     const { content } = req.body;
     const practice = await prisma.practiceSession.findUnique({ where: { id: req.params.id } });
@@ -100,7 +100,7 @@ router.post('/:id/message', authMiddleware, aiLimiter, async (req: AuthRequest, 
   } catch (err) { next(err); }
 });
 
-router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/', authMiddleware, async (req: Request, res, next) => {
   try {
     const practices = await prisma.practiceSession.findMany({
       where: { userId: req.user!.id },
@@ -110,7 +110,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
+router.get('/:id', authMiddleware, async (req: Request, res, next) => {
   try {
     const practice = await prisma.practiceSession.findFirst({
       where: { id: req.params.id, userId: req.user!.id },

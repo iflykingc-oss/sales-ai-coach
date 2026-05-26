@@ -1,0 +1,13 @@
+node_modules
+.git
+.vercel
+packages/web
+packages/ai-service
+.turbo
+dist
+*.log
+.env
+.env.*
+tests
+.DS_Store
+coverage
