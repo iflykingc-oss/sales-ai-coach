@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useScriptStore } from '@/stores/scriptStore';
 import type { InputType } from '@sales-ai-coach/shared';
 
@@ -68,7 +69,16 @@ export default function InputBar({ onSend }: InputBarProps) {
   const [pasteValue, setPasteValue] = useState('');
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const {
+    isListening,
+    isSupported,
+    transcript: voiceTranscript,
+    interimTranscript,
+    error: voiceError,
+    startListening,
+    stopListening,
+    resetTranscript: resetVoiceTranscript,
+  } = useVoiceInput();
   const [pasteError, setPasteError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +98,8 @@ export default function InputBar({ onSend }: InputBarProps) {
         input = `[图片已上传]`;
         break;
       case 'VOICE':
-        input = `[语音消息]`;
+        input = voiceTranscript.trim() || (interimTranscript ? interimTranscript.trim() : '');
+        if (!input) return;
         break;
       case 'FORM':
         formData = { ...formValues };
@@ -111,6 +122,7 @@ export default function InputBar({ onSend }: InputBarProps) {
     if (mode === 'PASTE') setPasteValue('');
     if (mode === 'FORM') setFormValues({});
     if (mode === 'IMAGE') setImageUrl(null);
+    if (mode === 'VOICE') resetVoiceTranscript();
 
     if (onSend) {
       onSend(input, inputType, formData);
@@ -230,9 +242,12 @@ export default function InputBar({ onSend }: InputBarProps) {
   );
 
   const handleRecordingToggle = useCallback(() => {
-    setIsRecording((prev) => !prev);
-    // Actual recording logic would go here (MediaRecorder API)
-  }, []);
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }, [isListening, startListening, stopListening]);
 
   return (
     <div className="border-t border-gray-200 bg-white">
@@ -338,21 +353,46 @@ export default function InputBar({ onSend }: InputBarProps) {
         {mode === 'VOICE' && (
           <div className="flex-1">
             <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-6">
-              <button
-                onClick={handleRecordingToggle}
-                className={cn(
-                  'flex h-16 w-16 items-center justify-center rounded-full transition-all',
-                  isRecording
-                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200'
-                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300',
-                )}
-              >
-                {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-              </button>
-              <p className="mt-3 text-sm text-gray-500">
-                {isRecording ? '录音中...点击停止' : '点击开始录音'}
-              </p>
-              <p className="mt-1 text-xs text-gray-400">(语音识别功能开发中)</p>
+              {!isSupported ? (
+                <>
+                  <MicOff className="mb-2 h-8 w-8 text-gray-400" />
+                  <p className="text-sm text-gray-500">当前浏览器不支持语音输入</p>
+                  <p className="mt-1 text-xs text-gray-400">请使用 Chrome 或 Edge 浏览器</p>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleRecordingToggle}
+                    className={cn(
+                      'flex h-16 w-16 items-center justify-center rounded-full transition-all',
+                      isListening
+                        ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200'
+                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300',
+                    )}
+                  >
+                    {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                  </button>
+                  {voiceError ? (
+                    <p className="mt-3 text-sm text-red-500">{voiceError}</p>
+                  ) : (
+                    <>
+                      <p className="mt-3 text-sm text-gray-500">
+                        {isListening ? '录音中...点击停止' : '点击开始录音'}
+                      </p>
+                      {interimTranscript && (
+                        <p className="mt-2 max-w-xs text-center text-xs italic text-gray-400">
+                          {interimTranscript}
+                        </p>
+                      )}
+                      {voiceTranscript && (
+                        <div className="mt-3 w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                          {voiceTranscript}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
