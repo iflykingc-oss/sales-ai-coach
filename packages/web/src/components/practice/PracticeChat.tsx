@@ -262,7 +262,7 @@ interface PracticeChatProps {
 }
 
 export function PracticeChat({ onEnd }: PracticeChatProps) {
-  const { session, addMessage, incrementRound, setCustomerEmotion, completePractice } = usePracticeStore();
+  const { session, addMessage, incrementRound, setCustomerEmotion, completePractice, setDetectedStage } = usePracticeStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPsychology, setShowPsychology] = useState(false);
@@ -308,6 +308,10 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
       };
 
       setCustomerEmotion(emotionMap[data.emotion] || 'interest');
+
+      if (data.detectedStage) {
+        setDetectedStage(data.detectedStage);
+      }
 
       const aiMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
@@ -425,8 +429,10 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           </div>
           <div className="flex gap-2">
             {currentFramework.stages.map((stage, idx) => {
-              const isActive = session.round >= idx * 2 && session.round < (idx + 1) * 2;
-              const isPast = session.round >= (idx + 1) * 2;
+              const currentStage = session.detectedStage || '';
+              const isActive = stage.id === currentStage;
+              const isPast = currentStage !== '' &&
+                currentFramework.stages.findIndex((s) => s.id === currentStage) > idx;
               return (
                 <div
                   key={stage.id}

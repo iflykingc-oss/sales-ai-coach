@@ -8,19 +8,11 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { usePracticeStore } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { api } from '@/services/api';
+import { EVALUATION_DIMENSIONS } from '@sales-ai-coach/shared';
 import EmotionTimeline from './EmotionTimeline';
 import RoundScores from './RoundScores';
 
-const defaultDimensions: string[] = [
-  '需求挖掘',
-  '异议处理',
-  '促单能力',
-  '沟通表达',
-  '情绪管理',
-  '产品知识',
-  '信任建立',
-  '价值传递',
-];
+const defaultDimensions: string[] = [...EVALUATION_DIMENSIONS];
 
 interface PracticeSummaryProps {
   onRestart: () => void;
@@ -51,6 +43,11 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
 
         const report = response.data.data;
         if (report && report.radarScores) {
+          // Normalize: ensure all expected dimensions present
+          const normalizedScores: Record<string, number> = {};
+          for (const dim of defaultDimensions) {
+            normalizedScores[dim] = report.radarScores[dim] ?? 0;
+          }
           setSummary({
             sessionId: session.id,
             totalScore: Math.round(report.overall_score * 100),
@@ -59,7 +56,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
             recommendations: report.recommendations?.map((r: any) =>
               `${r.dimension}: ${r.advice}`,
             ) || [],
-            radarScores: report.radarScores,
+            radarScores: normalizedScores,
           });
         }
       } catch (error) {

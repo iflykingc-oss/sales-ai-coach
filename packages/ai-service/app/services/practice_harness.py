@@ -6,20 +6,25 @@ Implements generator-evaluator separation for multi-turn coaching:
 - Evaluation Agent: After each round, evaluates the rep's performance
 - Context Manager: Tracks conversation state, compacts when needed
 - Feature List: Tracks coaching session progress
+- Framework Stage Detection: Identifies which sales logic stage the rep is in
 
 Architecture:
   Sales Rep → Practice Agent (customer response + emotion)
-           → Evaluation Agent (round score + feedback)
+           → Evaluation Agent (round multi-dim scores + feedback)
            → Context Manager (state tracking + compaction)
            → Feature List (session progress)
+           → Framework Stage Detector (dynamic stage tracking)
 """
 
 import json
 import re
 from app.harness.context_manager import ContextManager
 from app.harness.feature_list import FeatureList
+from app.harness.planner import TaskPlanner
+from app.harness.progress_tracker import ProgressTracker
 from app.models.router import model_router
 from app.core.logging import logger
+from app.services.evaluation_dimensions import EVALUATION_DIMENSIONS
 
 
 class PracticeHarness:
@@ -45,11 +50,15 @@ class PracticeHarness:
         self.session_id = session_id
         self.ctx = ContextManager(session_id)
         self.fl = FeatureList(task_id=session_id, goal="AI陪练会话")
+        self.progress_tracker = ProgressTracker(self.fl)
         self.round_count = 0
         self.max_rounds = 10
         self.customer_persona = ""
         self.emotion_history: list[str] = []
         self.round_scores: list[float] = []
+        self.round_dimension_scores: list[dict] = []  # Per-round 8-dim scores
+        self.detected_stage: str = ""  # Currently detected framework stage
+        self.stage_history: list[str] = []
         self.is_active = False
 
     async def init_session(
@@ -62,6 +71,20 @@ class PracticeHarness:
         """Initialize a practice session with customer persona."""
         self.max_rounds = max_rounds
         self.is_active = True
+
+        # Use TaskPlanner for structured session initialization
+        planner = TaskPlanner()
+        self.fl = await planner.plan_practice_session(
+            scenario=scenario,
+            industry=industry,
+            mode=mode,
+        )
+        self.progress_tracker = ProgressTracker(self.fl)
+        self.progress_tracker.start()
+
+        # Start the first item (persona generation)
+        if self.fl.items:
+            self.fl.start_item(self.fl.items[0].id)
 
         # Build customer persona
         persona_prompt = f"""作为客户画像生成器，根据以下信息构建详细的客户画像：
@@ -117,9 +140,11 @@ class PracticeHarness:
             },
         )
 
-        # Add feature list items
-        self.fl.add_item(description=f"构建客户画像: {persona.get('name', '')}")
-        greeting_id = self.fl.add_item("生成客户开场白", dependencies=[self.fl.items[0].id])
+        # Complete persona item
+        if self.fl.items:
+            self.fl.complete_item(self.fl.items[0].id, result=self.customer_persona)
+
+        greeting_id = self.fl.add_item(description="生成客户开场白", dependencies=[self.fl.items[0].id])
 
         # Generate initial greeting from customer
         greeting = await self._generate_customer_response(
@@ -128,7 +153,6 @@ class PracticeHarness:
             emotion=persona.get("initial_emotion", "中立"),
         )
 
-        self.fl.complete_item(self.fl.items[0].id, result=self.customer_persona)
         self.fl.complete_item(greeting_id, result=greeting["response"])
 
         return {
@@ -154,9 +178,11 @@ class PracticeHarness:
                 "round": int,
                 "is_complete": bool,
                 "round_score": float | None,
+                "dimension_scores": dict | None,
                 "evaluation_feedback": str | None,
                 "emotion_history": [...],
                 "logicFramework": str,
+                "detectedStage": str,
             }
         """
         if not self.is_active:
@@ -170,12 +196,22 @@ class PracticeHarness:
         # Parse customer persona
         persona = json.loads(self.customer_persona)
 
-        # Generate customer response with logic framework context
+        # Detect framework stage from the rep's message
+        detected_stage = ""
+        if logic_framework:
+            framework_id = self._extract_framework_id(logic_framework)
+            detected_stage = await self._detect_framework_stage(sales_message, framework_id)
+            if detected_stage:
+                self.detected_stage = detected_stage
+                self.stage_history.append(detected_stage)
+
+        # Generate customer response with logic framework + stage context
         customer_result = await self._generate_customer_response(
             sales_message=sales_message,
             persona=persona,
             emotion=self.emotion_history[-1] if self.emotion_history else "中立",
             logic_framework=logic_framework,
+            detected_stage=detected_stage,
         )
 
         # Track emotion
@@ -184,10 +220,11 @@ class PracticeHarness:
         # Add customer response to context
         self.ctx.add_message("assistant", customer_result["response"])
 
-        # Evaluate the rep's performance this round
+        # Evaluate the rep's performance this round (multi-dimensional)
         round_score = None
+        dimension_scores = None
         eval_feedback = None
-        if self.round_count >= 2:  # Skip evaluation for first round
+        if self.round_count >= 2:
             eval_result = await self._evaluate_round(
                 sales_message=sales_message,
                 customer_response=customer_result["response"],
@@ -195,10 +232,12 @@ class PracticeHarness:
                 persona=persona,
                 logic_framework=logic_framework,
             )
-            round_score = eval_result.get("score")
+            dimension_scores = eval_result.get("scores")
             eval_feedback = eval_result.get("feedback")
-            if round_score is not None:
-                self.round_scores.append(round_score)
+            if dimension_scores is not None:
+                self.round_dimension_scores.append(dimension_scores)
+                avg = sum(dimension_scores.values()) / len(dimension_scores)
+                self.round_scores.append(avg)
 
         # Compact context if needed
         if self.round_count >= self.COMPACT_AFTER_ROUNDS:
@@ -208,7 +247,9 @@ class PracticeHarness:
         is_complete = self.round_count >= self.max_rounds or customer_result.get("is_complete", False)
         if is_complete:
             self.is_active = False
-            self.fl.items[-1].status = self.fl.items[-1].status  # Keep as is
+
+        # Signal progress
+        self.progress_tracker._notify()
 
         return {
             "response": customer_result["response"],
@@ -216,36 +257,59 @@ class PracticeHarness:
             "round": self.round_count,
             "is_complete": is_complete,
             "round_score": round_score,
+            "dimension_scores": dimension_scores,
             "evaluation_feedback": eval_feedback,
             "emotion_history": list(self.emotion_history),
             "logicFramework": logic_framework,
+            "detectedStage": self.detected_stage,
         }
 
     async def generate_report(self) -> dict:
         """Generate a comprehensive practice session report."""
+        # Aggregate per-dimension scores from round history
+        dimension_averages = {}
+        for dim in EVALUATION_DIMENSIONS:
+            scores_for_dim = [
+                rs.get(dim, 0.5) for rs in self.round_dimension_scores if dim in rs
+            ]
+            if scores_for_dim:
+                dimension_averages[dim] = sum(scores_for_dim) / len(scores_for_dim)
+            else:
+                dimension_averages[dim] = 0.5
+
+        dimension_history_text = ""
+        for i, rs in enumerate(self.round_dimension_scores):
+            scores_str = ", ".join(f"{k}: {v:.2f}" for k, v in rs.items())
+            dimension_history_text += f"第{i+1}轮: {{{scores_str}}}\n"
+
+        avg_score = sum(self.round_scores) / len(self.round_scores) if self.round_scores else 0.5
+
         report_prompt = f"""作为销售陪练评估专家，请根据以下陪练记录生成详细的复盘报告。
 
 客户画像: {self.customer_persona}
 对话轮数: {self.round_count}
 情绪历史: {', '.join(self.emotion_history)}
-每轮评分: {self.round_scores}
-平均分: {sum(self.round_scores) / len(self.round_scores) if self.round_scores else 0:.1f}
+每轮综合评分: {self.round_scores}
+平均分: {avg_score:.1f}
 
-对话记录:
-{chr(10).join(f"{m['role']}: {m['content']}" for m in self.ctx.messages)}
+各维度历史得分（每轮评估）:
+{dimension_history_text}
+
+对话记录摘要:
+{chr(10).join(f"{m['role']}: {m['content'][:100]}..." for m in self.ctx.messages[-8:])}
 
 请输出JSON格式复盘报告:
 {{
   "overall_score": 0.75,
-  "dimension_scores": {{
-    "需求挖掘": 0.8,
-    "共情能力": 0.7,
-    "产品知识": 0.6,
-    "异议处理": 0.7,
-    "推进节奏": 0.8,
-    "专业形象": 0.7,
-    "话术质量": 0.6,
-    "情绪管理": 0.8
+  "radarScores": {{
+    "需求挖掘": 75,
+    "异议处理": 70,
+    "促单能力": 65,
+    "沟通表达": 80,
+    "情绪管理": 85,
+    "产品知识": 60,
+    "信任建立": 70,
+    "价值传递": 65
   }},
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["待改进1", "待改进2"],
@@ -259,7 +323,11 @@ class PracticeHarness:
     "trend": "上升/下降/波动",
     "turning_point": "情绪转折点描述"
   }}
-}}"""
+}}
+
+注意：
+1. radarScores 是0-100的整数分数，请基于各维度历史得分进行综合评估
+2. 各维度历史得分是每轮评估的原始数据，请结合对话记录分析趋势"""
 
         messages = [
             {"role": "user", "content": report_prompt},
@@ -267,7 +335,6 @@ class PracticeHarness:
 
         result = await model_router.chat_with_fallback(messages, temperature=0.3, max_tokens=2048)
 
-        # Parse report
         try:
             content = result["content"]
             if "```" in content:
@@ -278,17 +345,111 @@ class PracticeHarness:
         except (json.JSONDecodeError, ValueError):
             report = self._build_fallback_report()
 
+        # Ensure radarScores key exists (camelCase for frontend)
+        if "dimension_scores" in report and "radarScores" not in report:
+            raw = report.pop("dimension_scores")
+            report["radarScores"] = {k: round(v * 100) if v <= 1 else round(v) for k, v in raw.items()}
+
+        # If radarScores missing or incomplete, fill from dimension_averages
+        if not report.get("radarScores"):
+            report["radarScores"] = {dim: round(dimension_averages.get(dim, 0.5) * 100) for dim in EVALUATION_DIMENSIONS}
+        else:
+            for dim in EVALUATION_DIMENSIONS:
+                if dim not in report["radarScores"]:
+                    report["radarScores"][dim] = round(dimension_averages.get(dim, 0.5) * 100)
+
         report["session_id"] = self.session_id
         report["round_count"] = self.round_count
         report["emotion_history"] = self.emotion_history
         report["round_scores"] = self.round_scores
 
-        # Update feature list
         self.fl.add_item(description="生成复盘报告")
         self.fl.items[-1].status = "completed"
         self.fl.items[-1].result = json.dumps(report, ensure_ascii=False)
+        self.progress_tracker.complete()
 
         return report
+
+    async def _extract_framework_id(self, logic_framework: str) -> str:
+        """Extract framework ID from the logic framework string."""
+        framework_map = {
+            "预期同步法": "expectation-sync",
+            "差距分析法": "gap-analysis",
+            "价值展示法": "value-demo",
+            "痛点放大法": "pain-amplify",
+        }
+        for zh_name, en_id in framework_map.items():
+            if zh_name in logic_framework:
+                return en_id
+        # Try direct match (already an English ID)
+        if logic_framework in ("expectation-sync", "gap-analysis", "value-demo", "pain-amplify"):
+            return logic_framework
+        return logic_framework
+
+    async def _detect_framework_stage(
+        self,
+        sales_message: str,
+        framework_id: str,
+    ) -> str:
+        """Detect which stage of the sales logic framework the rep's message corresponds to."""
+        framework_stages = {
+            "expectation-sync": [
+                {"id": "status-confirm", "name": "现状确认", "key_questions": "了解客户当前状态和痛点、之前尝试的方法"},
+                {"id": "goal-align", "name": "目标对齐", "key_questions": "期望改善时间、短期长期目标、达成共识"},
+                {"id": "path-plan", "name": "路径规划", "key_questions": "分阶段方案、里程碑、配合事项"},
+            ],
+            "gap-analysis": [
+                {"id": "benchmark", "name": "标准对标", "key_questions": "行业标准、考试要求、优秀标准"},
+                {"id": "current-assess", "name": "现状评估", "key_questions": "当前水平、差距分析、强项弱项"},
+                {"id": "catchup", "name": "追赶策略", "key_questions": "补强短板、发挥优势、时间规划"},
+            ],
+            "value-demo": [
+                {"id": "case-show", "name": "案例呈现", "key_questions": "类似案例、改善过程、用时"},
+                {"id": "data-support", "name": "数据支撑", "key_questions": "提分幅度、满意度、续费率"},
+                {"id": "custom-plan", "name": "专属方案", "key_questions": "定制方案、方案优势、预期效果"},
+            ],
+            "pain-amplify": [
+                {"id": "pain-identify", "name": "痛点确认", "key_questions": "问题持续时间、影响、尝试方法"},
+                {"id": "consequence", "name": "后果推演", "key_questions": "不改变的后果、半年后状态、考试影响"},
+                {"id": "solution", "name": "方案呈现", "key_questions": "解决方案、具体做法、预期效果"},
+            ],
+        }
+
+        stages = framework_stages.get(framework_id, [])
+        if not stages:
+            return ""
+
+        stages_json = json.dumps(stages, ensure_ascii=False)
+
+        detect_prompt = f"""分析销售的话，判断他正在使用哪个销售阶段。
+
+可用阶段:
+{stages_json}
+
+销售的话: {sales_message}
+
+判断标准:
+- 如果销售在了解现状、确认痛点、问之前尝试的方法 → 第一阶段(status-confirm/benchmark/case-show/pain-identify)
+- 如果销售在设定目标、讨论期望效果、达成共识 → 第二阶段(goal-align/current-assess/data-support/consequence)
+- 如果销售在提出具体方案、分阶段计划、合作事项 → 第三阶段(path-plan/catchup/custom-plan/solution)
+
+请只输出阶段ID（如"status-confirm"），不要输出其他内容。如果无法判断，输出""。"""
+
+        messages = [
+            {"role": "user", "content": detect_prompt},
+        ]
+
+        try:
+            result = await model_router.chat_with_fallback(
+                messages, temperature=0.1, max_tokens=32
+            )
+            detected = result["content"].strip().strip('"').strip()
+            stage_ids = {s["id"] for s in stages}
+            if detected in stage_ids:
+                return detected
+            return ""
+        except Exception:
+            return ""
 
     async def _generate_customer_response(
         self,
@@ -296,21 +457,41 @@ class PracticeHarness:
         persona: dict,
         emotion: str = "中立",
         logic_framework: str = "",
+        detected_stage: str = "",
     ) -> dict:
         """Generate the customer's response in the roleplay."""
 
-        # Build logic framework context
+        # Build logic framework + stage context
         framework_context = ""
         if logic_framework:
+            stage_context = ""
+            if detected_stage:
+                stage_names = {
+                    "status-confirm": "现状确认（了解客户当前状态和痛点）",
+                    "goal-align": "目标对齐（与客户就改善目标达成共识）",
+                    "path-plan": "路径规划（制定具体可行的执行方案）",
+                    "benchmark": "标准对标（明确行业/考试标准）",
+                    "current-assess": "现状评估（客观评估当前水平，找出差距）",
+                    "catchup": "追赶策略（制定针对性提升方案）",
+                    "case-show": "案例呈现（用相似案例建立信任）",
+                    "data-support": "数据支撑（用客观数据证明效果）",
+                    "custom-plan": "专属方案（为客户定制个性化方案）",
+                    "pain-identify": "痛点确认（确认客户的核心痛点）",
+                    "consequence": "后果推演（引导思考不改变的后果）",
+                    "solution": "方案呈现（提供解决痛点的方案）",
+                }
+                stage_name = stage_names.get(detected_stage, detected_stage)
+                stage_context = f"""
+销售当前阶段: {stage_name}
+请根据你的角色，做出符合该阶段的自然反应：
+- 在现状确认阶段：客户通常会配合回答，但会保持一定的防备
+- 在目标对齐阶段：客户会表达期望，情绪偏向积极
+- 在路径规划阶段：客户会关注具体方案，情绪偏向犹豫到兴趣"""
+
             framework_context = f"""
 销售逻辑框架提示:
-当前销售正在使用「{logic_framework}」逻辑框架。
-请根据该框架的特点做出合理反应：
-- 如果销售在了解现状/痛点，应配合回答，情绪偏向犹豫
-- 如果销售在设定目标/规划路径，应表达期望，情绪偏向兴趣
-- 如果销售在展示价值/案例，应产生信任，情绪偏向共情
-- 如果销售在推演后果/放大痛点，应感到紧迫感，情绪偏向犹豫→兴趣
-"""
+当前销售正在使用「{logic_framework}」逻辑框架。{stage_context}
+请根据该框架的特点和销售的当前阶段做出合理反应。"""
 
         system_prompt = f"""你正在扮演一个客户角色，与销售进行对话。
 
@@ -374,7 +555,7 @@ class PracticeHarness:
         persona: dict,
         logic_framework: str = "",
     ) -> dict:
-        """Evaluate the sales rep's performance in this round."""
+        """Evaluate the sales rep's performance across all 8 dimensions."""
 
         framework_eval = ""
         if logic_framework:
@@ -383,7 +564,9 @@ class PracticeHarness:
 销售当前使用的逻辑框架: {logic_framework}
 请评估销售是否正确运用了该框架的核心逻辑。"""
 
-        eval_prompt = f"""评估销售在这轮对话中的表现。
+        dimensions_json = json.dumps(EVALUATION_DIMENSIONS, ensure_ascii=False)
+
+        eval_prompt = f"""评估销售在这轮对话中的表现，按以下8个维度分别打分。
 
 客户画像: {persona.get('name', '')} ({persona.get('personality', '')})
 客户当前情绪: {emotion}
@@ -391,15 +574,19 @@ class PracticeHarness:
 
 销售的话: {sales_message}
 
-评估维度:
-1. 是否有效回应客户需求/顾虑
-2. 语气是否恰当、专业
-3. 是否推进了销售进程
-4. 是否避免了常见销售错误
-5. 是否正确运用了销售逻辑框架（如适用）
+评估维度（{dimensions_json}）:
+- 需求挖掘: 是否有效提问和回应客户需求/顾虑
+- 异议处理: 面对客户异议时的应对能力
+- 促单能力: 是否适时推动决策和行动
+- 沟通表达: 语气是否恰当、专业、清晰
+- 情绪管理: 是否保持冷静，不因客户情绪波动而失控
+- 产品知识: 对产品和行业的理解深度
+- 信任建立: 是否建立了良好的信任关系
+- 价值传递: 是否清晰传达了产品/服务的价值
 
-请输出JSON: {{"score": 0.75, "feedback": "一句话反馈"}}
-score范围0-1，0.7以上为合格。"""
+请输出JSON:
+{{"scores": {{"需求挖掘": 0.7, "异议处理": 0.6, "促单能力": 0.7, "沟通表达": 0.8, "情绪管理": 0.8, "产品知识": 0.6, "信任建立": 0.7, "价值传递": 0.6}}, "feedback": "一句话总体反馈"}}
+每个维度score范围0-1，0.7以上为合格。"""
 
         messages = [
             {"role": "user", "content": eval_prompt},
@@ -407,7 +594,7 @@ score范围0-1，0.7以上为合格。"""
 
         try:
             result = await model_router.chat_with_fallback(
-                messages, temperature=0.2, max_tokens=128
+                messages, temperature=0.2, max_tokens=256
             )
             content = result["content"]
             if "```" in content:
@@ -415,28 +602,37 @@ score范围0-1，0.7以上为合格。"""
                 if content.startswith("json"):
                     content = content[4:]
             data = json.loads(content.strip())
+
+            scores = data.get("scores", {})
+            validated_scores = {}
+            for dim in EVALUATION_DIMENSIONS:
+                validated_scores[dim] = float(scores.get(dim, 0.5))
+
             return {
-                "score": float(data.get("score", 0.5)),
+                "scores": validated_scores,
                 "feedback": data.get("feedback", ""),
             }
         except (json.JSONDecodeError, ValueError):
-            return {"score": None, "feedback": ""}
+            return {
+                "scores": {dim: 0.5 for dim in EVALUATION_DIMENSIONS},
+                "feedback": "",
+            }
 
     def _build_fallback_report(self) -> dict:
         """Build a basic report when LLM report generation fails."""
         avg = sum(self.round_scores) / len(self.round_scores) if self.round_scores else 0.5
+        # Use dimension_averages from per-round data if available
+        fallback_scores = {}
+        for dim in EVALUATION_DIMENSIONS:
+            scores_for_dim = [rs.get(dim, 0.5) for rs in self.round_dimension_scores]
+            if scores_for_dim:
+                fallback_scores[dim] = round(sum(scores_for_dim) / len(scores_for_dim) * 100)
+            else:
+                fallback_scores[dim] = round(avg * 100)
+
         return {
             "overall_score": avg,
-            "dimension_scores": {
-                "需求挖掘": avg,
-                "共情能力": avg,
-                "产品知识": avg,
-                "异议处理": avg,
-                "推进节奏": avg,
-                "专业形象": avg,
-                "话术质量": avg,
-                "情绪管理": avg,
-            },
+            "radarScores": fallback_scores,
             "strengths": ["完成了完整的对话练习"],
             "weaknesses": ["需要更多练习来提升"],
             "key_moments": [],
@@ -462,6 +658,10 @@ score范围0-1，0.7以上为合格。"""
             "customer_persona": self.customer_persona,
             "emotion_history": self.emotion_history,
             "round_scores": self.round_scores,
+            "round_dimension_scores": self.round_dimension_scores,
+            "detected_stage": self.detected_stage,
+            "stage_history": self.stage_history,
             "context": self.ctx.export_state(),
             "feature_list": self.fl.to_dict(),
+            "progress": self.progress_tracker.get_progress().__dict__ if self.progress_tracker else None,
         }

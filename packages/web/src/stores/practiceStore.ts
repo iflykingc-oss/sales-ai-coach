@@ -25,6 +25,7 @@ export interface PracticeSession {
   skillFocus?: string;
   logicFramework?: string;
   logicStage?: string;
+  detectedStage?: string;
   messages: ChatMessage[];
   round: number;
   maxRounds: number;
@@ -63,6 +64,7 @@ interface PracticeState {
   setLoading: (loading: boolean) => void;
   addRecentScenario: (scenarioId: string) => void;
   setLogicFramework: (frameworkId: string) => void;
+  setDetectedStage: (stage: string) => void;
 }
 
 export const usePracticeStore = create<PracticeState>()(
@@ -127,6 +129,11 @@ export const usePracticeStore = create<PracticeState>()(
         set((state) => {
           if (!state.session) return state;
           return { session: { ...state.session, logicFramework: frameworkId } };
+        }),
+      setDetectedStage: (stage) =>
+        set((state) => {
+          if (!state.session) return state;
+          return { session: { ...state.session, detectedStage: stage } };
         }),
     }),
     { name: 'practice-state' },
