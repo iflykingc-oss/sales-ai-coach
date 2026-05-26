@@ -3,6 +3,7 @@ import { Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle } from 'luci
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
 import ScriptFeedback from './ScriptFeedback';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 const STYLE_TABS = [
   { key: 'empathy', label: '共情版', icon: '\u{1F91D}' },
@@ -106,11 +107,19 @@ export default function ScriptDisplay() {
 
       {/* Content area */}
       {isGenerating ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-primary-500" />
-            <p className="text-sm text-gray-500">AI 正在生成话术...</p>
-            <p className="mt-1 text-xs text-gray-400">分析场景，匹配知识库，生成三种风格</p>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-primary-500" />
+            <span className="text-sm text-gray-500">AI 正在生成话术...</span>
+          </div>
+          <Skeleton.Line className="h-4 w-3/4" />
+          <Skeleton.Line className="h-4 w-full" />
+          <Skeleton.Line className="h-4 w-2/3" />
+          <Skeleton.Line className="h-4 w-1/2" />
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <Skeleton.Line className="h-3 w-1/4 mb-2" />
+            <Skeleton.Line className="h-4 w-full" />
+            <Skeleton.Line className="h-4 w-4/5" />
           </div>
         </div>
       ) : currentScript ? (

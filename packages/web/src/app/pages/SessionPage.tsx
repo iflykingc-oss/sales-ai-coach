@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useScriptStore } from '@/stores/scriptStore';
@@ -15,6 +15,16 @@ export default function SessionPage() {
   const { setSessions, activeSessionId, setActiveSessionId } = useSessionStore();
   const { setCurrentScript, setGeneratedScriptIds, reset: resetScript } = useScriptStore();
   const { addActivity } = useActivityStore();
+  const onSendRef = useRef<((input: string, inputType: InputType) => void) | null>(null);
+
+  // Register onSend handler for quick prompts in MessageList
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('set-onsend', {
+      detail: (input: string, inputType: InputType) => {
+        onSendRef.current?.(input, inputType);
+      },
+    }));
+  }, []);
 
   // Fetch sessions on mount
   const { data: sessionsData } = useQuery({
@@ -122,6 +132,13 @@ export default function SessionPage() {
     },
     [activeSessionId, setCurrentScript, setGeneratedScriptIds],
   );
+
+  // Keep ref in sync
+  useEffect(() => {
+    onSendRef.current = (input: string, inputType: InputType) => {
+      handleSend(input, inputType);
+    };
+  }, [handleSend]);
 
   return (
     <div className="flex h-full flex-col bg-gray-50">
