@@ -738,7 +738,7 @@ function chainToScripts(chain: DialogueChain, prefix: string): PluginScript[] {
 /**
  * 填充配置占位符到对话链
  */
-function fillChainConfig(chain: DialogueChain, config: typeof DOMESTIC_CONFIGS[0]): DialogueChain {
+function fillChainConfig(chain: DialogueChain, config: typeof DOMESTIC_CONFIGS[0], _style: DialogueStyle = 'enthusiastic'): DialogueChain {
   const replacer = (text: string) => text
     .replace(/\{company\}/g, config.company)
     .replace(/\{role\}/g, config.role)
@@ -1294,10 +1294,27 @@ export function getPluginDialogueChains(pluginId: string): DialogueChain[] {
 }
 
 export {
+  fillChainConfig,
   EMPATHY_OPENERS_ZH,
   EMPATHY_OPENERS_EN,
   FILLER_PHRASES_ZH,
   FILLER_PHRASES_EN,
   OPEN_QUESTIONS_ZH,
   OPEN_QUESTIONS_EN,
+};
+
+export const stageLabels: Record<ConversationStage, string> = {
+  introduction: '初次接触',
+  qualification: '需求挖掘',
+  value_proposition: '价值证明',
+  needs_analysis: '需求分析',
+  solution: '方案呈现',
+  objection: '异议处理',
+  close: '关单促成',
+};
+
+export const difficultyLabels: Record<string, string> = {
+  beginner: '入门',
+  intermediate: '进阶',
+  advanced: '高级',
 };
