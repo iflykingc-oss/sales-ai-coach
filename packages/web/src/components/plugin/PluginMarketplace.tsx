@@ -1,56 +1,47 @@
 import { useMemo } from 'react';
 import { Package } from 'lucide-react';
 import { usePluginStore, type Plugin } from '@/stores/pluginStore';
+import { industryDefinitions } from '@/data/pluginContent';
 import { PluginCard } from './PluginCard';
 import { cn } from '@/utils/cn';
 
-const mockPlugins: Plugin[] = [
-  {
-    id: 'p1', name: 'SaaS软件行业包', description: '面向B端SaaS销售的全套话术、场景和知识库',
-    icon: '💻', category: 'domestic', installCount: 1280, installed: true, active: true,
-    scriptCount: 45, scenarioCount: 12, lastUpdated: '2025-05-20', version: '2.1.0', rating: 4.8, reviewCount: 86,
-  },
-  {
-    id: 'p2', name: '医疗器械行业包', description: '医疗设备、耗材、试剂销售专用',
-    icon: '🏥', category: 'domestic', installCount: 960, installed: true, active: false,
-    scriptCount: 38, scenarioCount: 10, lastUpdated: '2025-05-18', version: '1.8.0', rating: 4.6, reviewCount: 72,
-  },
-  {
-    id: 'p3', name: '教育培训行业包', description: 'K12、职教、素质教育招生话术',
-    icon: '📚', category: 'domestic', installCount: 845, installed: false, active: false,
-    scriptCount: 32, scenarioCount: 8, lastUpdated: '2025-05-15', version: '1.5.0', rating: 4.5, reviewCount: 54,
-  },
-  {
-    id: 'p4', name: '房地产行业包', description: '新房、二手房、商业地产销售全流程',
-    icon: '🏠', category: 'domestic', installCount: 720, installed: false, active: false,
-    scriptCount: 28, scenarioCount: 9, lastUpdated: '2025-05-12', version: '1.3.0', rating: 4.3, reviewCount: 48,
-  },
-  {
-    id: 'p5', name: '金融服务行业包', description: '银行、保险、证券理财销售专用话术',
-    icon: '💰', category: 'domestic', installCount: 1100, installed: false, active: false,
-    scriptCount: 42, scenarioCount: 11, lastUpdated: '2025-05-22', version: '2.0.0', rating: 4.7, reviewCount: 95,
-  },
-  {
-    id: 'p6', name: '跨境电商行业包', description: 'Amazon、Shopify独立站运营与销售',
-    icon: '🌐', category: 'overseas', installCount: 650, installed: false, active: false,
-    scriptCount: 35, scenarioCount: 10, lastUpdated: '2025-05-10', version: '1.2.0', rating: 4.4, reviewCount: 41,
-  },
-  {
-    id: 'p7', name: '海外SaaS (Global)', description: 'International B2B SaaS sales toolkit',
-    icon: '☁️', category: 'overseas', installCount: 520, installed: false, active: false,
-    scriptCount: 40, scenarioCount: 12, lastUpdated: '2025-05-08', version: '1.1.0', rating: 4.6, reviewCount: 38,
-  },
-  {
-    id: 'p8', name: '东南亚电商行业包', description: 'Shopee、Lazada、TikTok Shop东南亚市场',
-    icon: '🛒', category: 'overseas', installCount: 380, installed: false, active: false,
-    scriptCount: 25, scenarioCount: 7, lastUpdated: '2025-05-05', version: '1.0.0', rating: 4.2, reviewCount: 22,
-  },
-];
+function toPlugin(def: typeof industryDefinitions[0]): Plugin {
+  return {
+    id: def.id,
+    name: def.name,
+    description: def.description,
+    icon: def.icon,
+    category: def.category,
+    installCount: def.installCount,
+    installed: false,
+    active: false,
+    scriptCount: def.scriptCount,
+    scenarioCount: def.scenarioCount,
+    lastUpdated: def.lastUpdated,
+    version: def.version,
+    rating: def.rating,
+    reviewCount: def.reviewCount,
+  };
+}
 
 export function PluginMarketplace() {
   const { plugins, categoryFilter, setCategoryFilter, setSelectedPlugin } = usePluginStore();
 
-  const displayPlugins = plugins.length > 0 ? plugins : mockPlugins;
+  // Merge real definitions with store state (installed/active)
+  const displayPlugins = useMemo(() => {
+    const base = industryDefinitions.map(toPlugin);
+    if (plugins.length === 0) return base;
+    // Overlay store state for installed/active
+    const storeMap = new Map(plugins.map((p) => [p.id, p]));
+    return base.map((p) => {
+      const stored = storeMap.get(p.id);
+      if (stored) {
+        p.installed = stored.installed;
+        p.active = stored.active;
+      }
+      return p;
+    });
+  }, [plugins]);
 
   const filteredPlugins = useMemo(() => {
     if (categoryFilter === 'all') return displayPlugins;

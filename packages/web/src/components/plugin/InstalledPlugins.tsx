@@ -1,16 +1,51 @@
+import { useMemo } from 'react';
 import { Check, Power } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge, Card } from '@/components/ui/Badge';
 import {
   Select, SelectItem,
 } from '@/components/ui/Select';
-import { usePluginStore } from '@/stores/pluginStore';
+import { usePluginStore, type Plugin } from '@/stores/pluginStore';
+import { industryDefinitions } from '@/data/pluginContent';
 import { cn } from '@/utils/cn';
 
-export function InstalledPlugins() {
-  const { plugins, setActivePlugin } = usePluginStore();
+function toPlugin(def: typeof industryDefinitions[0]): Plugin {
+  return {
+    id: def.id,
+    name: def.name,
+    description: def.description,
+    icon: def.icon,
+    category: def.category,
+    installCount: def.installCount,
+    installed: false,
+    active: false,
+    scriptCount: def.scriptCount,
+    scenarioCount: def.scenarioCount,
+    lastUpdated: def.lastUpdated,
+    version: def.version,
+    rating: def.rating,
+    reviewCount: def.reviewCount,
+  };
+}
 
-  const installedPlugins = plugins.filter((p) => p.installed);
+export function InstalledPlugins() {
+  const { plugins, setActivePlugin, setSelectedPlugin } = usePluginStore();
+
+  // Merge real definitions with store state
+  const allPlugins = useMemo(() => {
+    const base = industryDefinitions.map(toPlugin);
+    const storeMap = new Map(plugins.map((p) => [p.id, p]));
+    return base.map((p) => {
+      const stored = storeMap.get(p.id);
+      if (stored) {
+        p.installed = stored.installed;
+        p.active = stored.active;
+      }
+      return p;
+    });
+  }, [plugins]);
+
+  const installedPlugins = allPlugins.filter((p) => p.installed);
   const activePlugin = installedPlugins.find((p) => p.active);
 
   if (installedPlugins.length === 0) {
@@ -54,9 +89,10 @@ export function InstalledPlugins() {
           <div
             key={plugin.id}
             className={cn(
-              'flex items-center justify-between rounded-lg border border-gray-100 p-3 transition-colors',
+              'flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 p-3 transition-colors hover:bg-gray-50',
               plugin.active && 'border-primary-200 bg-primary-50/30',
             )}
+            onClick={() => setSelectedPlugin(plugin)}
           >
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-xl">
@@ -85,7 +121,10 @@ export function InstalledPlugins() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setActivePlugin(plugin.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActivePlugin(plugin.id);
+                  }}
                 >
                   <Power className="mr-1 h-3.5 w-3.5" />
                   启用
