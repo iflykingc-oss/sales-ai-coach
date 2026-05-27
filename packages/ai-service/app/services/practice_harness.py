@@ -471,6 +471,107 @@ class PracticeHarness:
 10. 根据异议频率决定是否提出异议，不要每轮都提
 11. 说服阻力越高，销售需要越充分的理由才能打动你"""
 
+    async def generate_coaching_hint(self) -> dict:
+        """Generate a contextual coaching hint based on current conversation state."""
+        if not self.ctx.messages:
+            return {"hint": "开始对话，先用开放式问题了解客户。", "type": "opening"}
+
+        # Get last few messages for context
+        recent = self.ctx.messages[-6:]
+        conversation = "\n".join(f"{m['role']}: {m['content'][:200]}" for m in recent)
+
+        # Get last evaluation feedback if available
+        last_feedback = ""
+        if self.round_dimension_scores:
+            last_scores = self.round_dimension_scores[-1]
+            weak_dims = sorted(last_scores.items(), key=lambda x: x[1])[:2]
+            last_feedback = f"上轮最弱维度: {', '.join(f'{k}(得分{v:.1f})' for k, v in weak_dims)}"
+
+        # Build stage context
+        stage_hint = ""
+        if self.detected_stage:
+            stage_tips = {
+                "status-confirm": "当前处于现状确认阶段。建议：多问开放式问题了解客户当前状态，不要急于推销。",
+                "goal-align": "当前处于目标对齐阶段。建议：引导客户表达期望，寻找共同目标。",
+                "path-plan": "当前处于路径规划阶段。建议：提出具体可行的方案，分步骤说明。",
+                "benchmark": "当前处于标准对标阶段。建议：用行业标准和数据建立参照系。",
+                "current-assess": "当前处于现状评估阶段。建议：客观分析差距，避免让客户感到被否定。",
+                "catchup": "当前处于追赶策略阶段。建议：给出可执行的提升方案，强调可行性。",
+                "case-show": "当前处于案例呈现阶段。建议：选择与客户相似的成功案例，增强说服力。",
+                "data-support": "当前处于数据支撑阶段。建议：用具体数字而非笼统描述。",
+                "custom-plan": "当前处于专属方案阶段。建议：突出方案的个性化和针对性。",
+                "pain-identify": "当前处于痛点确认阶段。建议：引导客户自己说出痛点，而非直接指出。",
+                "consequence": "当前处于后果推演阶段。建议：让客户意识到不改变的代价。",
+                "solution": "当前处于方案呈现阶段。建议：方案要具体、可执行、有时间表。",
+                "situation": "SPIN-情境问题阶段。建议：了解客户的业务背景和现状。",
+                "problem": "SPIN-问题问题阶段。建议：引导客户表达不满和痛点。",
+                "implication": "SPIN-暗示问题阶段。建议：放大问题影响，让客户意识到紧迫性。",
+                "need-payoff": "SPIN-需求-效益阶段。建议：让客户自己说出解决方案的价值。",
+            }
+            stage_hint = stage_tips.get(self.detected_stage, "")
+
+        # Analyze emotion trend
+        emotion_trend = ""
+        if len(self.emotion_history) >= 2:
+            recent_emotions = self.emotion_history[-3:]
+            positive = {"感兴趣", "共情", "满意", "中立"}
+            negative = {"犹豫", "抗拒", "敷衍", "生气"}
+            pos_count = sum(1 for e in recent_emotions if e in positive)
+            neg_count = sum(1 for e in recent_emotions if e in negative)
+            if neg_count > pos_count:
+                emotion_trend = "客户情绪偏消极，建议先缓和气氛，不要急于推进。"
+            elif pos_count > neg_count:
+                emotion_trend = "客户情绪积极，可以适当推进决策。"
+
+        persona = json.loads(self.customer_persona) if self.customer_persona else {}
+
+        hint_prompt = f"""作为销售教练，根据以下对话给出一句具体的下一步建议（30字以内）。
+
+客户画像: {persona.get('name', '')}({persona.get('personality', '')})
+对话轮数: {self.round_count}/{self.max_rounds}
+{last_feedback}
+{stage_hint}
+{emotion_trend}
+
+最近对话:
+{conversation}
+
+要求:
+1. 给出具体的下一步行动建议，不要泛泛而谈
+2. 30字以内，简洁有力
+3. 如果客户情绪消极，建议先修复关系
+4. 如果有明确的阶段，建议符合该阶段的操作
+
+只输出建议内容，不要输出其他。"""
+
+        messages = [{"role": "user", "content": hint_prompt}]
+
+        try:
+            result = await model_router.chat_with_fallback(
+                messages, temperature=0.3, max_tokens=100
+            )
+            hint_text = result["content"].strip().strip('"').strip("'")
+        except Exception:
+            hint_text = "观察客户反应，调整沟通策略。"
+
+        # Determine hint type
+        hint_type = "general"
+        if self.round_count <= 1:
+            hint_type = "opening"
+        elif self.detected_stage:
+            hint_type = "stage"
+        elif self.emotion_history and self.emotion_history[-1] in {"抗拒", "生气", "敷衍"}:
+            hint_type = "recovery"
+
+        return {
+            "hint": hint_text,
+            "type": hint_type,
+            "detectedStage": self.detected_stage,
+            "currentEmotion": self.emotion_history[-1] if self.emotion_history else "中立",
+            "stageTip": stage_hint,
+            "emotionTip": emotion_trend,
+        }
+
     async def generate_report(self) -> dict:
         """Generate a comprehensive practice session report."""
         # Aggregate per-dimension scores from round history

@@ -47,6 +47,10 @@ class PracticeReportRequest(BaseModel):
     sessionId: str
 
 
+class PracticeHintRequest(BaseModel):
+    sessionId: str
+
+
 class PracticeResponse(BaseModel):
     success: bool
     data: dict
@@ -123,6 +127,20 @@ async def generate_report(req: PracticeReportRequest):
     report = await harness.generate_report()
     logger.info(f"Practice report generated for session {req.sessionId}")
     return PracticeResponse(success=True, data=report)
+
+
+@router.post("/hint", response_model=PracticeResponse)
+async def get_coaching_hint(req: PracticeHintRequest):
+    """Generate a contextual coaching hint based on conversation history."""
+    _cleanup_sessions()
+    session_data = _sessions.get(req.sessionId)
+    if not session_data:
+        return PracticeResponse(success=False, data={"error": "会话不存在或已结束"})
+
+    session_data["last_access"] = time.time()
+    harness = session_data["harness"]
+    hint = await harness.generate_coaching_hint()
+    return PracticeResponse(success=True, data=hint)
 
 
 @router.get("/session/{session_id}")

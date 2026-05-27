@@ -98,6 +98,17 @@ router.post('/report', authMiddleware, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/hint', authMiddleware, async (req, res, next) => {
+  try {
+    const { sessionId } = req.body;
+    const result = await callAiService({
+      path: '/practices/hint',
+      body: { sessionId },
+    });
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
 // Legacy DB-backed endpoints (still available)
 router.post('/start', authMiddleware, async (req, res, next) => {
   try {

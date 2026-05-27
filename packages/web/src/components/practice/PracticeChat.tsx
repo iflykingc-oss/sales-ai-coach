@@ -262,6 +262,27 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
 // Chat message bubble component
 function MessageBubble({ message }: { message: ChatMessage; isLast: boolean }) {
   const isUser = message.role === 'user';
+  // Detect coaching messages by content prefix
+  const isCoachHint = !isUser && message.content.startsWith('💡');
+  const isCoachFeedback = !isUser && message.content.startsWith('📊');
+
+  if (isCoachHint || isCoachFeedback) {
+    return (
+      <div className="mb-4 flex justify-center animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className={cn(
+          'max-w-[85%] rounded-xl border px-4 py-3 text-sm',
+          isCoachHint
+            ? 'border-violet-200 bg-violet-50 text-violet-800'
+            : 'border-blue-200 bg-blue-50 text-blue-800',
+        )}>
+          <p className="leading-relaxed whitespace-pre-wrap">{message.content}</p>
+          <div className="mt-1 text-[10px] text-gray-400 text-center">
+            {new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(
@@ -281,12 +302,6 @@ function MessageBubble({ message }: { message: ChatMessage; isLast: boolean }) {
           : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm',
       )}>
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
-        {message.suggestion && (
-          <div className={cn('mt-2 rounded-lg border p-2 text-xs', isUser ? 'border-white/30 bg-white/10' : 'border-amber-200 bg-amber-50')}>
-            <span className={cn('font-medium', isUser ? 'text-white/80' : 'text-amber-700')}>AI建议: </span>
-            <span className={isUser ? 'text-white' : 'text-amber-800'}>{message.suggestion}</span>
-          </div>
-        )}
         {message.emotion && !isUser && (
           <div className="mt-1.5 flex items-center gap-1">
             <span className="text-[10px] text-gray-400">情绪:</span>
@@ -437,6 +452,32 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                 evaluationFeedback: data.evaluation_feedback,
               });
 
+              // Show coaching feedback after each round (round 2+)
+              if (data.evaluation_feedback && data.round >= 2) {
+                const dimScores = data.dimension_scores || {};
+                const weakDims = Object.entries(dimScores)
+                  .sort(([, a], [, b]) => (a as number) - (b as number))
+                  .slice(0, 2)
+                  .map(([k, v]) => `${k}(${Math.round((v as number) * 100)}分)`)
+                  .join('、');
+
+                const coachMsg: ChatMessage = {
+                  id: `coach-${Date.now()}`,
+                  role: 'assistant',
+                  content: `📊 第${data.round}轮评估: ${data.evaluation_feedback}${weakDims ? `\n\n需加强: ${weakDims}` : ''}`,
+                  timestamp: Date.now(),
+                };
+                usePracticeStore.setState((state) => {
+                  if (!state.session) return state;
+                  return {
+                    session: {
+                      ...state.session,
+                      messages: [...state.session.messages, coachMsg],
+                    },
+                  };
+                });
+              }
+
               if (data.is_complete) completePractice();
             }
 
@@ -455,26 +496,47 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
     }
   };
 
-  const handleSuggestion = () => {
-    if (!session || session.messages.length === 0) return;
-    const lastAiMessage = [...session.messages].reverse().find((m) => m.role === 'assistant');
-    if (!lastAiMessage) return;
+  const [hintLoading, setHintLoading] = useState(false);
 
-    const suggestions = [
-      '尝试用提问引导客户，了解真实需求',
-      '先肯定客户的顾虑，再提供解决方案',
-      '用案例或数据增强说服力',
-      '尝试用封闭式问题推动决策',
-    ];
-    const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
+  const handleSuggestion = async () => {
+    if (!session || session.messages.length === 0 || hintLoading) return;
 
-    addMessage({
-      id: `sug-${Date.now()}`,
-      role: 'user',
-      content: `[AI建议] ${suggestion}`,
-      timestamp: Date.now(),
-      suggestion,
-    });
+    setHintLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/practices/hint', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ sessionId: session.id }),
+        credentials: 'include',
+      });
+      const json = await res.json();
+      const hintData = json.data || json;
+
+      const hint = hintData.hint || '观察客户反应，调整沟通策略。';
+      const extra = hintData.stageTip || hintData.emotionTip || '';
+
+      addMessage({
+        id: `hint-${Date.now()}`,
+        role: 'assistant',
+        content: `💡 教练提示: ${hint}${extra ? `\n\n${extra}` : ''}`,
+        timestamp: Date.now(),
+        suggestion: hint,
+      });
+    } catch {
+      addMessage({
+        id: `hint-${Date.now()}`,
+        role: 'assistant',
+        content: '💡 教练提示: 观察客户反应，根据情绪调整策略。',
+        timestamp: Date.now(),
+        suggestion: '观察客户反应，根据情绪调整策略。',
+      });
+    } finally {
+      setHintLoading(false);
+    }
   };
 
   const handleEnd = () => {
@@ -508,9 +570,9 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={handleSuggestion} disabled={isLoading}>
+          <Button variant="secondary" size="sm" onClick={handleSuggestion} disabled={isLoading || hintLoading}>
             <Lightbulb className="mr-1 h-3.5 w-3.5" />
-            帮我想下一句
+            {hintLoading ? '生成中...' : '教练提示'}
           </Button>
           <Button
             variant="secondary"
@@ -574,23 +636,42 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
       {showPsychology && (
         <div className="border-b border-gray-200 bg-amber-50 px-4 py-3">
           <h4 className="text-sm font-medium text-amber-800">客户心理分析</h4>
-          <p className="mt-1 text-sm text-amber-700">
-            客户当前情绪: {session.customerEmotion === 'interest' ? '对产品感兴趣，有进一步了解意愿' : ''}
-            {session.customerEmotion === 'hesitate' ? '存在顾虑，需要更多信心支持' : ''}
-            {session.customerEmotion === 'resist' ? '防御心理较强，需要先建立信任' : ''}
-            {session.customerEmotion === 'empathy' ? '情感上产生共鸣，但仍有历史阴影' : ''}
-          </p>
+          <div className="mt-1 space-y-1 text-sm text-amber-700">
+            <p>
+              当前情绪: <span className="font-medium">{
+                session.customerEmotion === 'interest' ? '感兴趣 — 有进一步了解意愿，可以适当推进' :
+                session.customerEmotion === 'hesitate' ? '犹豫 — 存在顾虑，需要提供更多信心支持' :
+                session.customerEmotion === 'resist' ? '抗拒 — 防御心理较强，先缓和气氛再推进' :
+                session.customerEmotion === 'empathy' ? '共情 — 情感上产生共鸣，是推进的好时机' :
+                session.customerEmotion
+              }</span>
+            </p>
+            {session.messages.filter(m => m.emotion).length > 0 && (
+              <p className="text-xs text-amber-600">
+                情绪轨迹: {session.messages.filter(m => m.emotion).map(m => m.emotion).join(' → ')}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
-      {showBenchmark && (
+      {showBenchmark && currentFramework && (
         <div className="border-b border-gray-200 bg-blue-50 px-4 py-3">
-          <h4 className="text-sm font-medium text-blue-800">行业最佳话术参考</h4>
-          <ul className="mt-1 space-y-1 text-sm text-blue-700">
-            <li>• "我理解您的顾虑，很多客户一开始也有类似想法..."</li>
-            <li>• "我们可以先从一个小范围尝试，降低您的风险..."</li>
-            <li>• "相比竞品，我们的核心优势在于..."</li>
-          </ul>
+          <h4 className="text-sm font-medium text-blue-800">{currentFramework.name} — 阶段指导</h4>
+          <div className="mt-2 space-y-2">
+            {currentFramework.stages.map((stage) => {
+              const isActive = stage.id === session.detectedStage;
+              return (
+                <div key={stage.id} className={cn('rounded-lg p-2 text-xs', isActive ? 'bg-blue-100 border border-blue-300' : 'bg-white/60')}>
+                  <p className="font-medium text-blue-800">{stage.name} {isActive && '(当前)'}</p>
+                  <p className="text-blue-600">{stage.purpose}</p>
+                  {stage.keyQuestions && stage.keyQuestions.length > 0 && (
+                    <p className="mt-1 text-blue-500">关键问题: {stage.keyQuestions.slice(0, 2).join('、')}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
