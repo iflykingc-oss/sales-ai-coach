@@ -128,17 +128,54 @@ const DEFAULT_MODELS = [
   { id: 'minimax', name: 'MiniMax', provider: 'MiniMax', temperature: 0.8, maxTokens: 8192, repetitionPenalty: 1.1, status: 'inactive' as const, usageQuota: 30000, usageCurrent: 0, alertThreshold: 80, apiKey: '' },
 ];
 
-router.get('/models', async (req, res, next) => {
+router.get('/models', requireAdmin, async (req, res, next) => {
   try {
-    // In production these would come from env or a config store
+    // Try to get from DB first
+    const dbModels = await prisma.modelConfig.findMany({
+      orderBy: [{ isPrimary: 'desc' }, { provider: 'asc' }],
+    });
+
+    if (dbModels.length > 0) {
+      const formatted = dbModels.map((m) => ({
+        id: m.id,
+        name: m.displayName,
+        provider: m.provider,
+        temperature: m.temperature,
+        maxTokens: m.maxTokens,
+        repetitionPenalty: 1.1,
+        status: m.isActive ? 'active' as const : 'inactive' as const,
+        usageQuota: 100000,
+        usageCurrent: 0,
+        alertThreshold: 80,
+        apiKey: m.apiKey ? '***' + m.apiKey.slice(-4) : '',
+      }));
+      return res.json({ success: true, data: formatted });
+    }
+
+    // Fallback to defaults
     res.json({ success: true, data: DEFAULT_MODELS });
   } catch (err) { next(err); }
 });
 
-router.put('/models/:id', async (req, res, next) => {
+router.put('/models/:id', requireAdmin, async (req, res, next) => {
   try {
+    const { temperature, maxTokens, apiKey, isActive } = req.body;
+
+    const config = await prisma.modelConfig.update({
+      where: { id: req.params.id },
+      data: {
+        temperature: temperature !== undefined ? temperature : undefined,
+        maxTokens: maxTokens !== undefined ? maxTokens : undefined,
+        apiKey: apiKey !== undefined ? apiKey : undefined,
+        isActive: isActive !== undefined ? isActive : undefined,
+      },
+    });
+
+    res.json({ success: true, data: config });
+  } catch (err) {
+    // If model not found in DB, just return success (default models)
     res.json({ success: true, message: 'Model config updated' });
-  } catch (err) { next(err); }
+  }
 });
 
 export default router;

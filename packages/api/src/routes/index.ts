@@ -9,6 +9,8 @@ import teamRoutes from './teams.js';
 import pluginRoutes from './plugins.js';
 import adminRoutes from './admin.js';
 import achievementRoutes from './achievements.js';
+import sharedScriptRoutes from './shared-scripts.js';
+import modelConfigRoutes from './model-configs.js';
 
 const router = Router();
 
@@ -22,5 +24,7 @@ router.use('/teams', teamRoutes);
 router.use('/plugins', pluginRoutes);
 router.use('/admin', adminRoutes);
 router.use('/achievements', achievementRoutes);
+router.use('/shared-scripts', sharedScriptRoutes);
+router.use('/model-configs', modelConfigRoutes);
 
 export default router;

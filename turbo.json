@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "env": ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL", "AI_SERVICE_URL", "NODE_ENV"],
   "tasks": {
     "dev": {
       "dependsOn": ["^build"],

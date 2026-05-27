@@ -7,5 +7,11 @@
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "JWT_SECRET": "@jwt-secret",
+    "FRONTEND_URL": "@frontend-url",
+    "AI_SERVICE_URL": "@ai-service-url"
+  }
 }

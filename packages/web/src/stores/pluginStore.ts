@@ -1,6 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+function getCategoryIcon(category: string): string {
+  const icons: Record<string, string> = {
+    '科技': '💻', '医疗': '🏥', '地产': '🏠', '教育': '📚',
+    '金融': '💰', '汽车': '🚗', '零售': '🛒', '互联网': '🌐',
+  };
+  return icons[category] || '📦';
+}
+
+function mapCategory(category: string): 'domestic' | 'overseas' {
+  const domestic = ['科技', '医疗', '地产', '教育', '金融', '汽车', '零售', '互联网'];
+  return domestic.includes(category) ? 'domestic' : 'overseas';
+}
+
 export function getInstalledVersion(pluginId: string): string | null {
   try {
     const installed = JSON.parse(localStorage.getItem('installed-plugins') || '{}');
@@ -80,26 +93,36 @@ export const usePluginStore = create<PluginState>()(
       fetchPlugins: async () => {
         set({ loading: true });
         try {
-          const res = await fetch('/api/plugins/search', { credentials: 'include' });
+          const res = await fetch('/api/plugins', { credentials: 'include' });
           if (!res.ok) throw new Error('API fetch failed');
           const json = await res.json();
           if (json.success && json.data?.length > 0) {
-            set({ plugins: json.data.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              description: p.description,
-              icon: p.icon || '📦',
-              category: p.category,
-              installCount: p.installCount || 0,
-              installed: false,
-              active: false,
-              scriptCount: p.scriptCount || 0,
-              scenarioCount: p.scenarioCount || 0,
-              lastUpdated: p.lastUpdated || '',
-              version: p.version || '1.0.0',
-              rating: p.rating || 0,
-              reviewCount: p.reviewCount || 0,
-            })) });
+            const { plugins: existingPlugins } = get();
+            const existingMap = new Map(existingPlugins.map((p) => [p.id, p]));
+            set({
+              plugins: json.data.map((p: any) => {
+                const existing = existingMap.get(p.id);
+                const scripts = Array.isArray(p.scripts) ? p.scripts : [];
+                const scenarios = Array.isArray(p.scenarios) ? p.scenarios : [];
+                return {
+                  id: p.id,
+                  name: p.name,
+                  description: p.description || `${p.name}行业专用话术和场景`,
+                  icon: getCategoryIcon(p.category),
+                  category: mapCategory(p.category),
+                  installCount: p.installCount || 0,
+                  installed: existing?.installed ?? false,
+                  active: existing?.active ?? false,
+                  scriptCount: scripts.length,
+                  scenarioCount: scenarios.length,
+                  lastUpdated: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : '',
+                  version: p.version || '1.0.0',
+                  rating: p.rating || 0,
+                  reviewCount: 0,
+                };
+              }),
+              loading: false,
+            });
             return;
           }
         } catch {

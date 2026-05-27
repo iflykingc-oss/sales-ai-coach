@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
+import { quotaMiddleware } from '../middleware/quota.js';
 import { prisma } from '../lib/prisma.js';
 import { generateScript } from '../services/ai.service.js';
 
 const router = Router();
 
-router.post('/generate', authMiddleware, aiLimiter, async (req, res, next) => {
+router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), async (req, res, next) => {
   try {
     const { input, inputType, industry, context, sessionId } = req.body;
 
@@ -112,10 +113,15 @@ router.post('/:id/feedback', authMiddleware, async (req, res, next) => {
       data: { weight: newWeight },
     });
 
-    // Log feedback reason for analytics (in production, store in a feedback table)
-    if (reason && type === 'down') {
-      console.log(`[Feedback] Script ${req.params.id as string}: ${reason}`);
-    }
+    // Persist feedback to database
+    await prisma.scriptFeedback.create({
+      data: {
+        userId: req.user!.id,
+        scriptId: req.params.id,
+        type,
+        reason: reason || null,
+      },
+    });
 
     res.json({ success: true });
   } catch (err) { next(err); }

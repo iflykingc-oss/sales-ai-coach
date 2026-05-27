@@ -2,9 +2,12 @@
   "name": "@sales-ai-coach/api",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "schema": "./src/prisma/schema.prisma"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "npx prisma generate && tsc --build || true",
+    "build": "npx prisma generate --schema=./src/prisma/schema.prisma && tsc --build || true",
     "vercel-build": "npx prisma generate --schema=./src/prisma/schema.prisma",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
