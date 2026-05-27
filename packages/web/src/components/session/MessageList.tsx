@@ -152,10 +152,20 @@ export default function MessageList() {
         if (!res.ok) throw new Error('Failed to load session');
         const json = await res.json();
         if (!cancelled && json.success && json.data?.messages) {
-          setMessages(json.data.messages);
+          const serverMessages = json.data.messages as Message[];
+          // Dedup: merge any optimistic messages not yet in server response
+          setMessages((prev) => {
+            const optimisticOnly = prev.filter(
+              (m) => m.id.startsWith('optimistic-') && !serverMessages.some(
+                (s) => s.role === m.role && s.content === m.content && Math.abs(new Date(s.createdAt).getTime() - new Date(m.createdAt).getTime()) < 5000,
+              ),
+            );
+            const merged = [...optimisticOnly, ...serverMessages];
+            return merged;
+          });
           await localDb.cacheSession(activeSessionId, {
             ...json.data,
-            messages: json.data.messages,
+            messages: serverMessages,
           });
         }
       } catch (err) {

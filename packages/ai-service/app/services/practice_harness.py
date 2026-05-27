@@ -20,7 +20,7 @@ import json
 import re
 from typing import AsyncIterator
 from app.harness.context_manager import ContextManager
-from app.harness.feature_list import FeatureList
+from app.harness.feature_list import FeatureList, ItemStatus
 from app.harness.planner import TaskPlanner
 from app.harness.progress_tracker import ProgressTracker
 from app.models.router import model_router
@@ -700,7 +700,7 @@ class PracticeHarness:
         report["archetype_name"] = self.archetype.get("name", "")
 
         self.fl.add_item(description="生成复盘报告")
-        self.fl.items[-1].status = "completed"
+        self.fl.items[-1].status = ItemStatus.COMPLETED
         self.fl.items[-1].result = json.dumps(report, ensure_ascii=False)
         self.progress_tracker.complete()
 

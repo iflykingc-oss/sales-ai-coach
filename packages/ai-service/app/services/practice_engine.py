@@ -36,6 +36,12 @@ LOGIC_FRAMEWORKS_PROMPT = """
    - 如果销售在确认痛点，客户应回忆问题，情绪偏向抗拒/犹豫
    - 如果销售在推演后果，客户应感到紧迫感，情绪偏向犹豫
    - 如果销售在呈现方案，客户应看到希望，情绪偏向兴趣
+
+5. SPIN销售法：情境问题 → 难点问题 → 暗示问题 → 需求效益问题
+   - 如果销售在问情境问题(S)，客户应如实介绍现状，情绪偏向中性/配合
+   - 如果销售在问难点问题(P)，客户应坦诚困难，情绪偏向犹豫
+   - 如果销售在问暗示问题(I)，客户应意识到严重性，情绪偏向焦虑/紧迫
+   - 如果销售在问需求效益问题(N)，客户应主动表达需求，情绪偏向兴趣/期待
 """
 
 async def process_practice_message(scenario: str, messages: list[dict], industry: str = "", mode: str = "scenario", logicFramework: str = "") -> dict:
