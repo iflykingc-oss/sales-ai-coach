@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw } from 'lucide-react';
+import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { RadarChart } from '@/components/ui/RadarChart';
@@ -22,6 +22,8 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const { session, summary, setSummary, setIsGeneratingSummary } = usePracticeStore();
   const [loading, setLoading] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
+  const [expandedRound, setExpandedRound] = useState<number | null>(null);
+  const [reportData, setReportData] = useState<any>(null);
 
   const handleDimensionClick = useCallback((dim: RadarDimension) => {
     setSelectedDimension((prev) => (prev === dim.label ? null : dim.label));
@@ -58,6 +60,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
             ) || [],
             radarScores: normalizedScores,
           });
+          setReportData(report);
         }
       } catch (error) {
         console.error('Failed to fetch practice report:', error);
@@ -288,6 +291,143 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
               </li>
             ))}
           </ul>
+        </Card>
+      )}
+
+      {/* Round-by-Round Analysis */}
+      {reportData?.round_analysis && reportData.round_analysis.length > 0 && (
+        <Card>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+            <BarChart3 className="h-4 w-4" />
+            逐轮诊断
+          </h4>
+          <div className="space-y-2">
+            {reportData.round_analysis.map((ra: any) => (
+              <div key={ra.round} className="rounded-lg border border-gray-100">
+                <button
+                  onClick={() => setExpandedRound(expandedRound === ra.round ? null : ra.round)}
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white',
+                      ra.score >= 0.7 ? 'bg-green-500' : ra.score >= 0.5 ? 'bg-yellow-500' : 'bg-red-500',
+                    )}>
+                      {ra.round}
+                    </span>
+                    <span className="text-sm text-gray-800">{ra.summary}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      ra.score >= 0.7 ? 'text-green-600' : ra.score >= 0.5 ? 'text-yellow-600' : 'text-red-600',
+                    )}>
+                      {Math.round(ra.score * 100)}分
+                    </span>
+                    {expandedRound === ra.round ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                  </div>
+                </button>
+                {expandedRound === ra.round && (
+                  <div className="border-t border-gray-100 px-3 py-3 space-y-2">
+                    <p className="text-sm text-gray-600">{ra.feedback}</p>
+                    {ra.improvement && (
+                      <p className="text-sm text-blue-600">
+                        <span className="font-medium">改进建议: </span>{ra.improvement}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Best Practice Comparison */}
+      {reportData?.best_practice_comparison && (
+        <Card>
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-indigo-700">
+            <Target className="h-4 w-4" />
+            最佳实践对比
+          </h4>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="text-center">
+              <div className={cn(
+                'text-2xl font-bold',
+                reportData.best_practice_comparison.score >= 80 ? 'text-green-600' :
+                reportData.best_practice_comparison.score >= 60 ? 'text-yellow-600' : 'text-red-600',
+              )}>
+                {reportData.best_practice_comparison.score}
+              </div>
+              <div className="text-xs text-gray-500">匹配度</div>
+            </div>
+            <div className="h-8 w-px bg-gray-200" />
+            <div className="flex-1 text-sm text-gray-600">
+              与行业最佳实践的匹配程度
+            </div>
+          </div>
+          {reportData.best_practice_comparison.gaps?.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1 text-xs font-medium text-amber-600">差距</p>
+              <ul className="space-y-1">
+                {reportData.best_practice_comparison.gaps.map((gap: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-600">- {gap}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {reportData.best_practice_comparison.highlights?.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-medium text-green-600">亮点</p>
+              <ul className="space-y-1">
+                {reportData.best_practice_comparison.highlights.map((h: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-600">+ {h}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Improvement Plan */}
+      {reportData?.improvement_plan && (
+        <Card className="border-emerald-200 bg-emerald-50/30">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-700">
+            <ClipboardList className="h-4 w-4" />
+            改进计划
+          </h4>
+          {reportData.improvement_plan.priority && (
+            <p className="mb-3 text-sm text-emerald-800">
+              <span className="font-medium">优先改进: </span>{reportData.improvement_plan.priority}
+            </p>
+          )}
+          {reportData.improvement_plan.exercises?.length > 0 && (
+            <div className="space-y-2">
+              {reportData.improvement_plan.exercises.map((ex: any, i: number) => (
+                <div key={i} className="rounded-lg border border-emerald-200 bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-emerald-800">{ex.title}</span>
+                    <span className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px]',
+                      ex.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
+                      ex.difficulty === 'hard' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700',
+                    )}>
+                      {ex.difficulty === 'easy' ? '入门' : ex.difficulty === 'hard' ? '进阶' : '标准'}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">{ex.description}</p>
+                  {ex.target_dimension && (
+                    <p className="mt-1 text-[10px] text-emerald-500">目标: {ex.target_dimension}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {reportData.improvement_plan.timeline && (
+            <p className="mt-3 text-xs text-emerald-600">
+              建议周期: {reportData.improvement_plan.timeline}
+            </p>
+          )}
         </Card>
       )}
 

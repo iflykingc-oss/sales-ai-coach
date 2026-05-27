@@ -592,6 +592,14 @@ class PracticeHarness:
 
         avg_score = sum(self.round_scores) / len(self.round_scores) if self.round_scores else 0.5
 
+        # Build per-round analysis data
+        round_details = []
+        for i, msg in enumerate(self.ctx.messages):
+            if msg["role"] == "user":
+                round_details.append(f"第{i//2+1}轮-销售: {msg['content'][:150]}")
+            else:
+                round_details.append(f"第{i//2+1}轮-客户: {msg['content'][:150]}")
+
         report_prompt = f"""作为销售陪练评估专家，请根据以下陪练记录生成详细的复盘报告。
 
 客户画像: {self.customer_persona}
@@ -603,8 +611,8 @@ class PracticeHarness:
 各维度历史得分（每轮评估）:
 {dimension_history_text}
 
-对话记录摘要:
-{chr(10).join(f"{m['role']}: {m['content'][:100]}..." for m in self.ctx.messages[-8:])}
+对话记录:
+{chr(10).join(round_details[-16:])}
 
 请输出JSON格式复盘报告:
 {{
@@ -625,6 +633,21 @@ class PracticeHarness:
   "key_moments": [
     {{"round": 3, "description": "关键时刻描述", "impact": "正面/负面"}}
   ],
+  "round_analysis": [
+    {{"round": 1, "summary": "这轮做了什么", "score": 0.6, "feedback": "具体反馈", "improvement": "可以怎样改进"}}
+  ],
+  "best_practice_comparison": {{
+    "score": 70,
+    "gaps": ["与最佳实践的差距1", "差距2"],
+    "highlights": ["做得好的地方1"]
+  }},
+  "improvement_plan": {{
+    "priority": "最需要改进的能力",
+    "exercises": [
+      {{"title": "练习名称", "description": "练习方法", "target_dimension": "目标维度", "difficulty": "easy/medium/hard"}}
+    ],
+    "timeline": "建议练习周期"
+  }},
   "recommendations": [
     {{"dimension": "维度", "advice": "具体建议", "practice": "练习方法"}}
   ],
@@ -637,7 +660,10 @@ class PracticeHarness:
 注意：
 1. radarScores 是0-100的整数分数，请基于各维度历史得分进行综合评估
 2. 各维度历史得分是每轮评估的原始数据，请结合对话记录分析趋势
-3. SPIN提问质量维度评估销售是否恰当使用了情境、问题、暗示、需求-效益四类提问"""
+3. SPIN提问质量维度评估销售是否恰当使用了情境、问题、暗示、需求-效益四类提问
+4. round_analysis 必须覆盖每一轮对话，给出具体的反馈和改进建议
+5. best_practice_comparison 对比行业最佳实践，指出差距和亮点
+6. improvement_plan 给出可执行的练习计划，包含具体练习方法"""
 
         messages = [
             {"role": "user", "content": report_prompt},
