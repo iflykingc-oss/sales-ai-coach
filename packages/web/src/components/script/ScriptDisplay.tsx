@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
-import { Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X } from 'lucide-react';
+import {
+  Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X,
+  Target, MessageCircleQuestion, Shield, TrendingUp, Lightbulb, ChevronRight,
+} from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
 import ScriptFeedback from './ScriptFeedback';
@@ -143,19 +146,30 @@ export default function ScriptDisplay() {
           {/* Compare mode: all 3 styles side by side */}
           {compareMode ? (
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              {STYLE_TABS.map(({ key, label, icon }) => (
-                <div key={key} className="rounded-lg bg-gray-50 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-600">
-                      {icon} {label}
-                    </span>
-                    <CopyButton text={getStyleContent(key)} />
+              {STYLE_TABS.map(({ key, label, icon }) => {
+                const variant = currentScript.speechStyles?.find(
+                  (s) => normalizeStyle(s.style) === key,
+                ) || currentScript.speechStyles?.[STYLE_TABS.findIndex((t) => t.key === key)];
+                return (
+                  <div key={key} className="rounded-lg bg-gray-50 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-600">
+                        {icon} {label}
+                      </span>
+                      <CopyButton text={getStyleContent(key)} />
+                    </div>
+                    <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-700 line-clamp-8">
+                      {getStyleContent(key)}
+                    </p>
+                    {variant?.logic && (
+                      <p className="mt-2 border-t border-gray-200 pt-2 text-xs text-violet-600 italic">
+                        <Lightbulb className="mr-1 inline h-3 w-3" />
+                        {variant.logic}
+                      </p>
+                    )}
                   </div>
-                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-700 line-clamp-8">
-                    {getStyleContent(key)}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             /* Single style view */
@@ -169,6 +183,159 @@ export default function ScriptDisplay() {
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
                 {getStyleContent(activeStyle)}
               </p>
+            </div>
+          )}
+
+          {/* Pain Analysis */}
+          {currentScript.painAnalysis && (
+            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-rose-700">
+                <Target className="h-4 w-4" />
+                客户痛点分析
+              </h4>
+              <div className="space-y-3">
+                {currentScript.painAnalysis.likely_pains?.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium text-rose-600">可能的核心痛点</p>
+                    <ul className="space-y-1">
+                      {currentScript.painAnalysis.likely_pains.map((p, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-rose-800">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {currentScript.painAnalysis.hidden_needs?.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium text-rose-600">隐藏需求</p>
+                    <ul className="space-y-1">
+                      {currentScript.painAnalysis.hidden_needs.map((n, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-rose-800">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300" />
+                          {n}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {currentScript.painAnalysis.decision_factors?.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium text-rose-600">决策关键因素</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {currentScript.painAnalysis.decision_factors.map((f, i) => (
+                        <span key={i} className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs text-rose-700">
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scenario Breakdown */}
+          {currentScript.scenarioBreakdown && (
+            <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-indigo-700">
+                <TrendingUp className="h-4 w-4" />
+                场景拆解
+              </h4>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-white/60 p-3">
+                  <p className="text-xs font-medium text-indigo-500">当前阶段</p>
+                  <p className="mt-1 text-sm font-semibold text-indigo-800">{currentScript.scenarioBreakdown.stage}</p>
+                </div>
+                <div className="rounded-lg bg-white/60 p-3">
+                  <p className="text-xs font-medium text-indigo-500">核心目标</p>
+                  <p className="mt-1 text-sm text-indigo-800">{currentScript.scenarioBreakdown.objective}</p>
+                </div>
+                <div className="rounded-lg bg-white/60 p-3">
+                  <p className="text-xs font-medium text-indigo-500">下一步行动</p>
+                  <p className="mt-1 text-sm text-indigo-800">{currentScript.scenarioBreakdown.next_step}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Follow-up Questions */}
+          {currentScript.followUpQuestions && currentScript.followUpQuestions.length > 0 && (
+            <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 p-4">
+              <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-teal-700">
+                <MessageCircleQuestion className="h-4 w-4" />
+                跟进提问建议
+              </h4>
+              <ul className="space-y-2">
+                {currentScript.followUpQuestions.map((q, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-teal-800">
+                    <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" />
+                    {q}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Speech style logic (shown below each style in single view) */}
+          {!compareMode && currentScript.speechStyles && (() => {
+            const activeVariant = currentScript.speechStyles.find(
+              (s) => normalizeStyle(s.style) === activeStyle,
+            ) || currentScript.speechStyles[STYLE_TABS.findIndex((t) => t.key === activeStyle)];
+            return activeVariant?.logic ? (
+              <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 p-3">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-violet-600">
+                  <Lightbulb className="h-3.5 w-3.5" />
+                  为什么这样说有效
+                </p>
+                <p className="mt-1 text-sm text-violet-800">{activeVariant.logic}</p>
+              </div>
+            ) : null;
+          })()}
+
+          {/* Objection Handling */}
+          {currentScript.objectionHandling && currentScript.objectionHandling.length > 0 && (
+            <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-orange-700">
+                <Shield className="h-4 w-4" />
+                异议应对预案
+              </h4>
+              <div className="space-y-3">
+                {currentScript.objectionHandling.map((obj, i) => (
+                  <div key={i} className="rounded-lg bg-white/60 p-3">
+                    <p className="text-xs font-medium text-orange-500">客户可能说</p>
+                    <p className="mt-0.5 text-sm font-medium text-orange-800">"{obj.likely_objection}"</p>
+                    <p className="mt-2 text-xs font-medium text-orange-500">应对话术</p>
+                    <p className="mt-0.5 text-sm text-orange-800">{obj.response}</p>
+                    <p className="mt-2 text-xs text-orange-400 italic">原则: {obj.principle}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Closing Strategy */}
+          {currentScript.closingStrategy && (
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                <CheckCircle className="h-4 w-4" />
+                促成成交策略
+              </h4>
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs font-medium text-emerald-500">成交信号</p>
+                  <p className="mt-0.5 text-sm text-emerald-800">{currentScript.closingStrategy.signal}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-emerald-500">推荐方法</p>
+                  <p className="mt-0.5 text-sm text-emerald-800">{currentScript.closingStrategy.method}</p>
+                </div>
+                <div className="rounded-lg bg-white/60 p-3">
+                  <p className="text-xs font-medium text-emerald-500">促成话术</p>
+                  <p className="mt-0.5 text-sm font-medium text-emerald-800">{currentScript.closingStrategy.script}</p>
+                </div>
+              </div>
             </div>
           )}
 

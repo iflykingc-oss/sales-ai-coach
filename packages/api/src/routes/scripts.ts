@@ -73,14 +73,20 @@ router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), 
     }
 
     // Normalize to camelCase for frontend (Python AI service returns snake_case)
+    const raw = result as any;
     const normalized = {
       speechStyles: speechStyles,
-      reasoning: (result as any).reasoning || [],
-      pitfalls: (result as any).pitfalls || [],
-      knowledgeSource: (result as any).knowledge_source || (result as any).knowledgeSource || '',
-      confidenceScore: (result as any).confidence_score || (result as any).confidenceScore || 0,
-      quality_report: (result as any).quality_report,
-      execution_report: (result as any).execution_report,
+      reasoning: raw.reasoning || [],
+      pitfalls: raw.pitfalls || [],
+      knowledgeSource: raw.knowledge_source || raw.knowledgeSource || '',
+      confidenceScore: raw.confidence_score || raw.confidenceScore || 0,
+      quality_report: raw.quality_report,
+      execution_report: raw.execution_report,
+      painAnalysis: raw.pain_analysis || raw.painAnalysis || null,
+      scenarioBreakdown: raw.scenario_breakdown || raw.scenarioBreakdown || null,
+      followUpQuestions: raw.follow_up_questions || raw.followUpQuestions || [],
+      objectionHandling: raw.objection_handling || raw.objectionHandling || [],
+      closingStrategy: raw.closing_strategy || raw.closingStrategy || null,
     };
     res.json({ success: true, data: normalized, scriptIds: createdIds });
   } catch (err) { next(err); }
@@ -117,7 +123,7 @@ router.post('/:id/feedback', authMiddleware, async (req, res, next) => {
     await prisma.scriptFeedback.create({
       data: {
         userId: req.user!.id,
-        scriptId: req.params.id,
+        scriptId: req.params.id as string,
         type,
         reason: reason || null,
       },

@@ -3,6 +3,31 @@ import { create } from 'zustand';
 export interface ScriptVariant {
   style: string;
   content: string;
+  logic?: string;
+}
+
+export interface PainAnalysis {
+  likely_pains: string[];
+  hidden_needs: string[];
+  decision_factors: string[];
+}
+
+export interface ScenarioBreakdown {
+  stage: string;
+  objective: string;
+  next_step: string;
+}
+
+export interface ObjectionHandling {
+  likely_objection: string;
+  response: string;
+  principle: string;
+}
+
+export interface ClosingStrategy {
+  signal: string;
+  method: string;
+  script: string;
 }
 
 export interface ScriptStateData {
@@ -11,6 +36,11 @@ export interface ScriptStateData {
   pitfalls: Array<{ action: string; reason: string }>;
   knowledgeSource: string;
   confidenceScore: number;
+  painAnalysis?: PainAnalysis;
+  scenarioBreakdown?: ScenarioBreakdown;
+  followUpQuestions?: string[];
+  objectionHandling?: ObjectionHandling[];
+  closingStrategy?: ClosingStrategy;
 }
 
 export interface ScriptFeedbackState {

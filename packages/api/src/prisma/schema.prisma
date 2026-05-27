@@ -82,6 +82,7 @@ model User {
   reviews         ReviewReport[]
   scriptFeedbacks ScriptFeedback[]
   usageLogs       UsageLog[]
+  sharedScripts   SharedScript[]
 
   @@map("users")
 }

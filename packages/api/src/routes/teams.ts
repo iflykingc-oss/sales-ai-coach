@@ -102,7 +102,6 @@ router.get('/:id/stats', authMiddleware, async (req, res, next) => {
   try {
     const team = await prisma.team.findFirst({
       where: { id: req.params.id as string },
-      include: { owner: true },
     });
     if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });

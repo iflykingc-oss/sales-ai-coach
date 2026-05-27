@@ -7,7 +7,8 @@ const router = Router();
 // Get shared scripts for a team
 router.get('/:teamId', authMiddleware, async (req, res, next) => {
   try {
-    const team = await prisma.team.findUnique({ where: { id: req.params.teamId } });
+    const teamId = req.params.teamId as string;
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
@@ -45,7 +46,8 @@ router.get('/:teamId', authMiddleware, async (req, res, next) => {
 // Share a script to team
 router.post('/:teamId', authMiddleware, async (req, res, next) => {
   try {
-    const team = await prisma.team.findUnique({ where: { id: req.params.teamId } });
+    const teamId = req.params.teamId as string;
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
@@ -75,7 +77,7 @@ router.post('/:teamId', authMiddleware, async (req, res, next) => {
 router.post('/:teamId/:scriptId/like', authMiddleware, async (req, res, next) => {
   try {
     const script = await prisma.sharedScript.findFirst({
-      where: { id: req.params.scriptId, teamId: req.params.teamId },
+      where: { id: req.params.scriptId as string, teamId: req.params.teamId as string },
     });
     if (!script) return res.status(404).json({ success: false, error: 'Script not found' });
 
@@ -102,7 +104,7 @@ router.post('/:teamId/:scriptId/like', authMiddleware, async (req, res, next) =>
 // Approve/reject a shared script (team owner only)
 router.patch('/:teamId/:scriptId/approve', authMiddleware, async (req, res, next) => {
   try {
-    const team = await prisma.team.findUnique({ where: { id: req.params.teamId } });
+    const team = await prisma.team.findUnique({ where: { id: req.params.teamId as string } });
     if (!team || team.ownerId !== req.user!.id) {
       return res.status(403).json({ success: false, error: 'Only team owner can approve' });
     }
@@ -110,12 +112,12 @@ router.patch('/:teamId/:scriptId/approve', authMiddleware, async (req, res, next
     const { approved } = req.body;
     if (approved) {
       await prisma.sharedScript.update({
-        where: { id: req.params.scriptId },
+        where: { id: req.params.scriptId as string },
         data: { approved: true },
       });
       res.json({ success: true });
     } else {
-      await prisma.sharedScript.delete({ where: { id: req.params.scriptId } });
+      await prisma.sharedScript.delete({ where: { id: req.params.scriptId as string } });
       res.json({ success: true, deleted: true });
     }
   } catch (err) { next(err); }

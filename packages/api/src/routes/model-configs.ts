@@ -63,13 +63,13 @@ router.put('/:id', authMiddleware, requireAdmin, async (req, res, next) => {
 
     if (isPrimary) {
       await prisma.modelConfig.updateMany({
-        where: { isPrimary: true, id: { not: req.params.id } },
+        where: { isPrimary: true, id: { not: req.params.id as string } },
         data: { isPrimary: false },
       });
     }
 
     const config = await prisma.modelConfig.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         displayName,
         apiKey: apiKey || undefined,
@@ -88,7 +88,7 @@ router.put('/:id', authMiddleware, requireAdmin, async (req, res, next) => {
 // Delete model config
 router.delete('/:id', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
-    await prisma.modelConfig.delete({ where: { id: req.params.id } });
+    await prisma.modelConfig.delete({ where: { id: req.params.id as string } });
     res.json({ success: true });
   } catch (err) { next(err); }
 });

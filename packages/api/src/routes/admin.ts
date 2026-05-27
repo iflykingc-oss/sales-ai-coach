@@ -162,7 +162,7 @@ router.put('/models/:id', requireAdmin, async (req, res, next) => {
     const { temperature, maxTokens, apiKey, isActive } = req.body;
 
     const config = await prisma.modelConfig.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         temperature: temperature !== undefined ? temperature : undefined,
         maxTokens: maxTokens !== undefined ? maxTokens : undefined,
