@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "corepack enable && pnpm install",
-  "buildCommand": "cd packages/web && pnpm exec vite build",
+  "buildCommand": "cd packages/web && pnpm run build",
   "outputDirectory": "packages/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
