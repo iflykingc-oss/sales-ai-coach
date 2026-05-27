@@ -60,7 +60,7 @@ export default function LoginPage() {
       setUser(json.data.user);
       addActivity({ type: 'login', title: '用户登录', description: json.data.user.name });
       toast.success('登录成功', { description: `欢迎回来，${json.data.user.name}` });
-      navigate('/');
+      navigate('/app');
     } catch {
       setError('网络错误，请稍后重试');
     } finally {

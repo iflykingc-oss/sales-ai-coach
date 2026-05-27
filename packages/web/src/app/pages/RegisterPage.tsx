@@ -66,7 +66,7 @@ export default function RegisterPage() {
       setUser(json.data.user);
       addActivity({ type: 'login', title: '新用户注册', description: data.name });
       toast.success('注册成功', { description: `欢迎，${data.name}！` });
-      navigate('/');
+      navigate('/app');
     } catch {
       setError('网络错误，请稍后重试');
     } finally {

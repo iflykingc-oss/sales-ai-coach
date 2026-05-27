@@ -23,7 +23,7 @@ function useCommands() {
       description: '开始一个新的AI销售教练会话',
       icon: <MessageSquare className="h-4 w-4" />,
       section: '快捷操作',
-      action: () => navigate('/'),
+      action: () => navigate('/app'),
     },
     {
       id: 'practice',
@@ -31,7 +31,7 @@ function useCommands() {
       description: '进入销售技能陪练模式',
       icon: <Dumbbell className="h-4 w-4" />,
       section: '快捷操作',
-      action: () => navigate('/practice'),
+      action: () => navigate('/app/practice'),
     },
     {
       id: 'knowledge',
@@ -39,7 +39,7 @@ function useCommands() {
       description: '浏览和管理个人知识库',
       icon: <BookOpen className="h-4 w-4" />,
       section: '快捷操作',
-      action: () => navigate('/knowledge'),
+      action: () => navigate('/app/knowledge'),
     },
     {
       id: 'review',
@@ -47,7 +47,7 @@ function useCommands() {
       description: '上传对话记录进行复盘分析',
       icon: <ClipboardList className="h-4 w-4" />,
       section: '快捷操作',
-      action: () => navigate('/review'),
+      action: () => navigate('/app/review'),
     },
     {
       id: 'team',
@@ -55,7 +55,7 @@ function useCommands() {
       description: '查看团队数据和任务',
       icon: <MessageSquare className="h-4 w-4" />,
       section: '快捷操作',
-      action: () => navigate('/team'),
+      action: () => navigate('/app/team'),
     },
     {
       id: 'plugins',
@@ -63,7 +63,7 @@ function useCommands() {
       description: '浏览和安装行业插件包',
       icon: <BookOpen className="h-4 w-4" />,
       section: '快捷操作',
-      action: () => navigate('/plugins'),
+      action: () => navigate('/app/plugins'),
     },
   ] as CommandItem[];
 }

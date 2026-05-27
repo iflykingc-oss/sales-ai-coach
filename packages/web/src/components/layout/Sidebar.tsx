@@ -14,13 +14,13 @@ import { useUserStore } from '@/stores/userStore';
 import { toast } from '@/hooks/useToast';
 
 const navItems = [
-  { path: '/', icon: MessageSquare, label: '会话' },
-  { path: '/practice', icon: Dumbbell, label: '陪练' },
-  { path: '/knowledge', icon: BookOpen, label: '知识库' },
-  { path: '/review', icon: ClipboardList, label: '复盘' },
-  { path: '/team', icon: Users, label: '团队' },
-  { path: '/plugins', icon: Puzzle, label: '行业插件' },
-  { path: '/admin', icon: Settings, label: '管理后台' },
+  { path: '/app', icon: MessageSquare, label: '会话' },
+  { path: '/app/practice', icon: Dumbbell, label: '陪练' },
+  { path: '/app/knowledge', icon: BookOpen, label: '知识库' },
+  { path: '/app/review', icon: ClipboardList, label: '复盘' },
+  { path: '/app/team', icon: Users, label: '团队' },
+  { path: '/app/plugins', icon: Puzzle, label: '行业插件' },
+  { path: '/app/admin', icon: Settings, label: '管理后台' },
 ];
 
 interface SidebarProps {
@@ -74,7 +74,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <NavLink
               key={path}
               to={path}
-              end={path === '/'}
+              end={path === '/app'}
               onClick={handleNavClick}
             >
               {({ isActive }) => (

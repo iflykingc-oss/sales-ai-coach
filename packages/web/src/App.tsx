@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
+import { LandingPage } from './app/pages/LandingPage';
 import SessionPage from './app/pages/SessionPage';
 import PracticePage from './app/pages/PracticePage';
 import KnowledgePage from './app/pages/KnowledgePage';
@@ -15,9 +16,10 @@ export default function App() {
   return (
     <>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/" element={<AppLayout />}>
+        <Route path="/app" element={<AppLayout />}>
           <Route index element={<SessionPage />} />
           <Route path="practice" element={<PracticePage />} />
           <Route path="knowledge" element={<KnowledgePage />} />
