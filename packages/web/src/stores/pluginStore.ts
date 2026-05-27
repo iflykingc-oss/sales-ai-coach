@@ -155,39 +155,42 @@ export const usePluginStore = create<PluginState>()(
       },
 
       installPluginPersisted: async (id: string) => {
-        try {
-          await fetch('/api/plugins/install', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ pluginId: id }),
-          });
-        } catch {
-          // API unavailable, local-only
-        }
+        // Update local state first (optimistic)
         set((state) => ({
           plugins: state.plugins.map((p) =>
             p.id === id ? { ...p, installed: true, active: true, installCount: p.installCount + 1 } : p,
           ),
         }));
-        // Save installed version to localStorage for update detection
         const plugin = get().plugins.find((p) => p.id === id);
         if (plugin) {
           const installed = JSON.parse(localStorage.getItem('installed-plugins') || '{}');
           installed[id] = { version: plugin.version, installedAt: Date.now() };
           localStorage.setItem('installed-plugins', JSON.stringify(installed));
         }
+        // Sync with server
+        try {
+          const res = await fetch('/api/plugins/install', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ pluginId: id }),
+          });
+          if (!res.ok) throw new Error('Install failed');
+        } catch {
+          // Revert on failure
+          set((state) => ({
+            plugins: state.plugins.map((p) =>
+              p.id === id ? { ...p, installed: false, active: false, installCount: Math.max(0, p.installCount - 1) } : p,
+            ),
+          }));
+          const installed = JSON.parse(localStorage.getItem('installed-plugins') || '{}');
+          delete installed[id];
+          localStorage.setItem('installed-plugins', JSON.stringify(installed));
+        }
       },
 
       uninstallPluginPersisted: async (id: string) => {
-        try {
-          await fetch(`/api/plugins/${id}/uninstall`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-        } catch {
-          // API unavailable, local-only
-        }
+        // Update local state first (optimistic)
         set((state) => ({
           plugins: state.plugins.map((p) =>
             p.id === id ? { ...p, installed: false, active: false, installCount: Math.max(0, p.installCount - 1) } : p,
@@ -196,6 +199,15 @@ export const usePluginStore = create<PluginState>()(
         const installed = JSON.parse(localStorage.getItem('installed-plugins') || '{}');
         delete installed[id];
         localStorage.setItem('installed-plugins', JSON.stringify(installed));
+        // Sync with server
+        try {
+          await fetch(`/api/plugins/${id}/uninstall`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+        } catch {
+          // Silent fail — local state already updated
+        }
       },
 
       togglePluginActive: (id) =>

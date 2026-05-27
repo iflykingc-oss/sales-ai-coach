@@ -7,6 +7,7 @@ import RegisterPage from './app/pages/RegisterPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CommandPalette } from './components/ui/CommandPalette';
 
+const DashboardPage = lazy(() => import('./app/pages/DashboardPage'));
 const SessionPage = lazy(() => import('./app/pages/SessionPage'));
 const PracticePage = lazy(() => import('./app/pages/PracticePage'));
 const KnowledgePage = lazy(() => import('./app/pages/KnowledgePage'));
@@ -26,7 +27,8 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/app" element={<AppLayout />}>
-              <Route index element={<SessionPage />} />
+              <Route index element={<DashboardPage />} />
+              <Route path="scripts" element={<SessionPage />} />
               <Route path="practice" element={<PracticePage />} />
               <Route path="knowledge" element={<KnowledgePage />} />
               <Route path="review" element={<ReviewPage />} />

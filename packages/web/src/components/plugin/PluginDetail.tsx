@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Star, Download, FileText, Target, BookOpen, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Dialog, DialogOverlay, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/Dialog';
 import { usePluginStore, getInstalledVersion, type Plugin } from '@/stores/pluginStore';
-import { getPluginScripts, getPluginScenarios, allConfigs } from '@/data/pluginContent';
+import { getPluginScripts, getPluginScenarios } from '@/data/pluginContent';
 import { DialogueChainViewer } from '@/components/session/DialogueChainViewer';
+import { api } from '@/services/api';
 
 const difficultyLabels: Record<string, string> = {
   beginner: '入门',
@@ -19,32 +20,6 @@ const difficultyVariants: Record<string, 'success' | 'warning' | 'danger'> = {
   intermediate: 'warning',
   advanced: 'danger',
 };
-
-interface PluginConfig {
-  id: string;
-  industry: string;
-  differentiator: string;
-  pain1: string;
-  pain2: string;
-  pain3: string;
-  competitor: string;
-  criteria: string;
-  advantage: string;
-}
-
-function getPluginKnowledge(pluginId: string): string[] {
-  const config = allConfigs.find((c: PluginConfig) => c.id === pluginId);
-  if (!config) return ['行业知识加载中...'];
-  const knowledge: string[] = [];
-  if (config.industry) knowledge.push(`${config.industry}销售全流程`);
-  if (config.differentiator) knowledge.push(`核心优势: ${config.differentiator}`);
-  const pains = [config.pain1, config.pain2, config.pain3].filter(Boolean);
-  if (pains.length > 0) knowledge.push(`典型痛点: ${pains.join('、')}`);
-  if (config.competitor) knowledge.push(`主要竞品: ${config.competitor}`);
-  if (config.criteria) knowledge.push(`客户决策标准: ${config.criteria}`);
-  if (config.advantage) knowledge.push(`差异化卖点: ${config.advantage}`);
-  return knowledge.length > 0 ? knowledge : ['行业知识加载中...'];
-}
 
 function compareSemver(a: string, b: string): number {
   const pa = a.split('.').map(Number);
@@ -65,12 +40,42 @@ interface PluginDetailProps {
 
 export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
   const { installPluginPersisted, uninstallPluginPersisted, togglePluginActive, plugins } = usePluginStore();
-  const scripts = getPluginScripts(plugin.id);
-  const scenarios = getPluginScenarios(plugin.id);
-  const knowledge = getPluginKnowledge(plugin.id);
   const [activeTab, setActiveTab] = useState('overview');
   const [showUninstallDialog, setShowUninstallDialog] = useState(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+  const [apiData, setApiData] = useState<any>(null);
+
+  // Fetch plugin details from API for real scripts/scenarios/knowledge
+  useEffect(() => {
+    api.get(`/plugins/${plugin.id}`)
+      .then((res: any) => setApiData(res.data))
+      .catch(() => {});
+  }, [plugin.id]);
+
+  // Use API data if available, fallback to hardcoded
+  const scripts = apiData?.scripts
+    ? (Array.isArray(apiData.scripts) ? apiData.scripts : []).map((s: any, i: number) => ({
+        id: `${plugin.id}-s${i}`,
+        title: s.style || s.title || `话术${i + 1}`,
+        content: s.content || '',
+        scenario: s.scenario || '',
+      }))
+    : getPluginScripts(plugin.id);
+
+  const scenarios = apiData?.scenarios
+    ? (Array.isArray(apiData.scenarios) ? apiData.scenarios : []).map((s: any, i: number) => ({
+        id: `${plugin.id}-sc${i}`,
+        name: typeof s === 'string' ? s : s.name || `场景${i + 1}`,
+        difficulty: 'intermediate' as const,
+        description: typeof s === 'string' ? '' : s.description || '',
+      }))
+    : getPluginScenarios(plugin.id);
+
+  const knowledge = apiData?.knowledge
+    ? (Array.isArray(apiData.knowledge) ? apiData.knowledge : [])
+    : apiData?.bestPractices
+      ? (Array.isArray(apiData.bestPractices) ? apiData.bestPractices : [])
+      : [];
 
   const installedVersion = getInstalledVersion(plugin.id);
   const hasUpdate = installedVersion && compareSemver(plugin.version, installedVersion) > 0;
@@ -181,7 +186,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
           {/* Scripts tab */}
           <TabsContent value="scripts">
             <div className="space-y-2">
-              {scripts.map((script) => (
+              {scripts.map((script: { id: string; title: string; content: string; scenario: string }) => (
                 <div key={script.id} className="rounded-lg border border-gray-100 p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-900">{script.title}</span>
@@ -196,7 +201,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
           {/* Scenarios tab */}
           <TabsContent value="scenarios">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {scenarios.map((scenario) => (
+              {scenarios.map((scenario: { id: string; name: string; difficulty: string; description: string }) => (
                 <div key={scenario.id} className="rounded-lg border border-gray-100 p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-900">{scenario.name}</span>
@@ -222,7 +227,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
             <div className="space-y-4">
               <div className="rounded-lg bg-primary-50 p-4">
                 <ul className="space-y-2 text-sm text-gray-700">
-                  {knowledge.map((item, i) => (
+                  {knowledge.map((item: string, i: number) => (
                     <li key={i} className="flex items-start gap-2">
                       <span className="mt-1 text-primary-600">&#8226;</span>
                       {item}
@@ -318,7 +323,10 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
             <Button variant="secondary" onClick={() => setShowUpgradeDialog(false)}>
               稍后再说
             </Button>
-            <Button>升级到专业版</Button>
+            <Button onClick={() => {
+              setShowUpgradeDialog(false);
+              // TODO: navigate to pricing page when implemented
+            }}>了解更多</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

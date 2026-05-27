@@ -394,13 +394,9 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
     };
 
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch('/api/practices/message/stream', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId: session.id,
           message: userMessage.content,
@@ -503,13 +499,9 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
 
     setHintLoading(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch('/api/practices/hint', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.id }),
         credentials: 'include',
       });

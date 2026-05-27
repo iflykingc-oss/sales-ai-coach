@@ -120,29 +120,7 @@ export default function PracticePage() {
       });
     } catch (error) {
       console.error('Failed to initialize practice session:', error);
-      toast('AI服务连接失败', { description: '无法连接AI陪练服务，已启动本地模式', variant: 'warning' });
-      // Fallback: create local session without API
-      setSession({
-        id: `session-${Date.now()}`,
-        mode,
-        scenarioId: options?.scenarioId,
-        scenarioName: options?.scenarioId ? practiceScenarios.find((s) => s.id === options.scenarioId)?.name : undefined,
-        industry: options?.industry,
-        skillFocus: options?.skillFocus,
-        logicFramework: options?.logicFramework,
-        messages: [],
-        round: 0,
-        maxRounds: 10,
-        customerEmotion: 'interest',
-        state: 'practicing',
-        startedAt: Date.now(),
-      });
-      setView('chat');
-      addActivity({
-        type: 'practice_session',
-        title: '开始陪练',
-        description: '自由对练',
-      });
+      toast.error('AI服务连接失败', { description: '无法连接AI陪练服务，请稍后重试' });
     } finally {
       setIsStarting(false);
     }

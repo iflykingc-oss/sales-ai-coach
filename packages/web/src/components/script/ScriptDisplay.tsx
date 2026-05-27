@@ -439,12 +439,18 @@ export default function ScriptDisplay() {
             </div>
           )}
 
-          {/* Feedback */}
+          {/* Feedback — use the script ID matching the active style */}
           <div className="border-t border-gray-100 pt-3">
-            <ScriptFeedback
-              scriptId={generatedScriptIds[0] || ''}
-              previouslySubmitted={!!generatedScriptIds[0]}
-            />
+            {(() => {
+              const activeIdx = STYLE_TABS.findIndex((t) => t.key === activeStyle);
+              const scriptId = generatedScriptIds[activeIdx] || generatedScriptIds[0] || '';
+              return (
+                <ScriptFeedback
+                  scriptId={scriptId}
+                  previouslySubmitted={!!scriptId}
+                />
+              );
+            })()}
           </div>
         </div>
       ) : null}

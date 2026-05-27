@@ -11,6 +11,7 @@ import adminRoutes from './admin.js';
 import achievementRoutes from './achievements.js';
 import sharedScriptRoutes from './shared-scripts.js';
 import modelConfigRoutes from './model-configs.js';
+import dashboardRoutes from './dashboard.js';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/admin', adminRoutes);
 router.use('/achievements', achievementRoutes);
 router.use('/shared-scripts', sharedScriptRoutes);
 router.use('/model-configs', modelConfigRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 export default router;

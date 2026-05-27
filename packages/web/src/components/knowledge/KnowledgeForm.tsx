@@ -64,28 +64,32 @@ export function KnowledgeForm({ open, onOpenChange }: KnowledgeFormProps) {
       }
       return api.post('/knowledge', data);
     },
-    onSuccess: () => {},
+    onSuccess: (res: any, variables) => {
+      // For create: add item with server-generated ID
+      if (!variables.id && res?.data) {
+        const serverItem = res.data;
+        addItem({
+          id: serverItem.id,
+          content: serverItem.content,
+          source: serverItem.source || 'manual',
+          tags: serverItem.tags || [],
+          industry: serverItem.industry || '',
+          weight: serverItem.weight || 5,
+          createdAt: serverItem.createdAt || new Date().toISOString(),
+          updatedAt: serverItem.updatedAt || new Date().toISOString(),
+        });
+      }
+    },
   });
 
   const handleSubmit = () => {
     if (!content.trim()) return;
 
-    const now = new Date().toISOString();
     if (editingItem) {
       updateItem(editingItem.id, { content, source, industry, weight, tags });
       saveMutation.mutate({ id: editingItem.id, content, source, industry, weight, tags });
     } else {
-      const newItem: KnowledgeItem = {
-        id: `kb-${Date.now()}`,
-        content,
-        source,
-        tags,
-        industry,
-        weight,
-        createdAt: now,
-        updatedAt: now,
-      };
-      addItem(newItem);
+      // Don't add to store yet — wait for API response with real ID
       saveMutation.mutate({ content, source, industry, weight, tags });
     }
 

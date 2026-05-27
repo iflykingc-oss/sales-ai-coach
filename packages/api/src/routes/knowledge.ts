@@ -30,35 +30,20 @@ function extractTextFromBuffer(buffer: Buffer, filename: string): string {
     return buffer.toString('utf-8').trim();
   }
 
-  // For binary formats, extract what we can
+  // Binary formats — return placeholder (user should paste text manually)
   if (ext === 'pdf') {
-    // Basic PDF text extraction (look for text streams)
-    const text = buffer.toString('utf-8');
-    const matches = text.match(/\(([^)]+)\)/g);
-    if (matches) {
-      return matches.map((m) => m.slice(1, -1)).join(' ').trim();
-    }
-    return `[PDF文件: ${filename} - 需要专业解析器提取文本]`;
+    return `[PDF文件: ${filename}] 请将PDF中的文字内容复制粘贴到知识库中，以获得最佳效果。`;
   }
 
   if (ext === 'docx') {
-    // DOCX is a ZIP containing XML - extract readable text
-    const text = buffer.toString('utf-8');
-    const xmlMatches = text.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
-    if (xmlMatches) {
-      return xmlMatches
-        .map((m) => m.replace(/<[^>]+>/g, ''))
-        .join('')
-        .trim();
-    }
-    return `[DOCX文件: ${filename} - 需要专业解析器提取文本]`;
+    return `[DOCX文件: ${filename}] 请将文档中的文字内容复制粘贴到知识库中，以获得最佳效果。`;
   }
 
   if (ext === 'xlsx' || ext === 'xls') {
-    return `[Excel文件: ${filename} - 需要专业解析器提取文本]`;
+    return `[Excel文件: ${filename}] 请将表格数据复制粘贴到知识库中。`;
   }
 
-  return `[${filename} - 无法提取文本内容]`;
+  return `[${filename}] 无法提取文本内容，请手动粘贴。`;
 }
 
 router.get('/', authMiddleware, async (req, res, next) => {

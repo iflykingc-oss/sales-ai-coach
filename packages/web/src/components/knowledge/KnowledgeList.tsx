@@ -28,7 +28,8 @@ export function KnowledgeList() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/knowledge/${id}`),
-    onSuccess: () => {
+    onSuccess: (_: unknown, id: string) => {
+      deleteItem(id);
       queryClient.invalidateQueries({ queryKey: ['knowledge'] });
     },
   });
@@ -51,7 +52,6 @@ export function KnowledgeList() {
   const handleDelete = (id: string) => {
     if (confirm('确定删除该知识条目吗？')) {
       deleteMutation.mutate(id);
-      deleteItem(id);
     }
   };
 

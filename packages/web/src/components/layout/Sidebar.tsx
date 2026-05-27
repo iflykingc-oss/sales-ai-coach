@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import {
+  Home,
   MessageSquare,
   Dumbbell,
   BookOpen,
@@ -15,14 +16,15 @@ import { useUserStore } from '@/stores/userStore';
 import { toast } from '@/hooks/useToast';
 
 const navItems = [
-  { path: '/app', icon: MessageSquare, label: '会话' },
-  { path: '/app/practice', icon: Dumbbell, label: '陪练' },
-  { path: '/app/knowledge', icon: BookOpen, label: '知识库' },
-  { path: '/app/review', icon: ClipboardList, label: '复盘' },
-  { path: '/app/analytics', icon: BarChart3, label: '数据分析' },
-  { path: '/app/team', icon: Users, label: '团队' },
-  { path: '/app/plugins', icon: Puzzle, label: '行业插件' },
-  { path: '/app/admin', icon: Settings, label: '管理后台' },
+  { path: '/app', icon: Home, label: '首页', end: true },
+  { path: '/app/scripts', icon: MessageSquare, label: '话术生成', end: false },
+  { path: '/app/practice', icon: Dumbbell, label: 'AI陪练', end: false },
+  { path: '/app/knowledge', icon: BookOpen, label: '知识库', end: false },
+  { path: '/app/review', icon: ClipboardList, label: '复盘', end: false },
+  { path: '/app/analytics', icon: BarChart3, label: '数据分析', end: false },
+  { path: '/app/team', icon: Users, label: '团队', end: false },
+  { path: '/app/plugins', icon: Puzzle, label: '行业插件', end: false },
+  { path: '/app/admin', icon: Settings, label: '管理后台', end: false },
 ];
 
 interface SidebarProps {
@@ -72,11 +74,11 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           <h1 className="text-lg font-bold text-primary-600">销冠AI教练</h1>
         </div>
         <nav className="flex-1 space-y-1 p-2" aria-label="导航菜单">
-          {navItems.map(({ path, icon: Icon, label }) => (
+          {navItems.map(({ path, icon: Icon, label, end }) => (
             <NavLink
               key={path}
               to={path}
-              end={path === '/app'}
+              end={end}
               onClick={handleNavClick}
             >
               {({ isActive }) => (

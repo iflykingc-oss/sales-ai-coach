@@ -8,37 +8,25 @@ import { useUserStore } from '@/stores/userStore';
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, setUser } = useUserStore();
+  const [validated, setValidated] = useState(false);
+  const { user, validateSession } = useUserStore();
   const navigate = useNavigate();
 
-  // Auth guard: restore session from API on mount
+  // Validate session on mount — always check with server
   useEffect(() => {
-    if (user) return; // Already have user
-
     let cancelled = false;
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Not authenticated');
-        return res.json();
-      })
-      .then((json) => {
-        if (!cancelled && json.success && json.data?.user) {
-          setUser(json.data.user);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          navigate('/login', { replace: true });
-        }
-      });
+    validateSession().then((valid) => {
+      if (cancelled) return;
+      setValidated(true);
+      if (!valid) {
+        navigate('/login', { replace: true });
+      }
+    });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => {
-      cancelled = true;
-    };
-  }, [user, setUser, navigate]);
-
-  // If no user yet (still loading), show minimal loading screen
-  if (!user) {
+  // If not validated yet, show loading
+  if (!validated || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
