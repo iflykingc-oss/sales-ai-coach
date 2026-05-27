@@ -1,10 +1,13 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X,
   Target, MessageCircleQuestion, Shield, TrendingUp, Lightbulb, ChevronRight,
+  Swords,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
+import { useSessionStore } from '@/stores/sessionStore';
 import ScriptFeedback from './ScriptFeedback';
 import { Skeleton } from '@/components/ui/Skeleton';
 
@@ -57,7 +60,21 @@ function CopyButton({ text }: { text: string }) {
 export default function ScriptDisplay() {
   const { activeStyle, setActiveStyle, currentScript, isGenerating, generatedScriptIds } =
     useScriptStore();
+  const { activeSessionId } = useSessionStore();
+  const navigate = useNavigate();
   const [compareMode, setCompareMode] = useState(false);
+
+  const handlePractice = useCallback(() => {
+    // Navigate to practice page with session context
+    navigate('/app/practice', {
+      state: {
+        sessionId: activeSessionId,
+        scenario: currentScript?.scenarioBreakdown?.objective || '',
+        industry: currentScript?.scenarioBreakdown?.stage || '',
+        fromScript: true,
+      },
+    });
+  }, [navigate, activeSessionId, currentScript]);
 
   const handleStyleSelect = useCallback(
     (key: string) => {
@@ -109,18 +126,27 @@ export default function ScriptDisplay() {
           </button>
         ))}
         {currentScript && !isGenerating && (
-          <button
-            onClick={() => setCompareMode(!compareMode)}
-            className={cn(
-              'mr-2 rounded-lg p-2 transition-colors',
-              compareMode
-                ? 'bg-primary-100 text-primary-600'
-                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600',
-            )}
-            title={compareMode ? '退出对比' : '三版对比'}
-          >
-            {compareMode ? <X className="h-4 w-4" /> : <Columns className="h-4 w-4" />}
-          </button>
+          <>
+            <button
+              onClick={handlePractice}
+              className="mr-1 rounded-lg p-2 text-gray-400 transition-colors hover:bg-orange-50 hover:text-orange-600"
+              title="用这段话术练习"
+            >
+              <Swords className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setCompareMode(!compareMode)}
+              className={cn(
+                'mr-2 rounded-lg p-2 transition-colors',
+                compareMode
+                  ? 'bg-primary-100 text-primary-600'
+                  : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600',
+              )}
+              title={compareMode ? '退出对比' : '三版对比'}
+            >
+              {compareMode ? <X className="h-4 w-4" /> : <Columns className="h-4 w-4" />}
+            </button>
+          </>
         )}
       </div>
 

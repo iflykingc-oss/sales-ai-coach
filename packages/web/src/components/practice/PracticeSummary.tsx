@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp, FileSearch } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { RadarChart } from '@/components/ui/RadarChart';
@@ -20,10 +21,40 @@ interface PracticeSummaryProps {
 
 export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const { session, summary, setSummary, setIsGeneratingSummary } = usePracticeStore();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
   const [reportData, setReportData] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveAndReview = useCallback(async () => {
+    if (!session || !reportData) return;
+    setSaving(true);
+    try {
+      // Save practice session to DB
+      const saveRes = await api.post('/practices/save', {
+        sessionId: session.linkedSessionId || null,
+        scriptId: session.linkedScriptId || null,
+        scenario: session.scenarioName || '',
+        industry: session.industry || '',
+        rounds: session.round,
+        score: summary?.totalScore ? summary.totalScore / 100 : 0,
+        feedback: reportData,
+        transcript: reportData.transcript || [],
+      });
+      const practiceId = saveRes.data?.data?.id;
+
+      // Navigate to review with practice session ID
+      navigate('/app/review', {
+        state: { practiceSessionId: practiceId, autoReview: true },
+      });
+    } catch (err) {
+      console.error('Failed to save practice:', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [session, reportData, summary, navigate]);
 
   const handleDimensionClick = useCallback((dim: RadarDimension) => {
     setSelectedDimension((prev) => (prev === dim.label ? null : dim.label));
@@ -439,11 +470,23 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
       )}
 
       {/* Action */}
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
         <Button size="lg" onClick={onRestart}>
           <RotateCcw className="mr-2 h-4 w-4" />
           再来一次
         </Button>
+        {reportData && (
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={handleSaveAndReview}
+            disabled={saving}
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+          >
+            <FileSearch className="mr-2 h-4 w-4" />
+            {saving ? '保存中...' : '保存并复盘'}
+          </Button>
+        )}
       </div>
     </div>
   );

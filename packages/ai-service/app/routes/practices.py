@@ -31,10 +31,12 @@ class PracticeInitRequest(BaseModel):
     industry: str = ""
     mode: str = "scenario"
     sessionId: str = ""
+    scriptId: str = ""
     maxRounds: int = 10
     userId: str = ""
     logicFramework: str = ""  # Sales logic framework to use
     difficulty: str = "medium"  # easy/medium/hard/expert
+    knowledgeContext: str = ""  # RAG knowledge context from user's knowledge base
 
 
 class PracticeMessageRequest(BaseModel):
@@ -70,6 +72,7 @@ async def init_session(req: PracticeInitRequest):
         mode=req.mode,
         max_rounds=req.maxRounds,
         difficulty=req.difficulty,
+        knowledge_context=req.knowledgeContext,
     )
 
     _cleanup_sessions()

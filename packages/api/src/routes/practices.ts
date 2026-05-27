@@ -10,7 +10,21 @@ const router = Router();
 // Harness-powered endpoints (direct proxy to AI service)
 router.post('/init', authMiddleware, async (req, res, next) => {
   try {
-    const { scenario, industry, mode, maxRounds, sessionId, logicFramework, difficulty } = req.body;
+    const { scenario, industry, mode, maxRounds, sessionId, scriptId, logicFramework, difficulty } = req.body;
+
+    // Fetch knowledge context for realistic practice
+    let knowledgeContext = '';
+    try {
+      const knowledgeItems = await prisma.knowledgeItem.findMany({
+        where: { userId: req.user!.id, status: 'ACTIVE' },
+        orderBy: { weight: 'desc' },
+        take: 10,
+      });
+      if (knowledgeItems.length > 0) {
+        knowledgeContext = knowledgeItems.map((k) => k.content).join('\n---\n');
+      }
+    } catch { /* ignore knowledge fetch errors */ }
+
     const result = await callAiService({
       path: '/practices/init',
       body: {
@@ -19,9 +33,11 @@ router.post('/init', authMiddleware, async (req, res, next) => {
         mode: mode || 'scenario',
         maxRounds: maxRounds || 10,
         sessionId: sessionId || '',
+        scriptId: scriptId || '',
         userId: req.user!.id,
         logicFramework: logicFramework || '',
         difficulty: difficulty || 'medium',
+        knowledgeContext,
       },
     });
     res.status(201).json({ success: true, data: result });
@@ -106,6 +122,37 @@ router.post('/hint', authMiddleware, async (req, res, next) => {
       body: { sessionId },
     });
     res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
+// Save completed practice session to DB with pipeline linkage
+router.post('/save', authMiddleware, async (req, res, next) => {
+  try {
+    const { sessionId, scriptId, scenario, industry, rounds, score, feedback, transcript } = req.body;
+
+    const practice = await prisma.practiceSession.create({
+      data: {
+        userId: req.user!.id,
+        sessionId: sessionId || null,
+        scriptId: scriptId || null,
+        scenario: scenario || '',
+        industry: industry || null,
+        rounds: rounds || 0,
+        score: score || 0,
+        feedback: feedback || {},
+        transcript: transcript || null,
+      },
+    });
+
+    // Auto-advance pipeline stage to REVIEW if linked to a session
+    if (sessionId) {
+      await prisma.session.updateMany({
+        where: { id: sessionId, userId: req.user!.id, stage: { in: ['SCRIPT', 'PRACTICE'] } },
+        data: { stage: 'REVIEW' },
+      });
+    }
+
+    res.status(201).json({ success: true, data: practice });
   } catch (err) { next(err); }
 });
 

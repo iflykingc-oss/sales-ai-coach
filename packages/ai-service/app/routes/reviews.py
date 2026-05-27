@@ -10,6 +10,7 @@ class ReviewAnalyzeRequest(BaseModel):
     conversations: list[dict]
     userId: str = ""
     history: str = ""  # Previous review reports for trend analysis
+    knowledgeContext: str = ""  # User's knowledge base for benchmarking
 
 
 @router.post("/analyze")
@@ -19,6 +20,7 @@ async def analyze_review(req: ReviewAnalyzeRequest):
     result = await analyzer.analyze(
         conversations=req.conversations,
         history=req.history,
+        knowledge_context=req.knowledgeContext,
     )
     logger.info(
         f"Review analyzed: quality={result.get('quality', {}).get('score', 'N/A')}"

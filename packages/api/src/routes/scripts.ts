@@ -72,6 +72,14 @@ router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), 
       createdIds.push(created.id);
     }
 
+    // Auto-advance pipeline stage to PRACTICE after script generation
+    if (sessionId) {
+      await prisma.session.updateMany({
+        where: { id: sessionId, userId: req.user!.id, stage: 'SCRIPT' },
+        data: { stage: 'PRACTICE' },
+      });
+    }
+
     // Normalize to camelCase for frontend (Python AI service returns snake_case)
     const raw = result as any;
     const normalized = {

@@ -6,24 +6,111 @@ import { analyzeReview } from '../services/ai.service.js';
 
 const router = Router();
 
+// Fetch knowledge context for review benchmarking
+async function getKnowledgeContext(userId: string): Promise<string> {
+  try {
+    const items = await prisma.knowledgeItem.findMany({
+      where: { userId, status: 'ACTIVE' },
+      orderBy: { weight: 'desc' },
+      take: 10,
+    });
+    return items.map((k) => k.content).join('\n---\n');
+  } catch { return ''; }
+}
+
 router.post('/generate', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
-    const { conversations, sessionId } = req.body;
+    const { conversations, sessionId, practiceSessionId } = req.body;
+    const knowledgeContext = await getKnowledgeContext(req.user!.id);
+
     const analysis = await analyzeReview({
       conversations,
       userId: req.user!.id,
+      knowledgeContext,
     });
 
     const report = await prisma.reviewReport.create({
       data: {
         userId: req.user!.id,
         sessionId: sessionId || null,
+        practiceSessionId: practiceSessionId || null,
         summary: analysis.summary,
         strengths: analysis.strengths,
         improvements: analysis.improvements,
         recommendations: analysis.recommendations,
       },
     });
+
+    // Auto-advance pipeline stage to CLOSED if linked
+    if (sessionId) {
+      await prisma.session.updateMany({
+        where: { id: sessionId, userId: req.user!.id },
+        data: { stage: 'CLOSED' },
+      });
+    }
+
+    res.json({ success: true, data: { ...report, radarScores: analysis.radarScores } });
+  } catch (err) { next(err); }
+});
+
+// Generate review directly from a practice session
+router.post('/from-practice', authMiddleware, aiLimiter, async (req, res, next) => {
+  try {
+    const { practiceSessionId } = req.body;
+    if (!practiceSessionId) {
+      return res.status(400).json({ success: false, error: 'Missing practiceSessionId' });
+    }
+
+    const practice = await prisma.practiceSession.findFirst({
+      where: { id: practiceSessionId, userId: req.user!.id },
+    });
+    if (!practice) {
+      return res.status(404).json({ success: false, error: 'Practice session not found' });
+    }
+
+    // Check if review already exists
+    const existing = await prisma.reviewReport.findFirst({
+      where: { practiceSessionId },
+    });
+    if (existing) {
+      return res.json({ success: true, data: existing, reused: true });
+    }
+
+    // Build conversations from transcript
+    const transcript = practice.transcript as Array<{ role: string; content: string }> | null;
+    const conversations = transcript || [];
+
+    if (conversations.length === 0) {
+      return res.status(400).json({ success: false, error: 'No conversation transcript available' });
+    }
+
+    const knowledgeContext = await getKnowledgeContext(req.user!.id);
+
+    const analysis = await analyzeReview({
+      conversations,
+      userId: req.user!.id,
+      knowledgeContext,
+    });
+
+    const report = await prisma.reviewReport.create({
+      data: {
+        userId: req.user!.id,
+        sessionId: practice.sessionId || null,
+        practiceSessionId,
+        summary: analysis.summary,
+        strengths: analysis.strengths,
+        improvements: analysis.improvements,
+        recommendations: analysis.recommendations,
+      },
+    });
+
+    // Advance pipeline to CLOSED
+    if (practice.sessionId) {
+      await prisma.session.updateMany({
+        where: { id: practice.sessionId, userId: req.user!.id },
+        data: { stage: 'CLOSED' },
+      });
+    }
 
     res.json({ success: true, data: { ...report, radarScores: analysis.radarScores } });
   } catch (err) { next(err); }

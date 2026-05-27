@@ -76,12 +76,14 @@ class PracticeHarness:
         mode: str = "scenario",
         max_rounds: int = 10,
         difficulty: str = "medium",
+        knowledge_context: str = "",
     ) -> dict:
         """Initialize a practice session with customer persona."""
         self.max_rounds = max_rounds
         self.is_active = True
         self.difficulty = difficulty
         self.difficulty_config = get_difficulty_config(difficulty)
+        self._knowledge_context = knowledge_context
 
         # Select buyer archetype based on difficulty
         archetype_key, archetype = select_archetype(difficulty)
@@ -117,14 +119,19 @@ class PracticeHarness:
 异议频率: {self.difficulty_config['objection_frequency']*100:.0f}%
 说服阻力: {self.difficulty_config['convince_resistance']*100:.0f}%"""
 
+        knowledge_hint = ""
+        if knowledge_context:
+            knowledge_hint = f"\n\n销售方的产品/知识信息（客户应了解这些信息，但不会主动透露全部）:\n{knowledge_context[:2000]}"
+
         persona_prompt = f"""作为客户画像生成器，根据以下信息构建详细的客户画像：
 行业: {industry or '通用'}
 场景: {scenario}
 模式: {mode}
 {archetype_hint}
 {difficulty_hint}
+{knowledge_hint}
 
-请基于上述买家原型和难度等级，生成一个具体的客户画像。画像必须体现原型的性格特征和异议风格，难度越高客户越难说服。
+请基于上述买家原型和难度等级，生成一个具体的客户画像。画像必须体现原型的性格特征和异议风格，难度越高客户越难说服。如果提供了产品知识，客户应该对这些产品有一定了解或疑虑。
 
 输出JSON格式: {{"name": "...", "role": "...", "company": "...", "personality": "...", "needs": "...", "pain_points": "...", "budget": "...", "attitude": "...", "initial_emotion": "...", "objection_style": "...", "archetype_key": "..."}}"""
 
@@ -698,6 +705,7 @@ class PracticeHarness:
         report["difficulty"] = self.difficulty
         report["archetype_key"] = self.archetype_key
         report["archetype_name"] = self.archetype.get("name", "")
+        report["transcript"] = self.ctx.get_messages()
 
         self.fl.add_item(description="生成复盘报告")
         self.fl.items[-1].status = ItemStatus.COMPLETED
@@ -1024,4 +1032,5 @@ class PracticeHarness:
             "context": self.ctx.export_state(),
             "feature_list": self.fl.to_dict(),
             "progress": self.progress_tracker.get_progress().__dict__ if self.progress_tracker else None,
+            "transcript": self.ctx.get_messages(),
         }

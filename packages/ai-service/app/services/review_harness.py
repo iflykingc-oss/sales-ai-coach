@@ -33,13 +33,14 @@ class ReviewAnalyzer:
             threshold=0.7,
         )
 
-    async def analyze(self, conversations: list[dict], history: str = "") -> dict:
+    async def analyze(self, conversations: list[dict], history: str = "", knowledge_context: str = "") -> dict:
         """
         Analyze sales conversations with quality evaluation.
 
         Args:
             conversations: List of {role, content} dicts
             history: Previous review reports for trend analysis (optional)
+            knowledge_context: User's knowledge base for benchmarking (optional)
         """
         # Phase 1: If conversation is long, summarize first
         convo_text = "\n".join(
@@ -50,7 +51,7 @@ class ReviewAnalyzer:
             convo_text = await self._summarize_conversations(conversations)
 
         # Phase 2: Generate report
-        report = await self._generate_report(convo_text, history)
+        report = await self._generate_report(convo_text, history, knowledge_context)
 
         # Phase 3: Evaluate quality
         eval_result = await self.evaluator.evaluate(
@@ -70,6 +71,7 @@ class ReviewAnalyzer:
             report = await self._generate_report(
                 convo_text,
                 history,
+                knowledge_context,
                 eval_feedback=eval_result.feedback,
                 suggestions=eval_result.suggestions,
             )
@@ -143,11 +145,15 @@ class ReviewAnalyzer:
         self,
         convo_text: str,
         history: str = "",
+        knowledge_context: str = "",
         eval_feedback: str = "",
         suggestions: list[str] | None = None,
     ) -> dict:
         """Generate a review report from conversation text."""
         history_context = f"\n历史复盘趋势:\n{history}" if history else ""
+        knowledge_hint = ""
+        if knowledge_context:
+            knowledge_hint = f"\n\n产品/知识参考（用于评估销售话术的准确性和完整性）:\n{knowledge_context[:2000]}"
         retry_context = ""
         if eval_feedback:
             retry_context = f"\n上次评估反馈: {eval_feedback}\n改进建议: {', '.join(suggestions or [])}"
@@ -156,6 +162,7 @@ class ReviewAnalyzer:
 
 {history_context}
 {retry_context}
+{knowledge_hint}
 
 对话内容:
 {convo_text}

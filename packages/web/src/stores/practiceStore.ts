@@ -28,6 +28,8 @@ export interface PracticeSession {
   detectedStage?: string;
   difficulty?: string;
   archetypeName?: string;
+  linkedSessionId?: string;
+  linkedScriptId?: string;
   messages: ChatMessage[];
   round: number;
   maxRounds: number;

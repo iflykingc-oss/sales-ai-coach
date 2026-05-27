@@ -29,6 +29,13 @@ enum SessionStatus {
   ARCHIVED
 }
 
+enum PipelineStage {
+  SCRIPT
+  PRACTICE
+  REVIEW
+  CLOSED
+}
+
 enum MessageRole {
   USER
   ASSISTANT
@@ -112,15 +119,21 @@ model Session {
   name      String
   industry  String?
   status    SessionStatus @default(PENDING)
+  stage     PipelineStage @default(SCRIPT)
   tags      String[]
+  customerName String?    @map("customer_name")
+  customerInfo Json?      @map("customer_info")
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  messages Message[]
-  scripts  Script[]
+  messages  Message[]
+  scripts   Script[]
+  practices PracticeSession[]
+  reviews   ReviewReport[]
 
   @@index([userId])
   @@index([teamId])
+  @@index([stage])
   @@map("sessions")
 }
 
@@ -175,34 +188,45 @@ model KnowledgeItem {
 }
 
 model PracticeSession {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?   @map("session_id")
+  session   Session?  @relation(fields: [sessionId], references: [id])
+  scriptId  String?   @map("script_id")
   scenario  String
   industry  String?
   rounds    Int
   score     Float
   feedback  Json
-  createdAt DateTime @default(now()) @map("created_at")
+  transcript Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  reviewReport ReviewReport?
 
   @@index([userId])
+  @@index([sessionId])
   @@index([createdAt])
   @@map("practice_sessions")
 }
 
 model ReviewReport {
-  id              String   @id @default(uuid())
-  userId          String   @map("user_id")
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId       String?  @map("session_id")
-  summary         String   @db.Text
-  strengths       String[]
-  improvements    String[]
-  recommendations String[]
-  createdAt       DateTime @default(now()) @map("created_at")
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId         String?  @map("session_id")
+  session           Session? @relation(fields: [sessionId], references: [id])
+  practiceSessionId String?  @unique @map("practice_session_id")
+  practiceSession   PracticeSession? @relation(fields: [practiceSessionId], references: [id])
+  summary           String   @db.Text
+  strengths         String[]
+  improvements      String[]
+  recommendations   String[]
+  createdAt         DateTime @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([sessionId])
+  @@index([practiceSessionId])
   @@map("review_reports")
 }
 

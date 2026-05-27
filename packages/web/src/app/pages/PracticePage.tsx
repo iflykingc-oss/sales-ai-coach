@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -25,6 +26,14 @@ const SKILL_NAMES: Record<string, string> = {
 };
 
 export default function PracticePage() {
+  const location = useLocation();
+  const navState = location.state as {
+    sessionId?: string;
+    scriptId?: string;
+    scenario?: string;
+    industry?: string;
+    fromScript?: boolean;
+  } | null;
   const [view, setView] = useState<PracticeView>('setup');
   const [isStarting, setIsStarting] = useState(false);
   const { resetPractice, setSession, addRecentScenario } = usePracticeStore();
@@ -73,9 +82,11 @@ export default function PracticePage() {
       // Initialize session with the harness-powered API
       const response = await api.post('/practices/init', {
         scenario: scenarioDesc,
-        industry: options?.industry || '',
+        industry: options?.industry || navState?.industry || '',
         mode: mode === 'freeform' ? 'freestyle' : 'scenario',
         maxRounds: 10,
+        sessionId: navState?.sessionId || '',
+        scriptId: navState?.scriptId || '',
         logicFramework: options?.logicFramework || '',
         difficulty: options?.difficulty || 'medium',
       });
@@ -96,11 +107,13 @@ export default function PracticePage() {
         mode,
         scenarioId: options?.scenarioId,
         scenarioName: scenario?.name,
-        industry: options?.industry,
+        industry: options?.industry || navState?.industry,
         skillFocus: options?.skillFocus,
         logicFramework: options?.logicFramework,
         difficulty: options?.difficulty,
         archetypeName: initData.archetype_name,
+        linkedSessionId: navState?.sessionId,
+        linkedScriptId: navState?.scriptId,
         messages: greetingMessage,
         round: 0,
         maxRounds: 10,

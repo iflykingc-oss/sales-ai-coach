@@ -89,6 +89,7 @@ export interface ReviewInput {
   conversations: Array<{ content: string; role: string }>;
   userId: string;
   history?: string;
+  knowledgeContext?: string;
 }
 
 export interface ReviewOutput {
