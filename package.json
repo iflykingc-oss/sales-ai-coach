@@ -16,6 +16,9 @@
     "typescript": "^5.7.0"
   },
   "packageManager": "pnpm@10.0.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "bcrypt", "esbuild"]
+  },
   "engines": {
     "node": ">=20.0.0"
   }
