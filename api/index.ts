@@ -1,11 +1,10 @@
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { apiLimiter } from '../src/middleware/rateLimit.js';
-import { errorMiddleware } from '../src/middleware/error.js';
-import routes from '../src/routes/index.js';
+import { apiLimiter } from '../packages/api/src/middleware/rateLimit.js';
+import { errorMiddleware } from '../packages/api/src/middleware/error.js';
+import routes from '../packages/api/src/routes/index.js';
 
 const app = express();
 
