@@ -1,8 +1,7 @@
 {
   "version": 2,
-  "framework": "vite",
   "installCommand": "corepack enable && pnpm install",
-  "buildCommand": "cd packages/web && pnpm build",
+  "buildCommand": "cd packages/web && npx vite build",
   "outputDirectory": "packages/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
