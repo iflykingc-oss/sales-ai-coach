@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Plus, Calendar, User, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectItem } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,6 +10,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/Dialog';
 import { useTeamStore, type TeamTask } from '@/stores/teamStore';
+import { api } from '@/services/api';
 import { cn } from '@/utils/cn';
 
 const statusLabels: Record<TeamTask['status'], string> = {
@@ -32,34 +34,65 @@ const typeLabels: Record<TeamTask['type'], string> = {
 
 type TaskFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'expired';
 
-export function TaskManager() {
+interface TaskManagerProps {
+  teamId: string | null;
+}
+
+export function TaskManager({ teamId }: TaskManagerProps) {
   const { tasks, addTask, updateTaskStatus, members } = useTeamStore();
 
   const [filter, setFilter] = useState<TaskFilter>('all');
   const [showDialog, setShowDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '', type: 'practice' as TeamTask['type'], assigneeId: '', deadline: '', description: '',
   });
 
   const filteredTasks = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter);
 
-  const handleCreateTask = () => {
-    if (!newTask.title || !newTask.assigneeId || !newTask.deadline) return;
-    const assignee = members.find((m) => m.id === newTask.assigneeId);
-    const task: TeamTask = {
-      id: `t${Date.now()}`,
-      title: newTask.title,
-      type: newTask.type,
-      assigneeId: newTask.assigneeId,
-      assigneeName: assignee?.name ?? '',
-      deadline: newTask.deadline,
-      status: 'pending',
-      createdAt: new Date().toISOString().split('T')[0],
-      description: newTask.description,
-    };
-    addTask(task);
-    setNewTask({ title: '', type: 'practice', assigneeId: '', deadline: '', description: '' });
-    setShowDialog(false);
+  const handleCreateTask = async () => {
+    if (!newTask.title || !newTask.assigneeId || !newTask.deadline || !teamId) return;
+    setCreating(true);
+    try {
+      const res = await api.post(`/teams/${teamId}/tasks`, {
+        type: newTask.type,
+        assigneeId: newTask.assigneeId,
+        deadline: newTask.deadline,
+        scenario: newTask.title,
+        description: newTask.description,
+      }) as any;
+
+      const task: TeamTask = {
+        id: res?.data?.id || `t${Date.now()}`,
+        title: newTask.title,
+        type: newTask.type,
+        assigneeId: newTask.assigneeId,
+        assigneeName: members.find((m) => m.id === newTask.assigneeId)?.name ?? '',
+        deadline: newTask.deadline,
+        status: 'pending',
+        createdAt: new Date().toISOString().split('T')[0],
+        description: newTask.description,
+      };
+      addTask(task);
+      setNewTask({ title: '', type: 'practice', assigneeId: '', deadline: '', description: '' });
+      setShowDialog(false);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleStatusChange = async (taskId: string, status: TeamTask['status']) => {
+    if (!teamId) return;
+    updateTaskStatus(taskId, status); // Optimistic update
+    try {
+      await api.patch(`/teams/${teamId}/tasks/${taskId}`, { status });
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      // Revert on failure
+      updateTaskStatus(taskId, status === 'completed' ? 'pending' : status);
+    }
   };
 
   return (
@@ -123,7 +156,7 @@ export function TaskManager() {
               {task.status !== 'completed' && task.status !== 'expired' && (
                 <button
                   type="button"
-                  onClick={() => updateTaskStatus(task.id, 'completed')}
+                  onClick={() => handleStatusChange(task.id, 'completed')}
                   className="text-primary-600 hover:text-primary-700"
                 >
                   标记完成
@@ -201,8 +234,8 @@ export function TaskManager() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowDialog(false)}>取消</Button>
-            <Button onClick={handleCreateTask} disabled={!newTask.title || !newTask.assigneeId || !newTask.deadline}>
-              创建任务
+            <Button onClick={handleCreateTask} disabled={!newTask.title || !newTask.assigneeId || !newTask.deadline || creating}>
+              {creating ? '创建中...' : '创建任务'}
             </Button>
           </DialogFooter>
         </DialogContent>

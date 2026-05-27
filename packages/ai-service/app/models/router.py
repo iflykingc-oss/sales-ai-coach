@@ -1,3 +1,4 @@
+from typing import AsyncIterator
 from app.models.base import BaseModelAdapter
 from app.models.qwen import QwenAdapter
 from app.models.openai_model import OpenAIAdapter
@@ -74,6 +75,26 @@ class ModelRouter:
                 continue
 
         raise AIServiceError(f"All models failed. Last error: {last_error}")
+
+    async def chat_stream_with_fallback(
+        self, messages: list[dict], temperature: float = 0.7, max_tokens: int = 2048
+    ) -> AsyncIterator[str]:
+        """Stream tokens from primary model, falling back on error."""
+        models_to_try = [self._primary] + self._fallbacks if self._primary else self._fallbacks
+        models_to_try = [m for m in models_to_try if m is not None]
+
+        last_error = None
+        for model in models_to_try:
+            try:
+                async for token in model.chat_complete_stream(messages, temperature, max_tokens):
+                    yield token
+                return  # Success, stop trying fallbacks
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Stream model {model.get_model_name()} failed: {e}, trying next...")
+                continue
+
+        raise AIServiceError(f"All streaming models failed. Last error: {last_error}")
 
 
 # Singleton

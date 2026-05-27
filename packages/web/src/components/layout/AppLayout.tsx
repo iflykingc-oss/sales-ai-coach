@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { MobileTabBar } from './MobileTabBar';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useUserStore } from '@/stores/userStore';
 
@@ -62,10 +63,11 @@ export default function AppLayout() {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onMenuToggle={() => setMobileOpen(true)} />
-        <main id="main-content" className="flex-1 overflow-y-auto p-4" role="main" tabIndex={-1}>
+        <main id="main-content" className="flex-1 overflow-y-auto p-4 pb-20 md:pb-4" role="main" tabIndex={-1}>
           <Outlet />
         </main>
       </div>
+      <MobileTabBar />
       <ToastContainer />
     </div>
   );

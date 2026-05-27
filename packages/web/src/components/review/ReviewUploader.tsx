@@ -75,7 +75,7 @@ export function ReviewUploader() {
           <input
             type="file"
             multiple
-            accept=".txt,.json,.csv,.docx"
+            accept=".txt,.json,.csv,.md"
             onChange={handleFileSelect}
             className="hidden"
           />

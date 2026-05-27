@@ -1,11 +1,29 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
-import type { CreateSessionInput, UpdateSessionInput } from '@sales-ai-coach/shared';
+
+const createSessionSchema = z.object({
+  name: z.string().min(1).max(200),
+  industry: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+const updateSessionSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  status: z.enum(['PENDING', 'NEGOTIATING', 'WON', 'LOST', 'ARCHIVED']).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+const createMessageSchema = z.object({
+  content: z.string().min(1).max(50000),
+  role: z.literal('USER').default('USER'),
+  inputType: z.enum(['TEXT', 'IMAGE', 'VOICE', 'FORM', 'PASTE']).default('TEXT'),
+});
 
 const router = Router();
 
-router.get('/', authMiddleware, async (req: Request, res, next) => {
+router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const sessions = await prisma.session.findMany({
       where: { userId: req.user!.id },
@@ -16,10 +34,10 @@ router.get('/', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: Request, res, next) => {
+router.get('/:id', authMiddleware, async (req, res, next) => {
   try {
     const session = await prisma.session.findFirst({
-      where: { id: req.params.id, userId: req.user!.id },
+      where: { id: req.params.id as string, userId: req.user!.id },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
@@ -27,9 +45,9 @@ router.get('/:id', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authMiddleware, async (req: Request, res, next) => {
+router.post('/', authMiddleware, async (req, res, next) => {
   try {
-    const { name, industry, tags } = req.body as CreateSessionInput;
+    const { name, industry, tags } = createSessionSchema.parse(req.body);
     const session = await prisma.session.create({
       data: { userId: req.user!.id, name, industry: industry || null, tags: tags || [] },
     });
@@ -37,22 +55,22 @@ router.post('/', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authMiddleware, async (req: Request, res, next) => {
+router.put('/:id', authMiddleware, async (req, res, next) => {
   try {
-    const { name, industry, status, tags } = req.body as UpdateSessionInput;
+    const { name, status, tags } = updateSessionSchema.parse(req.body);
     const session = await prisma.session.updateMany({
-      where: { id: req.params.id, userId: req.user!.id },
-      data: { name, industry, status, tags },
+      where: { id: req.params.id as string, userId: req.user!.id },
+      data: { name, status, tags },
     });
     if (session.count === 0) return res.status(404).json({ success: false, error: 'Session not found' });
     res.json({ success: true });
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authMiddleware, async (req: Request, res, next) => {
+router.delete('/:id', authMiddleware, async (req, res, next) => {
   try {
     const result = await prisma.session.deleteMany({
-      where: { id: req.params.id, userId: req.user!.id },
+      where: { id: req.params.id as string, userId: req.user!.id },
     });
     if (result.count === 0) return res.status(404).json({ success: false, error: 'Session not found' });
     res.json({ success: true });
@@ -60,22 +78,19 @@ router.delete('/:id', authMiddleware, async (req: Request, res, next) => {
 });
 
 // Create a message in a session
-router.post('/:id/messages', authMiddleware, async (req: Request, res, next) => {
+router.post('/:id/messages', authMiddleware, async (req, res, next) => {
   try {
     const session = await prisma.session.findFirst({
-      where: { id: req.params.id, userId: req.user!.id },
+      where: { id: req.params.id as string, userId: req.user!.id },
     });
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
 
-    const { role, content, inputType = 'TEXT' } = req.body;
-    if (!role || !content) {
-      return res.status(400).json({ success: false, error: 'role and content are required' });
-    }
+    const { content, inputType } = createMessageSchema.parse(req.body);
 
     const message = await prisma.message.create({
       data: {
-        sessionId: req.params.id,
-        role,
+        sessionId: req.params.id as string,
+        role: 'USER',
         content,
         inputType,
       },
@@ -83,7 +98,7 @@ router.post('/:id/messages', authMiddleware, async (req: Request, res, next) => 
 
     // Update session's updatedAt
     await prisma.session.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: { updatedAt: new Date() },
     });
 

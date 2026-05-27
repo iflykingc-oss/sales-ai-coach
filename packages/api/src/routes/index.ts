@@ -8,6 +8,7 @@ import reviewRoutes from './reviews.js';
 import teamRoutes from './teams.js';
 import pluginRoutes from './plugins.js';
 import adminRoutes from './admin.js';
+import achievementRoutes from './achievements.js';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/reviews', reviewRoutes);
 router.use('/teams', teamRoutes);
 router.use('/plugins', pluginRoutes);
 router.use('/admin', adminRoutes);
+router.use('/achievements', achievementRoutes);
 
 export default router;

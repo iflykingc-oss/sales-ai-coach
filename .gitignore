@@ -45,4 +45,6 @@ docker-compose.override.yml
 .claude/worktrees/
 
 .vercel
-turbo.json
+.turbo
+*.tsbuildinfo
+coverage/

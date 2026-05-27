@@ -19,6 +19,7 @@ from app.harness.evaluator import OutputEvaluator, EvalResult
 from app.harness.progress_tracker import ProgressTracker
 from app.models.router import model_router
 from app.core.logging import logger
+from app.utils.json_parser import extract_json
 
 
 class ScriptGenerationHarness:
@@ -172,13 +173,9 @@ class ScriptGenerationHarness:
     def _parse_script_result(self, result: str) -> dict:
         """Parse LLM output into structured script data."""
         try:
-            # Try direct JSON parse
-            if "{" in result:
-                start = result.index("{")
-                end = result.rindex("}") + 1
-                json_str = result[start:end]
-                data = json.loads(json_str)
+            data = extract_json(result)
 
+            if data is not None:
                 # Validate required fields
                 if "speech_styles" in data and isinstance(data["speech_styles"], list):
                     return {

@@ -1,6 +1,7 @@
 import { ThumbsUp, Share2, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { useTeamStore, type SharedScript } from '@/stores/teamStore';
 import { cn } from '@/utils/cn';
 

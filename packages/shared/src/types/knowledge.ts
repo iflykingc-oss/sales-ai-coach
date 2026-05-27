@@ -28,7 +28,12 @@ export interface UpdateKnowledgeInput {
 }
 
 export interface ImportKnowledgeInput {
-  file: File;
+  files: Array<{
+    name: string;
+    content?: string;
+    type?: string;
+    size?: number;
+  }>;
   industry?: string;
   tags?: string[];
 }

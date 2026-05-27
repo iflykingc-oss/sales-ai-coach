@@ -1,34 +1,8 @@
 import { useTeamStore, type TeamMember } from '@/stores/teamStore';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Users } from 'lucide-react';
 import { cn } from '@/utils/cn';
-
-const mockMembers: TeamMember[] = [
-  {
-    id: '1', name: '张伟', email: 'zhangwei@example.com', role: 'owner', status: 'online',
-    joinedAt: '2025-01-15',
-    stats: { scriptsGenerated: 45, practiceScore: 88, sessionsCompleted: 32, growthTrend: [65, 70, 72, 78, 82, 85, 88] },
-  },
-  {
-    id: '2', name: '李娜', email: 'lina@example.com', role: 'admin', status: 'online',
-    joinedAt: '2025-02-01',
-    stats: { scriptsGenerated: 38, practiceScore: 92, sessionsCompleted: 28, growthTrend: [70, 75, 78, 82, 85, 88, 92] },
-  },
-  {
-    id: '3', name: '王芳', email: 'wangfang@example.com', role: 'member', status: 'away',
-    joinedAt: '2025-02-10',
-    stats: { scriptsGenerated: 22, practiceScore: 75, sessionsCompleted: 18, growthTrend: [60, 62, 65, 68, 70, 72, 75] },
-  },
-  {
-    id: '4', name: '刘洋', email: 'liuyang@example.com', role: 'member', status: 'online',
-    joinedAt: '2025-03-01',
-    stats: { scriptsGenerated: 15, practiceScore: 68, sessionsCompleted: 12, growthTrend: [50, 55, 58, 60, 62, 65, 68] },
-  },
-  {
-    id: '5', name: '陈静', email: 'chenjing@example.com', role: 'member', status: 'offline',
-    joinedAt: '2025-03-15',
-    stats: { scriptsGenerated: 10, practiceScore: 82, sessionsCompleted: 8, growthTrend: [70, 72, 74, 76, 78, 80, 82] },
-  },
-];
 
 const statusColors: Record<TeamMember['status'], string> = {
   online: 'bg-green-500',
@@ -37,34 +11,38 @@ const statusColors: Record<TeamMember['status'], string> = {
 };
 
 const roleLabels: Record<TeamMember['role'], string> = {
-  owner: '团队长',
-  admin: '管理员',
-  member: '成员',
+  TEAM_OWNER: '团队长',
+  ADMIN: '管理员',
+  USER: '成员',
 };
 
 const roleVariants: Record<TeamMember['role'], 'default' | 'info' | 'warning'> = {
-  owner: 'warning',
-  admin: 'info',
-  member: 'default',
+  TEAM_OWNER: 'warning',
+  ADMIN: 'info',
+  USER: 'default',
 };
 
 export function MemberList() {
-  const { members, setMembers } = useTeamStore();
+  const { members } = useTeamStore();
 
   if (members.length === 0) {
-    setMembers(mockMembers);
+    return (
+      <EmptyState
+        icon={<Users className="h-6 w-6" />}
+        title="暂无成员"
+        description="邀请团队成员加入后，此处将展示成员列表"
+      />
+    );
   }
-
-  const displayMembers = members.length > 0 ? members : mockMembers;
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 px-5 py-4">
         <h3 className="text-base font-semibold text-gray-900">团队成员</h3>
-        <p className="mt-1 text-sm text-gray-500">共 {displayMembers.length} 名成员</p>
+        <p className="mt-1 text-sm text-gray-500">共 {members.length} 名成员</p>
       </div>
       <div className="divide-y divide-gray-100">
-        {displayMembers.map((member) => (
+        {members.map((member) => (
           <div key={member.id} className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-gray-50">
             <div className="flex items-center gap-3">
               <div className="relative">

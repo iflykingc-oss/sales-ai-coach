@@ -34,6 +34,6 @@ export function errorMiddleware(err: Error, req: Request, res: Response, next: N
 
   res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : 'An error occurred',
   });
 }

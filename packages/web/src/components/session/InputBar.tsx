@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useScriptStore } from '@/stores/scriptStore';
+import { generateScript } from '@/services/scriptService';
 import type { InputType } from '@sales-ai-coach/shared';
 
 type InputMode = 'TEXT' | 'IMAGE' | 'VOICE' | 'FORM' | 'PASTE';
@@ -84,6 +85,60 @@ export default function InputBar({ onSend }: InputBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pasteAreaRef = useRef<HTMLDivElement>(null);
 
+  const handleGenerateScript = useCallback(
+    async (input: string, inputType: InputMode) => {
+      if (!activeSessionId) return;
+
+      useScriptStore.setState({ isGenerating: true, error: null });
+
+      try {
+        // Dispatch event to add user message to MessageList
+        const userMsg = {
+          id: `optimistic-${Date.now()}`,
+          sessionId: activeSessionId,
+          role: 'USER' as const,
+          content: input,
+          inputType,
+          createdAt: new Date().toISOString(),
+        };
+        window.dispatchEvent(
+          new CustomEvent('append-message', { detail: userMsg }),
+        );
+
+        // Use shared script service
+        const result = await generateScript({
+          sessionId: activeSessionId,
+          content: input,
+          inputType,
+        });
+
+        if (result?.success && result?.data) {
+          setCurrentScript(result.data);
+
+          // Add assistant message
+          const assistantMsg = {
+            id: `assistant-${Date.now()}`,
+            sessionId: activeSessionId,
+            role: 'ASSISTANT' as const,
+            content: result.data.speechStyles[0]?.content || '话术已生成',
+            inputType: 'TEXT' as InputType,
+            createdAt: new Date().toISOString(),
+          };
+          window.dispatchEvent(
+            new CustomEvent('append-message', { detail: assistantMsg }),
+          );
+        }
+      } catch (err) {
+        useScriptStore.setState({
+          error: err instanceof Error ? err.message : '生成失败，请重试',
+        });
+      } finally {
+        useScriptStore.setState({ isGenerating: false });
+      }
+    },
+    [activeSessionId, setCurrentScript],
+  );
+
   const handleSubmit = useCallback(async () => {
     let input = '';
     let inputType: InputMode = mode;
@@ -95,7 +150,7 @@ export default function InputBar({ onSend }: InputBarProps) {
         break;
       case 'IMAGE':
         if (!imageUrl) return;
-        input = `[图片已上传]`;
+        input = `[图片]${imageUrl}`;
         break;
       case 'VOICE':
         input = voiceTranscript.trim() || (interimTranscript ? interimTranscript.trim() : '');
@@ -128,83 +183,9 @@ export default function InputBar({ onSend }: InputBarProps) {
       onSend(input, inputType, formData);
     } else {
       // Default: call the API directly
-      await generateScript(input, inputType);
+      await handleGenerateScript(input, inputType);
     }
-  }, [mode, textValue, imageUrl, formValues, pasteValue, onSend]);
-
-  const generateScript = useCallback(
-    async (input: string, inputType: InputMode) => {
-      if (!activeSessionId) return;
-
-      useScriptStore.setState({ isGenerating: true, error: null });
-
-      try {
-        // First, save the user message to the session
-        await fetch(`/api/sessions/${activeSessionId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            role: 'USER',
-            content: input,
-            inputType,
-          }),
-        });
-
-        // Dispatch event to add message to MessageList
-        const userMsg = {
-          id: `optimistic-${Date.now()}`,
-          sessionId: activeSessionId,
-          role: 'USER' as const,
-          content: input,
-          inputType,
-          createdAt: new Date().toISOString(),
-        };
-        window.dispatchEvent(
-          new CustomEvent('append-message', { detail: userMsg }),
-        );
-
-        // Call script generation API
-        const res = await fetch('/api/scripts/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            sessionId: activeSessionId,
-            input,
-            inputType,
-          }),
-        });
-
-        if (!res.ok) throw new Error('话术生成失败');
-        const json = await res.json();
-
-        if (json.success && json.data) {
-          setCurrentScript(json.data);
-
-          // Add assistant message
-          const assistantMsg = {
-            id: `assistant-${Date.now()}`,
-            sessionId: activeSessionId,
-            role: 'ASSISTANT' as const,
-            content: json.data.speech_styles[0]?.content || '话术已生成',
-            inputType: 'TEXT' as InputType,
-            createdAt: new Date().toISOString(),
-          };
-          window.dispatchEvent(
-            new CustomEvent('append-message', { detail: assistantMsg }),
-          );
-        }
-      } catch (err) {
-        useScriptStore.setState({
-          error: err instanceof Error ? err.message : '生成失败，请重试',
-        });
-      } finally {
-        useScriptStore.setState({ isGenerating: false });
-      }
-    },
-    [activeSessionId, setCurrentScript],
-  );
+  }, [mode, textValue, imageUrl, formValues, pasteValue, onSend, handleGenerateScript]);
 
   const handleImageUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

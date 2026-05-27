@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Check, Power, Puzzle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Select, SelectItem,
@@ -30,7 +31,7 @@ function toPlugin(def: typeof industryDefinitions[0]): Plugin {
 }
 
 export function InstalledPlugins() {
-  const { plugins, setActivePlugin, setSelectedPlugin } = usePluginStore();
+  const { plugins, togglePluginActive, setSelectedPlugin } = usePluginStore();
 
   // Merge real definitions with store state
   const allPlugins = useMemo(() => {
@@ -72,7 +73,7 @@ export function InstalledPlugins() {
           <span className="text-sm text-gray-500">当前使用:</span>
           <Select
             value={activePlugin?.id}
-            onValueChange={(v) => setActivePlugin(v)}
+            onValueChange={(v) => togglePluginActive(v)}
             placeholder="选择插件"
           >
             {installedPlugins.map((p) => (
@@ -124,7 +125,7 @@ export function InstalledPlugins() {
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setActivePlugin(plugin.id);
+                    togglePluginActive(plugin.id);
                   }}
                 >
                   <Power className="mr-1 h-3.5 w-3.5" />

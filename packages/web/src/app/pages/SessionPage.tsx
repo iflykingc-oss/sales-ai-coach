@@ -10,6 +10,7 @@ import InputBar from '@/components/session/InputBar';
 import ScriptDisplay from '@/components/script/ScriptDisplay';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import { useActivityStore } from '@/stores/activityStore';
+import { generateScript } from '@/services/scriptService';
 
 export default function SessionPage() {
   const { setSessions, activeSessionId, setActiveSessionId } = useSessionStore();
@@ -60,18 +61,6 @@ export default function SessionPage() {
       useScriptStore.setState({ isGenerating: true, error: null });
 
       try {
-        // Save user message to session
-        await fetch(`/api/sessions/${activeSessionId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            role: 'USER',
-            content: input,
-            inputType,
-          }),
-        });
-
         // Dispatch event to add user message to MessageList
         const userMsg = {
           id: `opt-${Date.now()}`,
@@ -83,26 +72,18 @@ export default function SessionPage() {
         };
         window.dispatchEvent(new CustomEvent('append-message', { detail: userMsg }));
 
-        // Call script generation API
-        const res = await fetch('/api/scripts/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            sessionId: activeSessionId,
-            input,
-            inputType,
-            industry: formData?.industry,
-          }),
+        // Use shared script service
+        const result = await generateScript({
+          sessionId: activeSessionId,
+          content: input,
+          inputType,
+          industry: formData?.industry,
         });
 
-        if (!res.ok) throw new Error('话术生成失败，请重试');
-        const json = await res.json();
-
-        if (json.success && json.data) {
-          const data = json.data as GenerateScriptOutput;
-          setCurrentScript(data);
-          setGeneratedScriptIds(json.scriptIds || []);
+        if (result?.success && result?.data) {
+          const data = result.data as GenerateScriptOutput;
+          setCurrentScript(data as any);
+          setGeneratedScriptIds(result.scriptIds || []);
           addActivity({
             type: 'script_generate',
             title: '话术生成',
@@ -114,7 +95,7 @@ export default function SessionPage() {
             id: `assistant-${Date.now()}`,
             sessionId: activeSessionId,
             role: 'ASSISTANT' as const,
-            content: `已为您生成 3 种风格的话术：\n- ${data.speech_styles.map((s) => s.style).join('\n- ')}`,
+            content: `已为您生成 3 种风格的话术：\n- ${data.speechStyles.map((s) => s.style).join('\n- ')}`,
             inputType: 'TEXT' as InputType,
             createdAt: new Date().toISOString(),
           };

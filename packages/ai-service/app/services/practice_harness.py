@@ -18,13 +18,17 @@ Architecture:
 
 import json
 import re
+from typing import AsyncIterator
 from app.harness.context_manager import ContextManager
 from app.harness.feature_list import FeatureList
 from app.harness.planner import TaskPlanner
 from app.harness.progress_tracker import ProgressTracker
 from app.models.router import model_router
 from app.core.logging import logger
+from app.core.sanitization import wrap_user_input
+from app.utils.json_parser import extract_json
 from app.services.evaluation_dimensions import EVALUATION_DIMENSIONS
+from app.data.buyer_personas import select_archetype, get_difficulty_config, DIFFICULTY_LEVELS
 
 
 class PracticeHarness:
@@ -56,10 +60,14 @@ class PracticeHarness:
         self.customer_persona = ""
         self.emotion_history: list[str] = []
         self.round_scores: list[float] = []
-        self.round_dimension_scores: list[dict] = []  # Per-round 8-dim scores
+        self.round_dimension_scores: list[dict] = []  # Per-round 9-dim scores
         self.detected_stage: str = ""  # Currently detected framework stage
         self.stage_history: list[str] = []
         self.is_active = False
+        self.difficulty: str = "medium"
+        self.difficulty_config: dict = get_difficulty_config("medium")
+        self.archetype_key: str = ""
+        self.archetype: dict = {}
 
     async def init_session(
         self,
@@ -67,10 +75,18 @@ class PracticeHarness:
         industry: str = "",
         mode: str = "scenario",
         max_rounds: int = 10,
+        difficulty: str = "medium",
     ) -> dict:
         """Initialize a practice session with customer persona."""
         self.max_rounds = max_rounds
         self.is_active = True
+        self.difficulty = difficulty
+        self.difficulty_config = get_difficulty_config(difficulty)
+
+        # Select buyer archetype based on difficulty
+        archetype_key, archetype = select_archetype(difficulty)
+        self.archetype_key = archetype_key
+        self.archetype = archetype
 
         # Use TaskPlanner for structured session initialization
         planner = TaskPlanner()
@@ -86,21 +102,31 @@ class PracticeHarness:
         if self.fl.items:
             self.fl.start_item(self.fl.items[0].id)
 
-        # Build customer persona
+        # Build customer persona with archetype guidance
+        archetype_hint = f"""
+买家原型: {archetype['name']} — {archetype['description']}
+性格特征: {', '.join(archetype['traits'])}
+异议风格: {archetype['objection_style']}
+沟通方式: {archetype['communication']}
+决策模式: {archetype['decision_pattern']}
+典型异议: {', '.join(archetype['typical_objections'][:3])}
+情绪范围: 基线={archetype['emotion_range']['baseline']}, 峰值={archetype['emotion_range']['peak']}"""
+
+        difficulty_hint = f"""
+难度等级: {DIFFICULTY_LEVELS[difficulty]['label']} — {DIFFICULTY_LEVELS[difficulty]['description']}
+异议频率: {self.difficulty_config['objection_frequency']*100:.0f}%
+说服阻力: {self.difficulty_config['convince_resistance']*100:.0f}%"""
+
         persona_prompt = f"""作为客户画像生成器，根据以下信息构建详细的客户画像：
 行业: {industry or '通用'}
 场景: {scenario}
 模式: {mode}
+{archetype_hint}
+{difficulty_hint}
 
-请生成一个具体的客户画像，包括:
-1. 姓名/职位/公司类型
-2. 性格特征（内向/外向、理性/感性）
-3. 核心需求和痛点
-4. 预算范围和决策权限
-5. 对销售的态度（配合/防备/敷衍/好奇）
-6. 初始情绪状态
+请基于上述买家原型和难度等级，生成一个具体的客户画像。画像必须体现原型的性格特征和异议风格，难度越高客户越难说服。
 
-输出JSON格式: {{"name": "...", "role": "...", "company": "...", "personality": "...", "needs": "...", "pain_points": "...", "budget": "...", "attitude": "...", "initial_emotion": "..."}}"""
+输出JSON格式: {{"name": "...", "role": "...", "company": "...", "personality": "...", "needs": "...", "pain_points": "...", "budget": "...", "attitude": "...", "initial_emotion": "...", "objection_style": "...", "archetype_key": "..."}}"""
 
         messages = [
             {"role": "user", "content": persona_prompt},
@@ -109,24 +135,23 @@ class PracticeHarness:
         result = await model_router.chat_with_fallback(messages, temperature=0.7, max_tokens=512)
 
         try:
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            persona = json.loads(content.strip())
+            persona = extract_json(result["content"])
+            if persona is None:
+                raise ValueError("No valid JSON found")
             self.customer_persona = json.dumps(persona, ensure_ascii=False)
         except (json.JSONDecodeError, ValueError):
             persona = {
                 "name": "王总",
                 "role": "采购负责人",
                 "company": f"{industry}公司",
-                "personality": "理性务实",
+                "personality": archetype.get("personality", "理性务实"),
                 "needs": scenario,
                 "pain_points": "尚未明确",
                 "budget": "待确认",
                 "attitude": "观望",
-                "initial_emotion": "中立",
+                "initial_emotion": archetype["emotion_range"]["baseline"],
+                "objection_style": archetype["objection_style"],
+                "archetype_key": archetype_key,
             }
             self.customer_persona = json.dumps(persona, ensure_ascii=False)
 
@@ -161,6 +186,9 @@ class PracticeHarness:
             "greeting": greeting["response"],
             "emotion": greeting["emotion"],
             "max_rounds": self.max_rounds,
+            "difficulty": difficulty,
+            "archetype_key": archetype_key,
+            "archetype_name": archetype["name"],
         }
 
     async def respond(self, sales_message: str, logic_framework: str = "") -> dict:
@@ -264,6 +292,185 @@ class PracticeHarness:
             "detectedStage": self.detected_stage,
         }
 
+    async def respond_stream(self, sales_message: str, logic_framework: str = "") -> AsyncIterator[dict]:
+        """Stream a practice round: yield tokens for customer response, then yield evaluation.
+
+        Yields:
+            {"type": "token", "content": "..."} — streamed text tokens
+            {"type": "done", "data": {...}} — final response + evaluation data
+        """
+        if not self.is_active:
+            yield {"type": "error", "data": {"error": "Session not active"}}
+            return
+
+        self.round_count += 1
+        self.ctx.add_message("user", sales_message)
+        persona = json.loads(self.customer_persona)
+
+        # Detect framework stage
+        detected_stage = ""
+        if logic_framework:
+            framework_id = self._extract_framework_id(logic_framework)
+            detected_stage = await self._detect_framework_stage(sales_message, framework_id)
+            if detected_stage:
+                self.detected_stage = detected_stage
+                self.stage_history.append(detected_stage)
+
+        # Build the same system prompt as _generate_customer_response
+        system_prompt = self._build_customer_system_prompt(
+            persona=persona,
+            emotion=self.emotion_history[-1] if self.emotion_history else "中立",
+            logic_framework=logic_framework,
+            detected_stage=detected_stage,
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"销售说: {wrap_user_input(sales_message)}"},
+        ]
+
+        if self.ctx.summary:
+            messages[0]["content"] += f"\n\n--- 对话背景 ---\n{self.ctx.summary}"
+
+        # Stream the customer response
+        full_content = ""
+        try:
+            async for token in model_router.chat_stream_with_fallback(
+                messages, temperature=0.8, max_tokens=256
+            ):
+                full_content += token
+                yield {"type": "token", "content": token}
+        except Exception as e:
+            yield {"type": "error", "data": {"error": str(e)}}
+            return
+
+        # Extract emotion and clean content
+        emotion_match = re.search(r"\[emotion[：:](.+?)\]", full_content)
+        emotion_val = emotion_match.group(1).strip() if emotion_match else "中立"
+        clean_content = re.sub(r"\s*\[emotion[：:].*?\]", "", full_content).strip()
+        is_complete = "[结束]" in full_content or "不想继续" in clean_content
+
+        self.emotion_history.append(emotion_val)
+        self.ctx.add_message("assistant", clean_content)
+
+        # Evaluate (non-streaming, runs after response is complete)
+        round_score = None
+        dimension_scores = None
+        eval_feedback = None
+        if self.round_count >= 2:
+            eval_result = await self._evaluate_round(
+                sales_message=sales_message,
+                customer_response=clean_content,
+                emotion=emotion_val,
+                persona=persona,
+                logic_framework=logic_framework,
+            )
+            dimension_scores = eval_result.get("scores")
+            eval_feedback = eval_result.get("feedback")
+            if dimension_scores is not None:
+                self.round_dimension_scores.append(dimension_scores)
+                avg = sum(dimension_scores.values()) / len(dimension_scores)
+                self.round_scores.append(avg)
+
+        if self.round_count >= self.COMPACT_AFTER_ROUNDS:
+            self.ctx._compact()
+
+        is_complete = is_complete or self.round_count >= self.max_rounds
+        if is_complete:
+            self.is_active = False
+
+        self.progress_tracker._notify()
+
+        # Yield final data event
+        yield {
+            "type": "done",
+            "data": {
+                "response": clean_content,
+                "emotion": emotion_val,
+                "round": self.round_count,
+                "is_complete": is_complete,
+                "round_score": round_score,
+                "dimension_scores": dimension_scores,
+                "evaluation_feedback": eval_feedback,
+                "emotion_history": list(self.emotion_history),
+                "logicFramework": logic_framework,
+                "detectedStage": self.detected_stage,
+            },
+        }
+
+    def _build_customer_system_prompt(
+        self, persona: dict, emotion: str, logic_framework: str = "", detected_stage: str = ""
+    ) -> str:
+        """Build the system prompt for customer persona (shared between respond and respond_stream)."""
+        framework_context = ""
+        if logic_framework:
+            stage_context = ""
+            if detected_stage:
+                stage_names = {
+                    "status-confirm": "现状确认（了解客户当前状态和痛点）",
+                    "goal-align": "目标对齐（与客户就改善目标达成共识）",
+                    "path-plan": "路径规划（制定具体可行的执行方案）",
+                    "benchmark": "标准对标（明确行业/考试标准）",
+                    "current-assess": "现状评估（客观评估当前水平，找出差距）",
+                    "catchup": "追赶策略（制定针对性提升方案）",
+                    "case-show": "案例呈现（用相似案例建立信任）",
+                    "data-support": "数据支撑（用客观数据证明效果）",
+                    "custom-plan": "专属方案（为客户定制个性化方案）",
+                    "pain-identify": "痛点确认（确认客户的核心痛点）",
+                    "consequence": "后果推演（引导思考不改变的后果）",
+                    "solution": "方案呈现（提供解决痛点的方案）",
+                    "situation": "情境问题（了解客户现状、业务背景）",
+                    "problem": "问题问题（引导客户表达痛点和不满）",
+                    "implication": "暗示问题（放大问题影响、让客户意识到紧迫性）",
+                    "need-payoff": "需求-效益问题（让客户自己说出解决方案的价值）",
+                }
+                stage_name = stage_names.get(detected_stage, detected_stage)
+                stage_context = f"""
+销售当前阶段: {stage_name}
+请根据你的角色，做出符合该阶段的自然反应：
+- 在现状确认阶段：客户通常会配合回答，但会保持一定的防备
+- 在目标对齐阶段：客户会表达期望，情绪偏向积极
+- 在路径规划阶段：客户会关注具体方案，情绪偏向犹豫到兴趣"""
+
+            framework_context = f"""
+销售逻辑框架提示:
+当前销售正在使用「{logic_framework}」逻辑框架。{stage_context}
+请根据该框架的特点和销售的当前阶段做出合理反应。"""
+
+        return f"""你正在扮演一个客户角色，与销售进行对话。
+
+客户画像:
+- 姓名: {persona.get('name', '王总')}
+- 职位: {persona.get('role', '采购负责人')}
+- 公司: {persona.get('company', '某公司')}
+- 性格: {persona.get('personality', '理性')}
+- 需求: {persona.get('needs', '待确认')}
+- 痛点: {persona.get('pain_points', '待确认')}
+- 态度: {persona.get('attitude', '观望')}
+- 异议风格: {persona.get('objection_style', '一般')}
+- 沟通方式: {getattr(self, 'archetype', {}).get('communication', '正常沟通')}
+
+当前情绪: {emotion}
+难度配置:
+- 异议频率: {self.difficulty_config['objection_frequency']*100:.0f}%（每轮有此概率提出异议）
+- 说服阻力: {self.difficulty_config['convince_resistance']*100:.0f}%（越高越难被说服）
+- 耐心轮数: {self.difficulty_config['patience_rounds']}轮（超过后情绪急转直下）
+- 情绪波动: {self.difficulty_config['emotion_volatility']*100:.0f}%（越高情绪变化越剧烈）
+{framework_context}
+
+要求:
+1. 保持角色一致性，像真实客户一样回复
+2. 回复简短自然，50-150字，像微信聊天
+3. 根据销售的话和你的情绪做出真实反应
+4. 识别销售使用的逻辑框架，做出符合该阶段的情绪反应
+5. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/共情/感兴趣/犹豫/抗拒/敷衍/满意/生气
+6. 如果销售表现很差，情绪会升级
+7. 如果销售表现很好，情绪会改善
+8. 情绪变化应遵循: 抗拒→犹豫→兴趣→共情 的正常路径
+9. 体现你的异议风格「{persona.get('objection_style', '一般')}」，按此风格提出异议
+10. 根据异议频率决定是否提出异议，不要每轮都提
+11. 说服阻力越高，销售需要越充分的理由才能打动你"""
+
     async def generate_report(self) -> dict:
         """Generate a comprehensive practice session report."""
         # Aggregate per-dimension scores from round history
@@ -309,7 +516,8 @@ class PracticeHarness:
     "情绪管理": 85,
     "产品知识": 60,
     "信任建立": 70,
-    "价值传递": 65
+    "价值传递": 65,
+    "SPIN提问质量": 70
   }},
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["待改进1", "待改进2"],
@@ -327,7 +535,8 @@ class PracticeHarness:
 
 注意：
 1. radarScores 是0-100的整数分数，请基于各维度历史得分进行综合评估
-2. 各维度历史得分是每轮评估的原始数据，请结合对话记录分析趋势"""
+2. 各维度历史得分是每轮评估的原始数据，请结合对话记录分析趋势
+3. SPIN提问质量维度评估销售是否恰当使用了情境、问题、暗示、需求-效益四类提问"""
 
         messages = [
             {"role": "user", "content": report_prompt},
@@ -336,12 +545,9 @@ class PracticeHarness:
         result = await model_router.chat_with_fallback(messages, temperature=0.3, max_tokens=2048)
 
         try:
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            report = json.loads(content.strip())
+            report = extract_json(result["content"])
+            if report is None:
+                raise ValueError("No valid JSON found")
         except (json.JSONDecodeError, ValueError):
             report = self._build_fallback_report()
 
@@ -362,6 +568,9 @@ class PracticeHarness:
         report["round_count"] = self.round_count
         report["emotion_history"] = self.emotion_history
         report["round_scores"] = self.round_scores
+        report["difficulty"] = self.difficulty
+        report["archetype_key"] = self.archetype_key
+        report["archetype_name"] = self.archetype.get("name", "")
 
         self.fl.add_item(description="生成复盘报告")
         self.fl.items[-1].status = "completed"
@@ -377,12 +586,13 @@ class PracticeHarness:
             "差距分析法": "gap-analysis",
             "价值展示法": "value-demo",
             "痛点放大法": "pain-amplify",
+            "SPIN销售法": "spin-selling",
         }
         for zh_name, en_id in framework_map.items():
             if zh_name in logic_framework:
                 return en_id
         # Try direct match (already an English ID)
-        if logic_framework in ("expectation-sync", "gap-analysis", "value-demo", "pain-amplify"):
+        if logic_framework in ("expectation-sync", "gap-analysis", "value-demo", "pain-amplify", "spin-selling"):
             return logic_framework
         return logic_framework
 
@@ -413,6 +623,12 @@ class PracticeHarness:
                 {"id": "consequence", "name": "后果推演", "key_questions": "不改变的后果、半年后状态、考试影响"},
                 {"id": "solution", "name": "方案呈现", "key_questions": "解决方案、具体做法、预期效果"},
             ],
+            "spin-selling": [
+                {"id": "situation", "name": "情境问题", "key_questions": "了解客户现状、业务背景、决策流程"},
+                {"id": "problem", "name": "问题问题", "key_questions": "引导客户表达痛点和不满"},
+                {"id": "implication", "name": "暗示问题", "key_questions": "放大问题影响、让客户意识到紧迫性"},
+                {"id": "need-payoff", "name": "需求-效益问题", "key_questions": "让客户自己说出解决方案的价值"},
+            ],
         }
 
         stages = framework_stages.get(framework_id, [])
@@ -432,6 +648,10 @@ class PracticeHarness:
 - 如果销售在了解现状、确认痛点、问之前尝试的方法 → 第一阶段(status-confirm/benchmark/case-show/pain-identify)
 - 如果销售在设定目标、讨论期望效果、达成共识 → 第二阶段(goal-align/current-assess/data-support/consequence)
 - 如果销售在提出具体方案、分阶段计划、合作事项 → 第三阶段(path-plan/catchup/custom-plan/solution)
+- 如果销售在了解客户现状、业务背景、决策流程 → 情境问题(situation)
+- 如果销售在引导客户表达痛点和不满 → 问题问题(problem)
+- 如果销售在放大问题影响、让客户意识到紧迫性 → 暗示问题(implication)
+- 如果销售在让客户自己说出解决方案的价值 → 需求-效益问题(need-payoff)
 
 请只输出阶段ID（如"status-confirm"），不要输出其他内容。如果无法判断，输出""。"""
 
@@ -479,6 +699,10 @@ class PracticeHarness:
                     "pain-identify": "痛点确认（确认客户的核心痛点）",
                     "consequence": "后果推演（引导思考不改变的后果）",
                     "solution": "方案呈现（提供解决痛点的方案）",
+                    "situation": "情境问题（了解客户现状、业务背景）",
+                    "problem": "问题问题（引导客户表达痛点和不满）",
+                    "implication": "暗示问题（放大问题影响、让客户意识到紧迫性）",
+                    "need-payoff": "需求-效益问题（让客户自己说出解决方案的价值）",
                 }
                 stage_name = stage_names.get(detected_stage, detected_stage)
                 stage_context = f"""
@@ -503,8 +727,16 @@ class PracticeHarness:
 - 需求: {persona.get('needs', '待确认')}
 - 痛点: {persona.get('pain_points', '待确认')}
 - 态度: {persona.get('attitude', '观望')}
+- 异议风格: {persona.get('objection_style', '一般')}
+- 沟通方式: {getattr(self, 'archetype', {}).get('communication', '正常沟通')}
 
-当前情绪: {emotion}{framework_context}
+当前情绪: {emotion}
+难度配置:
+- 异议频率: {self.difficulty_config['objection_frequency']*100:.0f}%（每轮有此概率提出异议）
+- 说服阻力: {self.difficulty_config['convince_resistance']*100:.0f}%（越高越难被说服）
+- 耐心轮数: {self.difficulty_config['patience_rounds']}轮（超过后情绪急转直下）
+- 情绪波动: {self.difficulty_config['emotion_volatility']*100:.0f}%（越高情绪变化越剧烈）
+{framework_context}
 
 要求:
 1. 保持角色一致性，像真实客户一样回复
@@ -514,11 +746,14 @@ class PracticeHarness:
 5. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/共情/感兴趣/犹豫/抗拒/敷衍/满意/生气
 6. 如果销售表现很差，情绪会升级
 7. 如果销售表现很好，情绪会改善
-8. 情绪变化应遵循: 抗拒→犹豫→兴趣→共情 的正常路径"""
+8. 情绪变化应遵循: 抗拒→犹豫→兴趣→共情 的正常路径
+9. 体现你的异议风格「{persona.get('objection_style', '一般')}」，按此风格提出异议
+10. 根据异议频率决定是否提出异议，不要每轮都提
+11. 说服阻力越高，销售需要越充分的理由才能打动你"""
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"销售说: {sales_message}"},
+            {"role": "user", "content": f"销售说: {wrap_user_input(sales_message)}"},
         ]
 
         # Inject context summary if available
@@ -566,7 +801,7 @@ class PracticeHarness:
 
         dimensions_json = json.dumps(EVALUATION_DIMENSIONS, ensure_ascii=False)
 
-        eval_prompt = f"""评估销售在这轮对话中的表现，按以下8个维度分别打分。
+        eval_prompt = f"""评估销售在这轮对话中的表现，按以下9个维度分别打分。
 
 客户画像: {persona.get('name', '')} ({persona.get('personality', '')})
 客户当前情绪: {emotion}
@@ -583,9 +818,10 @@ class PracticeHarness:
 - 产品知识: 对产品和行业的理解深度
 - 信任建立: 是否建立了良好的信任关系
 - 价值传递: 是否清晰传达了产品/服务的价值
+- SPIN提问质量: 评估销售人员在对话中使用SPIN四类提问的质量和适当性（情境问题了解现状、问题问题发现痛点、暗示问题放大影响、需求-效益问题引导客户说出价值）
 
 请输出JSON:
-{{"scores": {{"需求挖掘": 0.7, "异议处理": 0.6, "促单能力": 0.7, "沟通表达": 0.8, "情绪管理": 0.8, "产品知识": 0.6, "信任建立": 0.7, "价值传递": 0.6}}, "feedback": "一句话总体反馈"}}
+{{"scores": {{"需求挖掘": 0.7, "异议处理": 0.6, "促单能力": 0.7, "沟通表达": 0.8, "情绪管理": 0.8, "产品知识": 0.6, "信任建立": 0.7, "价值传递": 0.6, "SPIN提问质量": 0.7}}, "feedback": "一句话总体反馈"}}
 每个维度score范围0-1，0.7以上为合格。"""
 
         messages = [
@@ -596,12 +832,9 @@ class PracticeHarness:
             result = await model_router.chat_with_fallback(
                 messages, temperature=0.2, max_tokens=256
             )
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            data = json.loads(content.strip())
+            data = extract_json(result["content"])
+            if data is None:
+                raise ValueError("No valid JSON found")
 
             scores = data.get("scores", {})
             validated_scores = {}

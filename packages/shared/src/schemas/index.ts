@@ -1,14 +1,18 @@
 import { z } from 'zod';
 
+// Re-export auth schemas
+export { registerSchema, loginSchema, updateProfileSchema } from './auth';
+export type { RegisterInput, LoginInput, UpdateProfileInput } from './auth';
+
 export const scriptSchema = z.object({
   input: z.string().min(1, '输入不能为空'),
-  inputType: z.enum(['screenshot', 'text', 'voice']).default('text'),
+  inputType: z.enum(['TEXT', 'IMAGE', 'VOICE', 'FORM', 'PASTE']).default('TEXT'),
   industry: z.string().default(''),
   context: z.string().default(''),
 });
 
 export const scriptResponseSchema = z.object({
-  speech_styles: z.array(
+  speechStyles: z.array(
     z.object({
       style: z.string(),
       content: z.string(),
@@ -21,14 +25,14 @@ export const scriptResponseSchema = z.object({
       reason: z.string(),
     }),
   ),
-  knowledge_source: z.string(),
-  confidence_score: z.number().min(0).max(1),
+  knowledgeSource: z.string(),
+  confidenceScore: z.number().min(0).max(1),
 });
 
 export const practiceSessionSchema = z.object({
   scenario: z.string().min(1, '场景描述不能为空'),
   industry: z.string().default(''),
-  mode: z.enum(['scenario', 'freestyle']).default('scenario'),
+  mode: z.enum(['scenario', 'freeform', 'special']).default('scenario'),
   maxRounds: z.number().min(1).max(20).default(10),
 });
 
@@ -51,6 +55,13 @@ export const knowledgeUpdateSchema = z.object({
   reason: z.string().optional(),
 });
 
+export const createKnowledgeUpdateSchema = z.object({
+  source: z.string().min(1, '来源不能为空'),
+  content: z.string().min(1, '内容不能为空'),
+  tags: z.array(z.string()).optional(),
+  industry: z.string().optional(),
+});
+
 export const reviewSchema = z.object({
   conversations: z.array(
     z.object({
@@ -69,6 +80,10 @@ export const teamSchema = z.object({
   description: z.string().max(500).default(''),
 });
 
+export const createTeamSchema = z.object({
+  name: z.string().min(1, '团队名称不能为空'),
+});
+
 export const taskSchema = z.object({
   title: z.string().min(1, '任务标题不能为空').max(200),
   description: z.string().max(1000).default(''),
@@ -77,8 +92,35 @@ export const taskSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
 });
 
+export const createTaskSchema = z.object({
+  assigneeId: z.string().min(1, '负责人不能为空'),
+  type: z.string().min(1, '任务类型不能为空'),
+  scenario: z.string().min(1, '场景不能为空'),
+  deadline: z.string().datetime(),
+});
+
 export const pluginSchema = z.object({
   industry: z.string().min(1, '行业不能为空'),
   name: z.string().min(1, '插件名称不能为空'),
   version: z.string().default('1.0.0'),
+});
+
+export const createSessionSchema = z.object({
+  name: z.string().min(1, '会话名称不能为空'),
+  industry: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const updateSessionSchema = z.object({
+  name: z.string().min(1).optional(),
+  industry: z.string().optional(),
+  status: z.enum(['PENDING', 'NEGOTIATING', 'WON', 'LOST', 'ARCHIVED']).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const createMessageSchema = z.object({
+  sessionId: z.string().min(1, '会话ID不能为空'),
+  role: z.enum(['USER', 'ASSISTANT', 'SYSTEM']),
+  content: z.string().min(1, '消息内容不能为空'),
+  inputType: z.enum(['TEXT', 'IMAGE', 'VOICE', 'FORM', 'PASTE']).optional(),
 });

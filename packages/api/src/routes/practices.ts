@@ -4,12 +4,13 @@ import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
 
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const router = Router();
 
 // Harness-powered endpoints (direct proxy to AI service)
-router.post('/init', authMiddleware, async (req: Request, res, next) => {
+router.post('/init', authMiddleware, async (req, res, next) => {
   try {
-    const { scenario, industry, mode, maxRounds, sessionId } = req.body;
+    const { scenario, industry, mode, maxRounds, sessionId, logicFramework, difficulty } = req.body;
     const result = await callAiService({
       path: '/practices/init',
       body: {
@@ -19,24 +20,74 @@ router.post('/init', authMiddleware, async (req: Request, res, next) => {
         maxRounds: maxRounds || 10,
         sessionId: sessionId || '',
         userId: req.user!.id,
+        logicFramework: logicFramework || '',
+        difficulty: difficulty || 'medium',
       },
     });
     res.status(201).json({ success: true, data: result });
   } catch (err) { next(err); }
 });
 
-router.post('/message', authMiddleware, aiLimiter, async (req: Request, res, next) => {
+router.post('/message', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
-    const { sessionId, message } = req.body;
+    const { sessionId, message, logicFramework } = req.body;
     const result = await callAiService({
       path: '/practices/message',
-      body: { sessionId, message },
+      body: { sessionId, message, logicFramework: logicFramework || '' },
     });
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 });
 
-router.post('/report', authMiddleware, async (req: Request, res, next) => {
+// Streaming practice message (SSE proxy)
+router.post('/message/stream', authMiddleware, aiLimiter, async (req, res, next) => {
+  try {
+    const { sessionId, message, logicFramework } = req.body;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const aiRes = await fetch(`${AI_SERVICE_URL}/api/practices/message/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, message, logicFramework: logicFramework || '' }),
+    });
+
+    if (!aiRes.ok) {
+      const error = await aiRes.text();
+      res.status(aiRes.status).json({ success: false, error });
+      return;
+    }
+
+    // Pipe the SSE stream from AI service to client
+    const reader = aiRes.body?.getReader();
+    if (!reader) {
+      res.status(500).json({ success: false, error: 'No response body' });
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        res.write(chunk);
+        // Flush immediately for SSE
+        if (typeof (res as any).flush === 'function') {
+          (res as any).flush();
+        }
+      }
+    } finally {
+      reader.releaseLock();
+      res.end();
+    }
+  } catch (err) { next(err); }
+});
+
+router.post('/report', authMiddleware, async (req, res, next) => {
   try {
     const { sessionId } = req.body;
     const result = await callAiService({
@@ -48,7 +99,7 @@ router.post('/report', authMiddleware, async (req: Request, res, next) => {
 });
 
 // Legacy DB-backed endpoints (still available)
-router.post('/start', authMiddleware, async (req: Request, res, next) => {
+router.post('/start', authMiddleware, async (req, res, next) => {
   try {
     const { scenario, industry, mode } = req.body;
     const practice = await prisma.practiceSession.create({
@@ -65,10 +116,10 @@ router.post('/start', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/message', authMiddleware, aiLimiter, async (req: Request, res, next) => {
+router.post('/:id/message', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
     const { content } = req.body;
-    const practice = await prisma.practiceSession.findUnique({ where: { id: req.params.id } });
+    const practice = await prisma.practiceSession.findUnique({ where: { id: req.params.id as string } });
     if (!practice || practice.userId !== req.user!.id) {
       return res.status(404).json({ success: false, error: 'Practice session not found' });
     }
@@ -86,7 +137,7 @@ router.post('/:id/message', authMiddleware, aiLimiter, async (req: Request, res,
 
     const updatedMessages = [...messages, { role: 'user' as const, content }, { role: 'assistant' as const, content: result.response }];
     await prisma.practiceSession.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         rounds: { increment: 1 },
         feedback: { ...feedback, messages: updatedMessages, emotion: result.emotion },
@@ -100,7 +151,7 @@ router.post('/:id/message', authMiddleware, aiLimiter, async (req: Request, res,
   } catch (err) { next(err); }
 });
 
-router.get('/', authMiddleware, async (req: Request, res, next) => {
+router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const practices = await prisma.practiceSession.findMany({
       where: { userId: req.user!.id },
@@ -110,10 +161,10 @@ router.get('/', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: Request, res, next) => {
+router.get('/:id', authMiddleware, async (req, res, next) => {
   try {
     const practice = await prisma.practiceSession.findFirst({
-      where: { id: req.params.id, userId: req.user!.id },
+      where: { id: req.params.id as string, userId: req.user!.id },
     });
     if (!practice) return res.status(404).json({ success: false, error: 'Practice session not found' });
     res.json({ success: true, data: practice });

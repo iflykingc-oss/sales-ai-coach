@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useReviewStore } from '@/stores/reviewStore';
 import { api } from '@/services/api';

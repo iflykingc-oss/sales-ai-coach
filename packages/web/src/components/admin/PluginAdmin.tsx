@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Plus, Edit3, Trash2, RotateCcw, Download, Users, Star, GitBranch, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';

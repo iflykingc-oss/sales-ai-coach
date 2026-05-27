@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle } from 'lucide-react';
+import { Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
 import ScriptFeedback from './ScriptFeedback';
@@ -54,6 +54,7 @@ function CopyButton({ text }: { text: string }) {
 export default function ScriptDisplay() {
   const { activeStyle, setActiveStyle, currentScript, isGenerating, generatedScriptIds } =
     useScriptStore();
+  const [compareMode, setCompareMode] = useState(false);
 
   const handleStyleSelect = useCallback(
     (key: string) => {
@@ -65,17 +66,17 @@ export default function ScriptDisplay() {
   // Find the content for the active style tab
   const getStyleContent = useCallback(
     (styleKey: string): string => {
-      if (!currentScript?.speech_styles) return '';
+      if (!currentScript?.speechStyles) return '';
       // Try to find matching style
-      for (const s of currentScript.speech_styles) {
+      for (const s of currentScript.speechStyles) {
         if (normalizeStyle(s.style) === styleKey) return s.content;
       }
       // Fallback: use index-based mapping
       const styleIndex = STYLE_TABS.findIndex((t) => t.key === styleKey);
-      if (styleIndex >= 0 && currentScript.speech_styles[styleIndex]) {
-        return currentScript.speech_styles[styleIndex].content;
+      if (styleIndex >= 0 && currentScript.speechStyles[styleIndex]) {
+        return currentScript.speechStyles[styleIndex].content;
       }
-      return currentScript.speech_styles[0]?.content || '';
+      return currentScript.speechStyles[0]?.content || '';
     },
     [currentScript],
   );
@@ -87,22 +88,37 @@ export default function ScriptDisplay() {
   return (
     <div className="mx-4 mb-4 rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* Style tabs */}
-      <div className="flex border-b border-gray-100">
+      <div className="flex items-center border-b border-gray-100">
         {STYLE_TABS.map(({ key, label, icon }) => (
           <button
             key={key}
             onClick={() => handleStyleSelect(key)}
             className={cn(
-              'flex-1 px-4 py-3 text-sm font-medium transition-colors',
-              activeStyle === key
+              'flex-1 px-4 py-3 text-sm font-medium transition-all',
+              activeStyle === key && !compareMode
                 ? 'border-b-2 border-primary-500 bg-primary-50 text-primary-700'
                 : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700',
+              compareMode && 'text-gray-400',
             )}
           >
             <span className="mr-1.5">{icon}</span>
             {label}
           </button>
         ))}
+        {currentScript && !isGenerating && (
+          <button
+            onClick={() => setCompareMode(!compareMode)}
+            className={cn(
+              'mr-2 rounded-lg p-2 transition-colors',
+              compareMode
+                ? 'bg-primary-100 text-primary-600'
+                : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600',
+            )}
+            title={compareMode ? '退出对比' : '三版对比'}
+          >
+            {compareMode ? <X className="h-4 w-4" /> : <Columns className="h-4 w-4" />}
+          </button>
+        )}
       </div>
 
       {/* Content area */}
@@ -124,18 +140,37 @@ export default function ScriptDisplay() {
         </div>
       ) : currentScript ? (
         <div className="p-4">
-          {/* Script content */}
-          <div className="mb-4 rounded-lg bg-gray-50 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500">
-                {STYLE_TABS.find((t) => t.key === activeStyle)?.label} 话术
-              </span>
-              <CopyButton text={getStyleContent(activeStyle)} />
+          {/* Compare mode: all 3 styles side by side */}
+          {compareMode ? (
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              {STYLE_TABS.map(({ key, label, icon }) => (
+                <div key={key} className="rounded-lg bg-gray-50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-600">
+                      {icon} {label}
+                    </span>
+                    <CopyButton text={getStyleContent(key)} />
+                  </div>
+                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-700 line-clamp-8">
+                    {getStyleContent(key)}
+                  </p>
+                </div>
+              ))}
             </div>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
-              {getStyleContent(activeStyle)}
-            </p>
-          </div>
+          ) : (
+            /* Single style view */
+            <div className="mb-4 rounded-lg bg-gray-50 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-500">
+                  {STYLE_TABS.find((t) => t.key === activeStyle)?.label} 话术
+                </span>
+                <CopyButton text={getStyleContent(activeStyle)} />
+              </div>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+                {getStyleContent(activeStyle)}
+              </p>
+            </div>
+          )}
 
           {/* Reason for this approach */}
           {currentScript.reasoning.length > 0 && (
@@ -156,23 +191,23 @@ export default function ScriptDisplay() {
           )}
 
           {/* Confidence score */}
-          {currentScript.confidence_score > 0 && (
+          {currentScript.confidenceScore > 0 && (
             <div className="mb-4">
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <span>AI 信心指数</span>
-                <span>{Math.round(currentScript.confidence_score * 100)}%</span>
+                <span>{Math.round(currentScript.confidenceScore * 100)}%</span>
               </div>
               <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all',
-                    currentScript.confidence_score >= 0.7
+                    currentScript.confidenceScore >= 0.7
                       ? 'bg-green-500'
-                      : currentScript.confidence_score >= 0.4
+                      : currentScript.confidenceScore >= 0.4
                         ? 'bg-yellow-500'
                         : 'bg-red-500',
                   )}
-                  style={{ width: `${currentScript.confidence_score * 100}%` }}
+                  style={{ width: `${currentScript.confidenceScore * 100}%` }}
                 />
               </div>
             </div>
@@ -230,10 +265,10 @@ export default function ScriptDisplay() {
           )}
 
           {/* Knowledge source */}
-          {currentScript.knowledge_source && (
+          {currentScript.knowledgeSource && (
             <div className="mb-4 border-t border-gray-100 pt-3">
               <h4 className="mb-1 text-xs font-medium text-gray-400">引用来源</h4>
-              <p className="text-xs text-gray-500">{currentScript.knowledge_source}</p>
+              <p className="text-xs text-gray-500">{currentScript.knowledgeSource}</p>
             </div>
           )}
 

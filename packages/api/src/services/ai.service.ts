@@ -32,11 +32,11 @@ export interface ScriptGenerationInput {
 }
 
 export interface ScriptGenerationOutput {
-  speech_styles: Array<{ style: string; content: string }>;
+  speechStyles: Array<{ style: string; content: string }>;
   reasoning: string[];
   pitfalls: Array<{ action: string; reason: string }>;
-  knowledge_source: string;
-  confidence_score: number;
+  knowledgeSource: string;
+  confidenceScore: number;
   quality_report?: {
     score: number;
     feedback: string;

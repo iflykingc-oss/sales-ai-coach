@@ -10,6 +10,7 @@ export const EVALUATION_DIMENSIONS = [
   '产品知识',
   '信任建立',
   '价值传递',
+  'SPIN提问质量',
 ] as const;
 
 export type EvaluationDimension = typeof EVALUATION_DIMENSIONS[number];

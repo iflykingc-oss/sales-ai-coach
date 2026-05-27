@@ -9,7 +9,7 @@ class AnthropicAdapter(BaseModelAdapter):
 
     def __init__(self):
         settings = get_settings()
-        self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self.client = AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=60.0)
         self.model_name = "claude-sonnet-4-6-20250514"
 
     async def chat_complete(

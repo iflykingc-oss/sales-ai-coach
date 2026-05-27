@@ -26,6 +26,8 @@ export interface PracticeSession {
   logicFramework?: string;
   logicStage?: string;
   detectedStage?: string;
+  difficulty?: string;
+  archetypeName?: string;
   messages: ChatMessage[];
   round: number;
   maxRounds: number;

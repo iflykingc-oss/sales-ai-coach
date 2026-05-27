@@ -5,7 +5,7 @@ export interface TeamMember {
   name: string;
   email: string;
   avatar?: string;
-  role: 'owner' | 'admin' | 'member';
+  role: 'TEAM_OWNER' | 'ADMIN' | 'USER';
   status: 'online' | 'offline' | 'away';
   joinedAt: string;
   stats: {

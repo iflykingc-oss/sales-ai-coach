@@ -1,5 +1,5 @@
 import { Users, Activity, FileText, TrendingUp } from 'lucide-react';
-import { Card } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/MiniChart';
 import { useTeamStore } from '@/stores/teamStore';

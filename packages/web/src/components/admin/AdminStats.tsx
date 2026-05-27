@@ -1,5 +1,5 @@
 import { Users, Activity, FileText, Cpu, TrendingUp, BarChart3 } from 'lucide-react';
-import { Card } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard, Sparkline, MiniBarChart } from '@/components/ui/MiniChart';
 import { useAdminStore } from '@/stores/adminStore';

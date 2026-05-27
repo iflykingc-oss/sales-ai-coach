@@ -8,6 +8,8 @@ raw chat text (WeChat screenshots, email threads, etc.)
 import json
 from app.models.router import model_router
 from app.core.logging import logger
+from app.core.sanitization import wrap_user_input
+from app.utils.json_parser import extract_json
 
 
 DIALOG_PARSER_PROMPT = """你是一个微信聊天对话解析专家。用户提供了从截图中OCR识别的原始文字，你需要将其解析为结构化的对话记录。
@@ -69,18 +71,15 @@ async def parse_dialog(raw_text: str) -> dict:
     """
     messages = [
         {"role": "system", "content": DIALOG_PARSER_PROMPT},
-        {"role": "user", "content": f"请解析以下OCR识别的对话文字:\n\n{raw_text}"},
+        {"role": "user", "content": f"请解析以下OCR识别的对话文字:\n\n{wrap_user_input(raw_text)}"},
     ]
 
     result = await model_router.chat_with_fallback(messages, temperature=0.3, max_tokens=2048)
 
     try:
-        content = result["content"]
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        parsed = json.loads(content.strip())
+        parsed = extract_json(result["content"])
+        if parsed is None:
+            raise ValueError("No valid JSON found")
 
         # Validate dialog structure
         if "dialog" not in parsed:

@@ -6,11 +6,11 @@ export interface ScriptVariant {
 }
 
 export interface ScriptStateData {
-  speech_styles: ScriptVariant[];
+  speechStyles: ScriptVariant[];
   reasoning: string[];
   pitfalls: Array<{ action: string; reason: string }>;
-  knowledge_source: string;
-  confidence_score: number;
+  knowledgeSource: string;
+  confidenceScore: number;
 }
 
 export interface ScriptFeedbackState {

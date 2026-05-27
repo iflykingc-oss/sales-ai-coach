@@ -1,21 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authLimiter } from '../middleware/rateLimit.js';
+import { getJwtSecret } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { registerSchema, loginSchema } from '@sales-ai-coach/shared/schemas';
 
-function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET environment variable is required in production');
-  }
-  return secret || 'dev-secret-do-not-use-in-production';
-}
-
 const router = Router();
 
-router.post('/register', authLimiter, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/register', authLimiter, async (req, res: Response, next: NextFunction) => {
   try {
     const data = registerSchema.parse(req.body);
     const hashedPassword = await bcrypt.hash(data.password, 12);
@@ -46,11 +39,11 @@ router.post('/register', authLimiter, async (req: Request, res: Response, next: 
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({ success: true, data: { user, accessToken: token } });
+    res.json({ success: true, data: { user } });
   } catch (err) { next(err); }
 });
 
-router.post('/login', authLimiter, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/login', authLimiter, async (req, res: Response, next: NextFunction) => {
   try {
     const data = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: data.email } });
@@ -73,7 +66,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response, next: Nex
     });
 
     const { password, ...publicUser } = user;
-    res.json({ success: true, data: { user: publicUser, accessToken: token } });
+    res.json({ success: true, data: { user: publicUser } });
   } catch (err) { next(err); }
 });
 
@@ -82,7 +75,7 @@ router.post('/logout', (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-router.get('/me', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/me', async (req, res: Response, next: NextFunction) => {
   try {
     const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ success: false, error: 'Not authenticated' });

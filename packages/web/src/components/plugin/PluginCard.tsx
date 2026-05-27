@@ -9,7 +9,7 @@ interface PluginCardProps {
 }
 
 export function PluginCard({ plugin, onDetail }: PluginCardProps) {
-  const { installPluginPersisted, uninstallPluginPersisted, setActivePlugin } = usePluginStore();
+  const { installPluginPersisted, uninstallPluginPersisted, togglePluginActive } = usePluginStore();
 
   const handleUninstall = async () => {
     if (window.confirm(`确定要卸载「${plugin.name}」吗？`)) {
@@ -66,7 +66,7 @@ export function PluginCard({ plugin, onDetail }: PluginCardProps) {
             </Button>
           ) : (
             <>
-              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setActivePlugin(plugin.id)}>
+              <Button variant="secondary" size="sm" className="flex-1" onClick={() => togglePluginActive(plugin.id)}>
                 切换到
               </Button>
               <Button

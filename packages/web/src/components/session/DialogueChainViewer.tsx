@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MessageSquare, User, Bot, ChevronDown, ChevronUp, Filter, BookOpen, Lightbulb } from 'lucide-react';
-import { Card } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Select, SelectItem } from '@/components/ui/Select';
 import type { DialogueChain, ConversationStage, CustomerBranch, DialogueStyle } from '@/data/pluginContent';

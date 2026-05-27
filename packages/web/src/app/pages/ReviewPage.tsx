@@ -23,15 +23,38 @@ export default function ReviewPage() {
         ? reviewData.data as Record<string, unknown> | undefined
         : reviewData;
       const rd = nested || reviewData || {};
+      const radarScores = (rd.radarScores as Record<string, number>) || {};
+
+      // Compute overallScore from radarScores if not provided
+      const scoreValues = Object.values(radarScores).filter((v) => typeof v === 'number' && v > 0);
+      const computedScore = scoreValues.length > 0
+        ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length)
+        : 0;
+
+      // Normalize recommendations: handle both string[] and object[]
+      const rawRecommendations = rd.recommendations || [];
+      const recommendations = Array.isArray(rawRecommendations)
+        ? rawRecommendations.map((r: unknown) => {
+            if (typeof r === 'string') return r;
+            if (typeof r === 'object' && r !== null) {
+              const obj = r as Record<string, unknown>;
+              const parts = [obj.dimension, obj.advice, obj.practice].filter(Boolean);
+              return parts.join('：');
+            }
+            return String(r);
+          })
+        : [];
+
       const reportData: ReviewReport = {
         id: (rd.id as string) || `review-${Date.now()}`,
         date: (rd.date as string) || new Date().toLocaleDateString('zh-CN'),
-        overallScore: (rd.overallScore as number) || 0,
+        overallScore: (rd.overallScore as number) || computedScore,
         summary: (rd.summary as string) || 'AI 分析完成，请查看以下维度评分。',
         strengths: (rd.strengths as string[]) || [],
         improvements: (rd.improvements as string[]) || [],
         actionItems: (rd.actionItems as string[]) || [],
-        radarScores: (rd.radarScores as Record<string, number>) || {},
+        recommendations,
+        radarScores,
         scenarioType: rd.scenarioType as string | undefined,
       };
       setReport(reportData);

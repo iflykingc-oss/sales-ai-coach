@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Upload, Save, Key, Shield, Database, Download, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { useAdminStore } from '@/stores/adminStore';
@@ -123,8 +124,8 @@ export function SystemSettings() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={user.role === 'admin' ? 'warning' : 'default'}>
-                      {user.role === 'admin' ? '管理员' : '普通用户'}
+                    <Badge variant={user.role === 'ADMIN' ? 'warning' : 'default'}>
+                      {user.role === 'ADMIN' ? '管理员' : '普通用户'}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{user.plan}</td>

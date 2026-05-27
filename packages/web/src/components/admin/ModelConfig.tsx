@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Save, AlertTriangle, Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge, Card } from '@/components/ui/Badge';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/utils/cn';

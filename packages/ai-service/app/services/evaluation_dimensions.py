@@ -1,7 +1,7 @@
 """
 Shared evaluation dimensions for AI practice sessions.
 
-These 8 dimensions are used for both per-round evaluation and final report generation.
+These 9 dimensions are used for both per-round evaluation and final report generation.
 Names MUST match exactly between backend and frontend.
 """
 
@@ -14,4 +14,5 @@ EVALUATION_DIMENSIONS = [
     "产品知识",
     "信任建立",
     "价值传递",
+    "SPIN提问质量",
 ]

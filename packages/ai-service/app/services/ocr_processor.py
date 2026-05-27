@@ -9,12 +9,23 @@ Supports multiple OCR backends:
 3. LLM vision model (if model supports image input, like GPT-4o/Claude)
 """
 
+import asyncio
 import base64
 import os
 import json
 import httpx
 from app.core.logging import logger
-from app.core.config import settings
+from app.core.config import get_settings
+
+_paddle_ocr_instance = None
+
+
+def _get_paddle_ocr():
+    global _paddle_ocr_instance
+    if _paddle_ocr_instance is None:
+        from paddleocr import PaddleOCR
+        _paddle_ocr_instance = PaddleOCR(use_angle_cls=True, lang="ch", use_gpu=False)
+    return _paddle_ocr_instance
 
 
 async def process_image(image_data: str) -> str:
@@ -51,10 +62,8 @@ async def process_image(image_data: str) -> str:
 async def _try_paddleocr(image_bytes: bytes) -> str | None:
     """Try PaddleOCR (local). Returns None if not available."""
     try:
-        from paddleocr import PaddleOCR
-
-        ocr = PaddleOCR(use_angle_cls=True, lang="ch", use_gpu=False)
-        result = ocr.ocr(image_bytes, cls=True)
+        ocr = _get_paddle_ocr()
+        result = await asyncio.to_thread(ocr.ocr, image_bytes, cls=True)
 
         texts = []
         for line in result:

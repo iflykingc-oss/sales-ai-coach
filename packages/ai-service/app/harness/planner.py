@@ -14,6 +14,7 @@ import json
 from app.harness.feature_list import FeatureList
 from app.models.router import model_router
 from app.core.logging import logger
+from app.utils.json_parser import extract_json
 
 
 PLANNER_SYSTEM_PROMPT = """你是一个任务规划专家。你的职责是将用户的复杂请求分解为可执行的子任务列表。
@@ -160,8 +161,7 @@ class TaskPlanner:
 
     def _parse_json(self, content: str) -> dict:
         """Extract and parse JSON from LLM response."""
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        return json.loads(content.strip())
+        result = extract_json(content)
+        if result is None:
+            raise json.JSONDecodeError("No valid JSON found", content, 0)
+        return result

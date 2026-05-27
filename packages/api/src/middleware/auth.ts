@@ -1,13 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// Centralized JWT secret — throws in production if not configured
-function getJwtSecret(): string {
+// Centralized JWT secret — always required, no fallback
+export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET environment variable is required in production');
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
   }
-  return secret || 'dev-secret-do-not-use-in-production';
+  return secret;
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -49,8 +49,16 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const role = req.user?.role;
-  if (role !== 'ADMIN' && role !== 'TEAM_OWNER') {
+  if (role !== 'ADMIN') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  next();
+}
+
+export function requireTeamOwner(req: Request, res: Response, next: NextFunction) {
+  const role = req.user?.role;
+  if (role !== 'ADMIN' && role !== 'TEAM_OWNER') {
+    return res.status(403).json({ success: false, error: 'Team owner or admin access required' });
   }
   next();
 }

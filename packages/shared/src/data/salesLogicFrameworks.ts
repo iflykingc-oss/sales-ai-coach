@@ -204,6 +204,48 @@ export const salesLogicFrameworks: LogicFramework[] = [
     ],
     useCases: ['犹豫客户', '拖延客户', '价格敏感', '竞品对比'],
     emotionFlow: ['resist', 'hesitate', 'interest']
+  },
+  {
+    id: 'spin-selling',
+    name: 'SPIN销售法',
+    nameEn: 'SPIN Selling',
+    description: '基于尼尔·雷克汉姆的SPIN销售法，通过情境(Situation)、问题(Problem)、暗示(Implication)、需求-效益(Need-Payoff)四类提问引导客户发现需求',
+    stages: [
+      {
+        id: 'situation',
+        name: '情境问题',
+        purpose: '了解客户现状、业务背景、决策流程',
+        keyQuestions: ['您目前使用什么方案?', '团队规模多大?', '这个流程持续多久了?'],
+        logicPattern: '通过开放式问题建立对客户业务的全面了解',
+        exampleScript: '王总，想了解一下您目前团队在XX方面是怎么做的？大概投入了多少人力和资源？'
+      },
+      {
+        id: 'problem',
+        name: '问题问题',
+        purpose: '引导客户表达痛点和不满',
+        keyQuestions: ['这个方案有什么不足?', '遇到过什么困难?', '哪些方面没有达到预期?'],
+        logicPattern: '让客户自己说出问题，比我们指出问题更有说服力',
+        exampleScript: '在使用现有方案的过程中，有没有遇到什么让您觉得不太满意的地方？'
+      },
+      {
+        id: 'implication',
+        name: '暗示问题',
+        purpose: '放大问题的影响，让客户意识到紧迫性',
+        keyQuestions: ['这个问题导致了什么后果?', '如果不解决会怎样?', '对其他业务有什么影响?'],
+        logicPattern: '将小问题放大为大问题，将局部问题放大为全局问题',
+        exampleScript: '如果这个问题持续下去，对您的业绩目标会有什么影响？团队的士气会受到什么影响？'
+      },
+      {
+        id: 'need-payoff',
+        name: '需求-效益问题',
+        purpose: '让客户自己说出解决方案的价值',
+        keyQuestions: ['如果能解决这个问题，对您意味着什么?', '您希望达到什么效果?', '这能为您带来什么价值?'],
+        logicPattern: '让客户自己说出价值，比我们推销更有力量',
+        exampleScript: '如果我们能帮您解决这个问题，对您的团队和业务会有什么积极的影响？'
+      }
+    ],
+    useCases: ['B2B销售', '解决方案销售', '大客户开发', '需求调研', '顾问式销售'],
+    emotionFlow: ['neutral', 'concerned', 'excited']
   }
 ];
 
@@ -222,4 +264,11 @@ export function getAllFrameworks(): LogicFramework[] {
 export function getStageById(frameworkId: string, stageId: string): Stage | undefined {
   const fw = getFrameworkById(frameworkId);
   return fw?.stages.find(s => s.id === stageId);
+}
+
+export function generateScriptPattern(framework: LogicFramework, stageIndex: number): string {
+  const stage = framework.stages[stageIndex];
+  if (!stage) return '';
+
+  return stage.logicPattern.split(' → ').join('，然后');
 }

@@ -6,7 +6,7 @@ import { analyzeReview } from '../services/ai.service.js';
 
 const router = Router();
 
-router.post('/generate', authMiddleware, aiLimiter, async (req: Request, res, next) => {
+router.post('/generate', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
     const { conversations, sessionId } = req.body;
     const analysis = await analyzeReview({
@@ -29,7 +29,7 @@ router.post('/generate', authMiddleware, aiLimiter, async (req: Request, res, ne
   } catch (err) { next(err); }
 });
 
-router.get('/', authMiddleware, async (req: Request, res, next) => {
+router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const reports = await prisma.reviewReport.findMany({
       where: { userId: req.user!.id },
@@ -39,10 +39,10 @@ router.get('/', authMiddleware, async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', authMiddleware, async (req: Request, res, next) => {
+router.get('/:id', authMiddleware, async (req, res, next) => {
   try {
     const report = await prisma.reviewReport.findFirst({
-      where: { id: req.params.id, userId: req.user!.id },
+      where: { id: req.params.id as string, userId: req.user!.id },
     });
     if (!report) return res.status(404).json({ success: false, error: 'Report not found' });
     res.json({ success: true, data: report });

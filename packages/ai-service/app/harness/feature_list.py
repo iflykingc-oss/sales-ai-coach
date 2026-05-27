@@ -119,7 +119,7 @@ class FeatureList:
             return False
         item.status = ItemStatus.FAILED
         item.error = error
-        return False
+        return True
 
     def mark_rework(self, item_id: str, reason: str = "") -> bool:
         item = self._index.get(item_id)
@@ -127,7 +127,7 @@ class FeatureList:
             return False
         item.status = ItemStatus.NEEDS_REWORK
         item.error = reason
-        return False
+        return True
 
     def is_complete(self) -> bool:
         return all(

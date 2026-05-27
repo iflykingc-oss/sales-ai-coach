@@ -6,7 +6,7 @@ const router = Router();
 
 router.use(authMiddleware, requireAdmin);
 
-router.get('/stats', async (req: Request, res, next) => {
+router.get('/stats', async (req, res, next) => {
   try {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -33,16 +33,30 @@ router.get('/stats', async (req: Request, res, next) => {
       if (dayIndex >= 0 && dayIndex < 30) dailyScripts[29 - dayIndex] = s._count;
     });
 
-    // Industry distribution
-    const usersByIndustry = await prisma.user.groupBy({
-      by: ['industry'],
-      _count: true,
-      orderBy: { _count: 'desc' },
+    // Industry distribution (real data from user.industry array)
+    const allUsers = await prisma.user.findMany({
+      where: { industry: { isEmpty: false } },
+      select: { industry: true },
     });
-    const topIndustries = usersByIndustry
-      .filter((u) => u.industry && u.industry.length > 0)
+    const industryCount: Record<string, number> = {};
+    allUsers.forEach((u) => {
+      (u.industry as string[]).forEach((ind) => {
+        industryCount[ind] = (industryCount[ind] || 0) + 1;
+      });
+    });
+    const topIndustries = Object.entries(industryCount)
+      .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map((u) => ({ name: (u.industry as string[])[0], count: u._count }));
+      .map(([name, count]) => ({ name, count }));
+
+    // User growth trend (group by month using raw query)
+    const userGrowthTrend: { month: string; count: number }[] = await prisma.$queryRaw`
+      SELECT to_char("createdAt", 'YYYY-MM') AS month, COUNT(*)::int AS count
+      FROM "User"
+      GROUP BY month
+      ORDER BY month ASC
+      LIMIT 12
+    `;
 
     res.json({
       success: true,
@@ -54,24 +68,16 @@ router.get('/stats', async (req: Request, res, next) => {
         totalSessions,
         totalPractices,
         totalReviews,
-        modelUsage: [
-          { name: 'Qwen', calls: totalScripts + totalPractices, percentage: 75 },
-          { name: 'Claude', calls: Math.round(totalScripts * 0.2), percentage: 15 },
-          { name: 'MiniMax', calls: Math.round(totalScripts * 0.1), percentage: 10 },
-        ],
-        userGrowthTrend: Array.from({ length: 12 }, (_, i) => Math.round(totalUsers * (0.5 + (i + 1) * 0.05))),
+        modelUsage: null,
+        userGrowthTrend,
         scriptUsageTrend: dailyScripts,
-        topIndustries: topIndustries.length > 0 ? topIndustries : [
-          { name: '房地产', count: Math.round(totalUsers * 0.3) },
-          { name: '汽车', count: Math.round(totalUsers * 0.2) },
-          { name: 'SaaS', count: Math.round(totalUsers * 0.15) },
-        ],
+        topIndustries,
       },
     });
   } catch (err) { next(err); }
 });
 
-router.get('/users', async (req: Request, res, next) => {
+router.get('/users', async (req, res, next) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -84,14 +90,14 @@ router.get('/users', async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/users/:id/disable', async (req: Request, res, next) => {
+router.post('/users/:id/disable', async (req, res, next) => {
   try {
     await prisma.user.update({ where: { id: req.params.id }, data: { role: 'USER' } });
     res.json({ success: true });
   } catch (err) { next(err); }
 });
 
-router.post('/plugins', async (req: Request, res, next) => {
+router.post('/plugins', async (req, res, next) => {
   try {
     const { name, industry, scripts, scenarios, knowledge, customerProfiles, bestPractices } = req.body;
     const plugin = await prisma.industryPlugin.create({
@@ -109,7 +115,7 @@ router.post('/plugins', async (req: Request, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/train', async (req: Request, res, next) => {
+router.post('/train', async (req, res, next) => {
   try {
     res.json({ success: true, message: 'Training job started' });
   } catch (err) { next(err); }
@@ -122,14 +128,14 @@ const DEFAULT_MODELS = [
   { id: 'minimax', name: 'MiniMax', provider: 'MiniMax', temperature: 0.8, maxTokens: 8192, repetitionPenalty: 1.1, status: 'inactive' as const, usageQuota: 30000, usageCurrent: 0, alertThreshold: 80, apiKey: '' },
 ];
 
-router.get('/models', async (req: Request, res, next) => {
+router.get('/models', async (req, res, next) => {
   try {
     // In production these would come from env or a config store
     res.json({ success: true, data: DEFAULT_MODELS });
   } catch (err) { next(err); }
 });
 
-router.put('/models/:id', async (req: Request, res, next) => {
+router.put('/models/:id', async (req, res, next) => {
   try {
     res.json({ success: true, message: 'Model config updated' });
   } catch (err) { next(err); }

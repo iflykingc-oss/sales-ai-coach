@@ -1,35 +1,44 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import { LandingPage } from './app/pages/LandingPage';
-import SessionPage from './app/pages/SessionPage';
-import PracticePage from './app/pages/PracticePage';
-import KnowledgePage from './app/pages/KnowledgePage';
-import ReviewPage from './app/pages/ReviewPage';
-import TeamPage from './app/pages/TeamPage';
-import PluginPage from './app/pages/PluginPage';
-import AdminPage from './app/pages/AdminPage';
 import LoginPage from './app/pages/LoginPage';
 import RegisterPage from './app/pages/RegisterPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { CommandPalette } from './components/ui/CommandPalette';
+
+const SessionPage = lazy(() => import('./app/pages/SessionPage'));
+const PracticePage = lazy(() => import('./app/pages/PracticePage'));
+const KnowledgePage = lazy(() => import('./app/pages/KnowledgePage'));
+const ReviewPage = lazy(() => import('./app/pages/ReviewPage'));
+const TeamPage = lazy(() => import('./app/pages/TeamPage'));
+const PluginPage = lazy(() => import('./app/pages/PluginPage'));
+const AdminPage = lazy(() => import('./app/pages/AdminPage'));
+const AnalyticsPage = lazy(() => import('./app/pages/AnalyticsPage'));
 
 export default function App() {
   return (
     <>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/app" element={<AppLayout />}>
-          <Route index element={<SessionPage />} />
-          <Route path="practice" element={<PracticePage />} />
-          <Route path="knowledge" element={<KnowledgePage />} />
-          <Route path="review" element={<ReviewPage />} />
-          <Route path="team" element={<TeamPage />} />
-          <Route path="plugins" element={<PluginPage />} />
-          <Route path="admin" element={<AdminPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <ErrorBoundary>
+        <Suspense fallback={<div className="flex items-center justify-center h-screen">加载中...</div>}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/app" element={<AppLayout />}>
+              <Route index element={<SessionPage />} />
+              <Route path="practice" element={<PracticePage />} />
+              <Route path="knowledge" element={<KnowledgePage />} />
+              <Route path="review" element={<ReviewPage />} />
+              <Route path="team" element={<TeamPage />} />
+              <Route path="plugins" element={<PluginPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="admin" element={<AdminPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
       <CommandPalette />
     </>
   );

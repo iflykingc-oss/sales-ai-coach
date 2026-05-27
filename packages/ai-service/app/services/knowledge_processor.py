@@ -10,6 +10,8 @@ Features:
 
 from app.models.router import model_router
 from app.core.logging import logger
+from app.core.sanitization import wrap_user_input
+from app.utils.json_parser import extract_json
 import json
 import math
 from typing import Any
@@ -32,21 +34,23 @@ KNOWLEDGE_TAG_PROMPT = """你是一个销售知识分类专家。请分析以下
 async def process_knowledge(content: str, source: str = "") -> dict:
     """Auto-tag and categorize knowledge items with confidence scoring."""
     messages = [
-        {"role": "system", "content": KNOWLEDGE_TAG_PROMPT.format(text=content[:3000])},
+        {"role": "system", "content": KNOWLEDGE_TAG_PROMPT.format(text=wrap_user_input(content[:3000]))},
         {"role": "user", "content": "请分析并打标"},
     ]
 
     result = await model_router.chat_with_fallback(messages, temperature=0.3, max_tokens=512)
 
     try:
-        parsed = json.loads(result["content"])
+        parsed = extract_json(result["content"])
+        if parsed is None:
+            raise ValueError("No valid JSON found")
         return {
             "tags": parsed.get("tags", []),
             "category": parsed.get("category", "销售技巧库"),
             "confidence": parsed.get("confidence", 0.7),
             "summary": parsed.get("summary", content[:100]),
         }
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         return {
             "tags": ["待分类"],
             "category": "销售技巧库",

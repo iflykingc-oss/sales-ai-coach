@@ -12,6 +12,7 @@ class MinimaxAdapter(BaseModelAdapter):
         self.client = AsyncOpenAI(
             api_key=settings.minimax_api_key,
             base_url=f"https://api.minimax.chat/v1",
+            timeout=60.0,
         )
         self.model_name = "MiniMax-M2.7"
 

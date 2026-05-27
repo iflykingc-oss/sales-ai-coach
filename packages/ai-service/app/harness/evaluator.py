@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.harness.feature_list import FeatureList, ItemStatus
 from app.models.router import model_router
 from app.core.logging import logger
+from app.utils.json_parser import extract_json
 
 
 class EvalCriterion(BaseModel):
@@ -148,13 +149,9 @@ class OutputEvaluator:
         )
 
         try:
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-
-            data = json.loads(content.strip())
+            data = extract_json(result["content"])
+            if data is None:
+                raise ValueError("No valid JSON found in eval result")
             return EvalResult(
                 overall_score=float(data.get("overall_score", 0.5)),
                 passed=bool(data.get("passed", False)),
@@ -164,12 +161,12 @@ class OutputEvaluator:
             )
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Failed to parse eval result: {result['content']}, error: {e}")
-            # Default: pass with moderate score (don't block on evaluator failure)
+            # Default: fail on evaluator parse failure (don't silently pass bad output)
             return EvalResult(
-                overall_score=0.7,
-                passed=True,
+                overall_score=0.0,
+                passed=False,
                 criteria_scores={},
-                feedback="评估解析失败，默认通过",
+                feedback="评估解析失败，默认不通过",
                 suggestions=[],
             )
 
@@ -219,12 +216,9 @@ class OutputEvaluator:
         )
 
         try:
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            data = json.loads(content.strip())
+            data = extract_json(result["content"])
+            if data is None:
+                raise ValueError("No valid JSON found in script eval result")
             return EvalResult(
                 overall_score=float(data.get("overall_score", 0.5)),
                 passed=bool(data.get("passed", False)),
@@ -234,9 +228,9 @@ class OutputEvaluator:
             )
         except (json.JSONDecodeError, ValueError):
             return EvalResult(
-                overall_score=0.7,
-                passed=True,
+                overall_score=0.0,
+                passed=False,
                 criteria_scores={},
-                feedback="评估解析失败，默认通过",
+                feedback="评估解析失败，默认不通过",
                 suggestions=[],
             )

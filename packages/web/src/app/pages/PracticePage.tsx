@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PracticeModeSetup } from '@/components/practice/PracticeChat';
 import { PracticeChat } from '@/components/practice/PracticeChat';
 import { PracticeSummary } from '@/components/practice/PracticeSummary';
 import { usePracticeStore, type PracticeMode } from '@/stores/practiceStore';
 import { useActivityStore } from '@/stores/activityStore';
+import { useAchievementStore } from '@/stores/achievementStore';
 import { toast } from '@/hooks/useToast';
 import { api } from '@/services/api';
 import { practiceScenarios } from '@/data/practiceScenarios';
@@ -28,9 +29,36 @@ export default function PracticePage() {
   const [isStarting, setIsStarting] = useState(false);
   const { resetPractice, setSession, addRecentScenario } = usePracticeStore();
   const { addActivity } = useActivityStore();
+  const { achievements, fetchAchievements, checkNewAchievements, showUnlockNotifications } = useAchievementStore();
+  const previousUnlockedRef = useRef<string[]>([]);
 
-  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string }) => {
+  // Check achievements when practice completes (view transitions to 'summary')
+  useEffect(() => {
+    if (view === 'summary') {
+      const checkAchievements = async () => {
+        // Fetch latest achievements first if not loaded
+        if (achievements.length === 0) {
+          await fetchAchievements();
+        }
+        const currentUnlocked = useAchievementStore.getState().achievements
+          .filter((a) => a.unlocked)
+          .map((a) => a.id);
+        const newlyUnlocked = await checkNewAchievements(previousUnlockedRef.current.length > 0 ? previousUnlockedRef.current : currentUnlocked);
+        if (newlyUnlocked.length > 0) {
+          showUnlockNotifications(newlyUnlocked);
+          // Refresh achievements list
+          await fetchAchievements();
+        }
+      };
+      checkAchievements();
+    }
+  }, [view]);
+
+  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string; difficulty?: string }) => {
     setIsStarting(true);
+
+    // Save currently unlocked achievements for comparison after practice
+    previousUnlockedRef.current = achievements.filter((a) => a.unlocked).map((a) => a.id);
 
     try {
       const scenario = options?.scenarioId ? practiceScenarios.find((s) => s.id === options.scenarioId) : null;
@@ -49,9 +77,19 @@ export default function PracticePage() {
         mode: mode === 'freeform' ? 'freestyle' : 'scenario',
         maxRounds: 10,
         logicFramework: options?.logicFramework || '',
+        difficulty: options?.difficulty || 'medium',
       });
 
       const initData = response.data.data;
+
+      const greetingMessage = initData.greeting
+        ? [{
+            id: `msg-${Date.now()}`,
+            role: 'assistant' as const,
+            content: initData.greeting,
+            timestamp: Date.now(),
+          }]
+        : [];
 
       setSession({
         id: initData.session_id,
@@ -61,39 +99,15 @@ export default function PracticePage() {
         industry: options?.industry,
         skillFocus: options?.skillFocus,
         logicFramework: options?.logicFramework,
-        messages: [],
+        difficulty: options?.difficulty,
+        archetypeName: initData.archetype_name,
+        messages: greetingMessage,
         round: 0,
         maxRounds: 10,
         customerEmotion: 'interest',
         state: 'practicing',
         startedAt: Date.now(),
       });
-
-      // Add the AI customer's greeting message
-      if (initData.greeting) {
-        setSession({
-          id: initData.session_id,
-          mode,
-          scenarioId: options?.scenarioId,
-          scenarioName: scenario?.name,
-          industry: options?.industry,
-          skillFocus: options?.skillFocus,
-          logicFramework: options?.logicFramework,
-          messages: [
-            {
-              id: `msg-${Date.now()}`,
-              role: 'assistant',
-              content: initData.greeting,
-              timestamp: Date.now(),
-            },
-          ],
-          round: 0,
-          maxRounds: 10,
-          customerEmotion: 'interest',
-          state: 'practicing',
-          startedAt: Date.now(),
-        });
-      }
 
       setView('chat');
       if (options?.scenarioId) {

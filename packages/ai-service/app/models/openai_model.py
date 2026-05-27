@@ -1,4 +1,3 @@
-from app.models.qwen import QwenAdapter
 from app.models.base import BaseModelAdapter
 from app.core.config import get_settings
 from app.core.logging import logger
@@ -10,7 +9,7 @@ class OpenAIAdapter(BaseModelAdapter):
     def __init__(self):
         settings = get_settings()
         from openai import AsyncOpenAI
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=60.0)
         self.model_name = "gpt-4o"
 
     async def chat_complete(

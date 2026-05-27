@@ -233,13 +233,13 @@ export function LandingPage() {
             {t('从话术生成到团队管理，一站式销售赋能平台', 'From script generation to team management — a one-stop sales enablement platform')}
           </p>
         </div>
-        <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
           {FEATURES.map((f) => (
             <div
               key={f.title}
-              className="group rounded-2xl border border-gray-200 p-6 transition hover:border-primary-200 hover:shadow-lg"
+              className="group rounded-2xl border border-gray-200 p-6 transition-all duration-300 hover:border-primary-200 hover:shadow-lg hover:-translate-y-1"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600 transition group-hover:bg-primary-600 group-hover:text-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-600 transition-all duration-300 group-hover:bg-primary-600 group-hover:text-white group-hover:scale-110">
                 <f.icon className="h-6 w-6" />
               </div>
               <h3 className="mt-4 text-lg font-bold text-gray-900">{t(f.title, f.titleEn)}</h3>
@@ -339,15 +339,15 @@ export function LandingPage() {
               {t('从免费开始，按需升级', 'Start free, upgrade as you grow')}
             </p>
           </div>
-          <div className="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-3">
+          <div className="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-3 stagger-children">
             {PRICING.map((p) => (
               <div
                 key={p.name}
                 className={cn(
-                  'relative rounded-2xl border bg-white p-8',
+                  'relative rounded-2xl border bg-white p-8 transition-all duration-300 hover:-translate-y-1',
                   p.popular
-                    ? 'border-primary-500 shadow-xl ring-1 ring-primary-500'
-                    : 'border-gray-200'
+                    ? 'border-primary-500 shadow-xl ring-1 ring-primary-500 hover:shadow-2xl'
+                    : 'border-gray-200 hover:border-primary-200 hover:shadow-lg'
                 )}
               >
                 {p.popular && (

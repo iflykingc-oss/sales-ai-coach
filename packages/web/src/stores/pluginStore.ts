@@ -10,14 +10,6 @@ export function getInstalledVersion(pluginId: string): string | null {
   }
 }
 
-export function getInstalledPlugins(): Record<string, { version: string; installedAt: number }> {
-  try {
-    return JSON.parse(localStorage.getItem('installed-plugins') || '{}');
-  } catch {
-    return {};
-  }
-}
-
 export interface Plugin {
   id: string;
   name: string;
@@ -56,9 +48,6 @@ interface PluginState {
   fetchPlugins: () => Promise<void>;
   installPluginPersisted: (id: string) => Promise<void>;
   uninstallPluginPersisted: (id: string) => Promise<void>;
-  installPlugin: (id: string) => void;
-  uninstallPlugin: (id: string) => void;
-  setActivePlugin: (id: string) => void;
   togglePluginActive: (id: string) => void;
 
   // Active plugin
@@ -186,32 +175,10 @@ export const usePluginStore = create<PluginState>()(
         localStorage.setItem('installed-plugins', JSON.stringify(installed));
       },
 
-      installPlugin: (id) =>
-        set((state) => ({
-          plugins: state.plugins.map((p) =>
-            p.id === id ? { ...p, installed: true, active: true, installCount: p.installCount + 1 } : p,
-          ),
-        })),
-
-      uninstallPlugin: (id) =>
-        set((state) => ({
-          plugins: state.plugins.map((p) =>
-            p.id === id ? { ...p, installed: false, active: false, installCount: Math.max(0, p.installCount - 1) } : p,
-          ),
-        })),
-
-      setActivePlugin: (id) =>
-        set((state) => ({
-          plugins: state.plugins.map((p) => ({
-            ...p,
-            active: p.id === id,
-          })),
-        })),
-
       togglePluginActive: (id) =>
         set((state) => ({
           plugins: state.plugins.map((p) =>
-            p.id === id ? { ...p, active: !p.active } : p,
+            p.id === id ? { ...p, active: true } : { ...p, active: false },
           ),
         })),
 

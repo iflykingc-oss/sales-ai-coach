@@ -64,7 +64,7 @@ interface PluginDetailProps {
 }
 
 export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
-  const { installPluginPersisted, uninstallPluginPersisted, setActivePlugin, plugins } = usePluginStore();
+  const { installPluginPersisted, uninstallPluginPersisted, togglePluginActive, plugins } = usePluginStore();
   const scripts = getPluginScripts(plugin.id);
   const scenarios = getPluginScenarios(plugin.id);
   const knowledge = getPluginKnowledge(plugin.id);
@@ -254,7 +254,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
             {plugin.active ? (
               <Button className="flex-1" disabled>当前使用中</Button>
             ) : (
-              <Button className="flex-1" onClick={() => setActivePlugin(plugin.id)}>
+              <Button className="flex-1" onClick={() => togglePluginActive(plugin.id)}>
                 切换为当前插件
               </Button>
             )}

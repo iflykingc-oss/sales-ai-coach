@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { RadarChart } from '@/components/ui/RadarChart';
 import type { RadarDimension } from '@/components/ui/RadarChart';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -132,11 +132,23 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
             <div className="text-sm text-gray-500">综合评分</div>
           </div>
         </div>
-        {session?.scenarioName && (
-          <div className="mt-3 text-sm text-gray-500">
-            场景: {session.scenarioName} | 轮数: {session.round}
-          </div>
-        )}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-sm text-gray-500">
+          {session?.scenarioName && <span>场景: {session.scenarioName}</span>}
+          {session?.scenarioName && <span>|</span>}
+          <span>轮数: {session?.round}</span>
+          {session?.archetypeName && (
+            <>
+              <span>|</span>
+              <span>买家类型: {session.archetypeName}</span>
+            </>
+          )}
+          {session?.difficulty && (
+            <>
+              <span>|</span>
+              <span>难度: {session.difficulty === 'easy' ? '初级' : session.difficulty === 'medium' ? '中级' : session.difficulty === 'hard' ? '高级' : '地狱'}</span>
+            </>
+          )}
+        </div>
       </Card>
 
       {/* Emotion Timeline + Round Scores */}

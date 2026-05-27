@@ -59,7 +59,7 @@ function MessageBubble({ message }: { message: Message }) {
   }, [message.content]);
 
   return (
-    <div className={cn('flex w-full group', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex w-full group animate-in fade-in slide-in-from-bottom-2 duration-300', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
           'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed relative',
@@ -177,18 +177,17 @@ export default function MessageList() {
   useEffect(() => {
     const handleAppendMessage = (e: CustomEvent) => {
       const msg = e.detail as Message;
-      setMessages((prev) => [...prev, msg]);
-      // Update cache
-      if (activeSessionId) {
-        localDb.cacheSession(activeSessionId, {
-          messages: [...messages, msg],
-        });
-      }
+      setMessages((prev) => {
+        const updated = [...prev, msg];
+        if (activeSessionId) {
+          localDb.cacheSession(activeSessionId, { messages: updated });
+        }
+        return updated;
+      });
     };
     window.addEventListener('append-message', handleAppendMessage as EventListener);
-    return () =>
-      window.removeEventListener('append-message', handleAppendMessage as EventListener);
-  }, [activeSessionId, messages]);
+    return () => window.removeEventListener('append-message', handleAppendMessage as EventListener);
+  }, [activeSessionId]);
 
   // Listen for onSend callback from parent (SessionPage)
   useEffect(() => {
@@ -207,10 +206,31 @@ export default function MessageList() {
 
   if (!activeSessionId) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-gray-400">
-        <MessageCircle className="h-12 w-12" />
-        <p className="text-lg font-medium">欢迎使用销冠AI教练</p>
-        <p className="text-sm">选择一个会话或创建新会话开始</p>
+      <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 text-primary-500">
+          <MessageCircle className="h-8 w-8" />
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-semibold text-gray-900">欢迎使用销冠AI教练</p>
+          <p className="mt-1 text-sm text-gray-500">选择左侧会话，或试试这些场景快速开始</p>
+        </div>
+        <div className="grid w-full max-w-md gap-2 sm:grid-cols-2">
+          {QUICK_PROMPTS.map((qp) => (
+            <button
+              key={qp.label}
+              onClick={() => handleQuickPrompt(qp.prompt)}
+              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left transition-all hover:border-primary-300 hover:shadow-sm active:scale-[0.98]"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-500">
+                {qp.icon}
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-900">{qp.label}</div>
+                <div className="text-xs text-gray-500 line-clamp-1">{qp.prompt}</div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
@@ -225,11 +245,17 @@ export default function MessageList() {
 
   if (error && messages.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-red-500">
-        <p>{error}</p>
+      <div className="flex h-full flex-col items-center justify-center gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-400">
+          <MessageCircle className="h-6 w-6" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-900">加载失败</p>
+          <p className="mt-1 text-xs text-gray-500">{error}</p>
+        </div>
         <button
           onClick={() => window.location.reload()}
-          className="text-sm text-primary-600 hover:underline"
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
           重新加载
         </button>

@@ -4,7 +4,6 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password: string;
   role: Role;
   plan: Plan;
   industry: string[];
@@ -13,7 +12,7 @@ export interface User {
   updatedAt: Date;
 }
 
-export interface UserPublic extends Omit<User, 'password'> {}
+export type UserPublic = User;
 
 export interface CreateUserInput {
   name: string;

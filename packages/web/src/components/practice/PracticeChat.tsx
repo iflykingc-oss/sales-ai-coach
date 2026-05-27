@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Loader2, Clock, Target } from 'lucide-react';
+import { Send, Lightbulb, BookOpen, Brain, Clock, Target } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
@@ -10,7 +10,6 @@ import {
   type PracticeMode,
 } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
-import { api } from '@/services/api';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
 import { salesLogicFrameworks, getFrameworkById } from '@sales-ai-coach/shared';
 
@@ -23,8 +22,15 @@ const skillFocusOptions = [
   { id: 'presentation', name: '产品演示' },
 ];
 
+const difficultyOptions = [
+  { id: 'easy', name: '初级', desc: '友善型买家，少异议', icon: '🟢' },
+  { id: 'medium', name: '中级', desc: '分析/表现型买家，适度异议', icon: '🟡' },
+  { id: 'hard', name: '高级', desc: '驱动/怀疑型买家，强烈异议', icon: '🔴' },
+  { id: 'expert', name: '地狱', desc: '组合型买家，多重异议', icon: '💀' },
+];
+
 interface PracticeModeSelectorProps {
-  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string }) => void;
+  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string; difficulty?: string }) => void;
 }
 
 export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
@@ -32,6 +38,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   const [selectedScenario, setSelectedScenario] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('');
   const [selectedFramework, setSelectedFramework] = useState('');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
   const { recentScenarioIds } = usePracticeStore();
 
   const recentScenarios = useMemo(() => {
@@ -55,6 +62,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
       industry: scenario?.industry,
       skillFocus: selectedSkill || undefined,
       logicFramework: selectedFramework || undefined,
+      difficulty: selectedDifficulty,
     });
   };
 
@@ -216,6 +224,32 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
         </div>
       </div>
 
+      {/* Difficulty Selector */}
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-center gap-2">
+          <Brain className="h-4 w-4 text-gray-400" />
+          <h4 className="font-medium text-gray-900">难度等级</h4>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {difficultyOptions.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => setSelectedDifficulty(d.id)}
+              className={cn(
+                'rounded-lg border-2 p-3 text-center transition-all',
+                selectedDifficulty === d.id
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300',
+              )}
+            >
+              <div className="text-xl">{d.icon}</div>
+              <div className="mt-1 text-sm font-medium text-gray-900">{d.name}</div>
+              <div className="mt-0.5 text-[10px] leading-tight text-gray-500">{d.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex justify-end">
         <Button size="lg" onClick={handleStart} disabled={!canStart}>
           开始陪练
@@ -230,18 +264,50 @@ function MessageBubble({ message }: { message: ChatMessage; isLast: boolean }) {
   const isUser = message.role === 'user';
 
   return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start', 'mb-4')}>
+    <div className={cn(
+      'flex mb-4',
+      isUser ? 'justify-end' : 'justify-start',
+      'animate-in fade-in slide-in-from-bottom-2 duration-300',
+    )}>
       {!isUser && (
         <div className="mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm">
           AI客
         </div>
       )}
-      <div className={cn('max-w-[70%] rounded-2xl px-4 py-3', isUser ? 'bg-primary-600 text-white' : 'bg-white border border-gray-200 text-gray-800')}>
+      <div className={cn(
+        'max-w-[70%] rounded-2xl px-4 py-3 transition-all',
+        isUser
+          ? 'bg-primary-600 text-white rounded-br-sm'
+          : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm',
+      )}>
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
         {message.suggestion && (
           <div className={cn('mt-2 rounded-lg border p-2 text-xs', isUser ? 'border-white/30 bg-white/10' : 'border-amber-200 bg-amber-50')}>
             <span className={cn('font-medium', isUser ? 'text-white/80' : 'text-amber-700')}>AI建议: </span>
             <span className={isUser ? 'text-white' : 'text-amber-800'}>{message.suggestion}</span>
+          </div>
+        )}
+        {message.emotion && !isUser && (
+          <div className="mt-1.5 flex items-center gap-1">
+            <span className="text-[10px] text-gray-400">情绪:</span>
+            <span className={cn(
+              'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+              message.emotion === '感兴趣' || message.emotion === '共情' || message.emotion === '满意'
+                ? 'bg-green-50 text-green-600'
+                : message.emotion === '犹豫'
+                  ? 'bg-yellow-50 text-yellow-600'
+                  : 'bg-red-50 text-red-600',
+            )}>
+              {message.emotion}
+            </span>
+            {message.roundScore != null && (
+              <span className={cn(
+                'ml-1 rounded px-1 py-0.5 text-[10px] font-medium',
+                message.roundScore >= 0.7 ? 'bg-green-50 text-green-600' : message.roundScore >= 0.5 ? 'bg-yellow-50 text-yellow-600' : 'bg-red-50 text-red-600',
+              )}>
+                {Math.round(message.roundScore * 100)}分
+              </span>
+            )}
           </div>
         )}
         <div className={cn('mt-1 text-[10px]', isUser ? 'text-white/60' : 'text-gray-400')}>
@@ -288,53 +354,102 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
     setInput('');
     setIsLoading(true);
 
+    // Create placeholder AI message for streaming
+    const aiMsgId = `msg-${Date.now() + 1}`;
+    const placeholder: ChatMessage = {
+      id: aiMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+    };
+    addMessage(placeholder);
+
+    const updateAiMessage = (updates: Partial<ChatMessage>) => {
+      usePracticeStore.setState((state) => {
+        if (!state.session) return state;
+        return {
+          session: {
+            ...state.session,
+            messages: state.session.messages.map((m) =>
+              m.id === aiMsgId ? { ...m, ...updates } : m,
+            ),
+          },
+        };
+      });
+    };
+
     try {
-      // Call the harness-powered practice API
-      const response = await api.post('/practices/message', {
-        sessionId: session.id,
-        message: userMessage.content,
-        logicFramework: session.logicFramework || '',
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/practices/message/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          sessionId: session.id,
+          message: userMessage.content,
+          logicFramework: session.logicFramework || '',
+        }),
+        credentials: 'include',
       });
 
-      const data = response.data.data;
-      const emotionMap: Record<string, EmotionType> = {
-        '共情': 'empathy',
-        '感兴趣': 'interest',
-        '犹豫': 'hesitate',
-        '抗拒': 'resist',
-        '敷衍': 'resist',
-        '中立': 'interest',
-        '满意': 'interest',
-      };
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      setCustomerEmotion(emotionMap[data.emotion] || 'interest');
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
 
-      if (data.detectedStage) {
-        setDetectedStage(data.detectedStage);
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === 'token') {
+              streamedContent += event.content;
+              updateAiMessage({ content: streamedContent });
+            }
+
+            if (event.type === 'done') {
+              const data = event.data;
+              const emotionMap: Record<string, EmotionType> = {
+                '共情': 'empathy', '感兴趣': 'interest', '犹豫': 'hesitate',
+                '抗拒': 'resist', '敷衍': 'resist', '中立': 'interest', '满意': 'interest',
+              };
+              setCustomerEmotion(emotionMap[data.emotion] || 'interest');
+              if (data.detectedStage) setDetectedStage(data.detectedStage);
+
+              updateAiMessage({
+                content: data.response || streamedContent,
+                emotion: data.emotion,
+                roundScore: data.round_score,
+                evaluationFeedback: data.evaluation_feedback,
+              });
+
+              if (data.is_complete) completePractice();
+            }
+
+            if (event.type === 'error') {
+              throw new Error(event.data?.error || 'Stream error');
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
       }
-
-      const aiMessage: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant',
-        content: data.response || '...',
-        timestamp: Date.now(),
-        emotion: data.emotion,
-        roundScore: data.round_score,
-        evaluationFeedback: data.evaluation_feedback,
-      };
-      addMessage(aiMessage);
-
-      if (data.is_complete) {
-        completePractice();
-      }
-    } catch (error) {
-      // Fallback error message
-      addMessage({
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant',
-        content: '抱歉，AI服务暂时不可用，请稍后再试。',
-        timestamp: Date.now(),
-      });
+    } catch {
+      updateAiMessage({ content: '抱歉，AI服务暂时不可用，请稍后再试。' });
     } finally {
       setIsLoading(false);
     }
@@ -497,13 +612,14 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           />
         ))}
         {isLoading && (
-          <div className="mb-4 flex justify-start">
+          <div className="mb-4 flex justify-start animate-in fade-in slide-in-from-bottom-1 duration-300">
             <div className="mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm">
               AI客
             </div>
-            <div className="flex items-center rounded-2xl border border-gray-200 bg-white px-4 py-3">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin text-gray-400" />
-              <span className="text-sm text-gray-400">客户正在思考...</span>
+            <div className="flex items-center gap-1 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]" />
             </div>
           </div>
         )}

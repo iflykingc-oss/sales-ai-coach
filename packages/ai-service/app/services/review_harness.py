@@ -13,6 +13,8 @@ import json
 from app.models.router import model_router
 from app.harness.evaluator import OutputEvaluator, EvalCriterion
 from app.core.logging import logger
+from app.core.sanitization import wrap_user_input
+from app.utils.json_parser import extract_json
 
 
 class ReviewAnalyzer:
@@ -41,7 +43,7 @@ class ReviewAnalyzer:
         """
         # Phase 1: If conversation is long, summarize first
         convo_text = "\n".join(
-            f"[{c['role']}]: {c['content']}" for c in conversations
+            f"[{c['role']}]: {wrap_user_input(c['content'])}" for c in conversations
         )
 
         if len(convo_text) > 4000:
@@ -88,7 +90,7 @@ class ReviewAnalyzer:
     async def _summarize_conversations(self, conversations: list[dict]) -> str:
         """Compress a long conversation into a structured summary."""
         convo_text = "\n".join(
-            f"[{c['role']}]: {c['content']}" for c in conversations
+            f"[{c['role']}]: {wrap_user_input(c['content'])}" for c in conversations
         )
 
         prompt = f"""请将以下销售对话压缩为结构化摘要，保留关键信息。
@@ -120,12 +122,9 @@ class ReviewAnalyzer:
         result = await model_router.chat_with_fallback(messages, temperature=0.3, max_tokens=2048)
 
         try:
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            summary = json.loads(content.strip())
+            summary = extract_json(result["content"])
+            if summary is None:
+                raise ValueError("No valid JSON found")
             # Convert back to readable text
             lines = [summary.get("context", "")]
             for ex in summary.get("key_exchanges", []):
@@ -171,13 +170,13 @@ class ReviewAnalyzer:
   ],
   "actionItems": ["明日行动1", "明日行动2"],
   "radarScores": {{
-    "共情能力": 75,
+    "情绪管理": 75,
     "需求挖掘": 70,
     "异议处理": 60,
-    "成交推进": 65,
+    "促单能力": 65,
     "产品知识": 80,
     "沟通表达": 75,
-    "节奏把控": 60,
+    "价值传递": 60,
     "信任建立": 70
   }}
 }}
@@ -203,13 +202,11 @@ class ReviewAnalyzer:
         result = await model_router.chat_with_fallback(messages, temperature=0.5, max_tokens=2048)
 
         try:
-            content = result["content"]
-            if "```" in content:
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            return json.loads(content.strip())
-        except json.JSONDecodeError:
+            data = extract_json(result["content"])
+            if data is None:
+                raise ValueError("No valid JSON found")
+            return data
+        except (json.JSONDecodeError, ValueError):
             logger.error(f"Failed to parse review analysis: {result['content']}")
             return self._fallback_report(result["content"])
 
@@ -221,7 +218,7 @@ class ReviewAnalyzer:
             "recommendations": [{"dimension": "综合能力", "advice": "多场景练习", "practice": "使用AI陪练功能"}],
             "actionItems": ["复盘今日对话"],
             "radarScores": {
-                "共情能力": 70, "需求挖掘": 70, "异议处理": 70, "成交推进": 70,
-                "产品知识": 70, "沟通表达": 70, "节奏把控": 70, "信任建立": 70,
+                "情绪管理": 70, "需求挖掘": 70, "异议处理": 70, "促单能力": 70,
+                "产品知识": 70, "沟通表达": 70, "价值传递": 70, "信任建立": 70,
             },
         }

@@ -15,6 +15,7 @@ export interface ReviewReport {
   strengths: string[];
   improvements: string[];
   actionItems: string[];
+  recommendations?: string[];
   radarScores: Record<string, number>;
   scenarioType?: string;
 }

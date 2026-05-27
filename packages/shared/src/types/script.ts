@@ -43,11 +43,11 @@ export interface GenerateScriptInput {
 }
 
 export interface GenerateScriptOutput {
-  speech_styles: ScriptStyle[];
+  speechStyles: ScriptStyle[];
   reasoning: string[];
   pitfalls: { action: string; reason: string }[];
-  knowledge_source: string;
-  confidence_score: number;
+  knowledgeSource: string;
+  confidenceScore: number;
 }
 
 export interface CreateScriptInput {
