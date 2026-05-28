@@ -1,7 +1,24 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "env": ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL", "AI_SERVICE_URL", "NODE_ENV"],
+  "env": [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "FRONTEND_URL",
+    "AI_SERVICE_URL",
+    "NODE_ENV",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "QWEN_API_KEY",
+    "MINIMAX_API_KEY",
+    "MINIMAX_GROUP_ID",
+    "REDIS_URL",
+    "OCR_API_KEY",
+    "OCR_API_SECRET",
+    "OCR_ENDPOINT",
+    "CORS_ORIGINS",
+    "VITE_API_URL"
+  ],
   "tasks": {
     "dev": {
       "dependsOn": ["^build"],
