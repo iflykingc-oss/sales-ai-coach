@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "corepack enable && pnpm install",
-  "buildCommand": "cd packages/web && pnpm run build",
+  "buildCommand": "pnpm turbo run build --filter=@sales-ai-coach/web",
   "outputDirectory": "packages/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
