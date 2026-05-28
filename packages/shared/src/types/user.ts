@@ -35,5 +35,4 @@ export interface LoginInput {
 
 export interface AuthResponse {
   user: UserPublic;
-  accessToken: string;
 }

@@ -43,6 +43,7 @@ class ScriptGenerationHarness:
         input_type: str,
         industry: str = "",
         knowledge_context: str = "",
+        frameworks: list[str] | None = None,
     ) -> dict:
         """
         Generate sales scripts with full harness pipeline.
@@ -77,6 +78,7 @@ class ScriptGenerationHarness:
             input_type=input_type,
             industry=industry,
             knowledge_context=knowledge_context,
+            frameworks=frameworks,
         )
 
         # Phase 2: Execution
@@ -111,7 +113,7 @@ class ScriptGenerationHarness:
 
             # Regenerate with evaluator feedback incorporated
             fl_retry = await self._plan_retry(
-                input_text, input_type, industry, knowledge_context, eval_result
+                input_text, input_type, industry, knowledge_context, eval_result, frameworks
             )
             executor = TaskExecutor(fl_retry, max_retries=1)
             fl_retry = await executor.run()
@@ -144,6 +146,7 @@ class ScriptGenerationHarness:
         industry: str,
         knowledge_context: str,
         eval_result: EvalResult,
+        frameworks: list[str] | None = None,
     ) -> FeatureList:
         """Create a retry plan that incorporates evaluator feedback."""
         fl = FeatureList(goal=f"重新生成话术（质量改进）")
@@ -178,13 +181,37 @@ class ScriptGenerationHarness:
             if data is not None:
                 # Validate required fields
                 if "speech_styles" in data and isinstance(data["speech_styles"], list):
-                    return {
+                    result = {
                         "speech_styles": data["speech_styles"],
                         "reasoning": data.get("reasoning", []),
                         "pitfalls": data.get("pitfalls", []),
                         "knowledge_source": data.get("knowledge_source", "AI生成"),
                         "confidence_score": data.get("confidence_score", 0.7),
                     }
+                    # Include framework analysis fields if present
+                    for fw_field in ("swotAnalysis", "scenario5w2h", "aidaFlow", "fabMapping",
+                                     "bantQualification", "meddicAnalysis", "porterForces",
+                                     "journeyStage", "scqaNarrative", "challengerInsight",
+                                     "frameworkAnalysis"):
+                        if fw_field in data:
+                            result[fw_field] = data[fw_field]
+                    # Also check snake_case variants
+                    for snake, camel in [
+                        ("swot_analysis", "swotAnalysis"),
+                        ("scenario_5w2h", "scenario5w2h"),
+                        ("aida_flow", "aidaFlow"),
+                        ("fab_mapping", "fabMapping"),
+                        ("bant_qualification", "bantQualification"),
+                        ("meddic_analysis", "meddicAnalysis"),
+                        ("porter_forces", "porterForces"),
+                        ("journey_stage", "journeyStage"),
+                        ("scqa_narrative", "scqaNarrative"),
+                        ("challenger_insight", "challengerInsight"),
+                        ("framework_analysis", "frameworkAnalysis"),
+                    ]:
+                        if snake in data and camel not in result:
+                            result[camel] = data[snake]
+                    return result
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"Failed to parse script result: {e}")
 

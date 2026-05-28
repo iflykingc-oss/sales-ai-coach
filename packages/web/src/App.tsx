@@ -6,6 +6,7 @@ import LoginPage from './app/pages/LoginPage';
 import RegisterPage from './app/pages/RegisterPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CommandPalette } from './components/ui/CommandPalette';
+import { CookieConsent } from './components/compliance/CookieConsent';
 
 const DashboardPage = lazy(() => import('./app/pages/DashboardPage'));
 const SessionPage = lazy(() => import('./app/pages/SessionPage'));
@@ -16,6 +17,7 @@ const TeamPage = lazy(() => import('./app/pages/TeamPage'));
 const PluginPage = lazy(() => import('./app/pages/PluginPage'));
 const AdminPage = lazy(() => import('./app/pages/AdminPage'));
 const AnalyticsPage = lazy(() => import('./app/pages/AnalyticsPage'));
+const DataRightsPage = lazy(() => import('./app/pages/DataRightsPage'));
 
 export default function App() {
   return (
@@ -36,12 +38,14 @@ export default function App() {
               <Route path="plugins" element={<PluginPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="admin" element={<AdminPage />} />
+              <Route path="data-rights" element={<DataRightsPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </ErrorBoundary>
       <CommandPalette />
+      <CookieConsent />
     </>
   );
 }

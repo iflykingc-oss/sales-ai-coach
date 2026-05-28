@@ -29,6 +29,7 @@ export interface ScriptGenerationInput {
   industry?: string;
   context?: string;
   userId: string;
+  frameworks?: string[];  // Analytical framework IDs to apply
 }
 
 export interface ScriptGenerationOutput {

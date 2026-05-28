@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp, FileSearch } from 'lucide-react';
+import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp, FileSearch, Network, Gauge, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { RadarChart } from '@/components/ui/RadarChart';
@@ -416,6 +416,159 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
                 ))}
               </ul>
             </div>
+          )}
+        </Card>
+      )}
+
+      {/* Framework Analysis */}
+      {reportData?.frameworkAnalysis && (
+        <Card className="border-violet-200 bg-violet-50/30">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-violet-700">
+            <Network className="h-4 w-4" />
+            销售框架分析
+          </h4>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="text-center">
+              <div className={cn(
+                'text-2xl font-bold',
+                reportData.frameworkAnalysis.frameworkUsageQuality >= 80 ? 'text-green-600' :
+                reportData.frameworkAnalysis.frameworkUsageQuality >= 60 ? 'text-yellow-600' : 'text-red-600',
+              )}>
+                {reportData.frameworkAnalysis.frameworkUsageQuality}
+              </div>
+              <div className="text-xs text-gray-500">框架运用</div>
+            </div>
+            <div className="h-8 w-px bg-gray-200" />
+            <div className="flex-1 text-sm text-gray-600">
+              {reportData.frameworkAnalysis.stageProgression || '未检测到明确的框架使用'}
+            </div>
+          </div>
+          {reportData.frameworkAnalysis.detectedFrameworks?.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1 text-xs font-medium text-violet-600">识别到的框架</p>
+              <div className="flex flex-wrap gap-1">
+                {reportData.frameworkAnalysis.detectedFrameworks.map((fw: string, i: number) => (
+                  <span key={i} className="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-700">{fw}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {reportData.frameworkAnalysis.frameworkStrengths?.length > 0 && (
+            <div className="mb-2">
+              <p className="mb-1 text-xs font-medium text-green-600">框架运用亮点</p>
+              <ul className="space-y-1">
+                {reportData.frameworkAnalysis.frameworkStrengths.map((s: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-600">+ {s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {reportData.frameworkAnalysis.frameworkGaps?.length > 0 && (
+            <div className="mb-2">
+              <p className="mb-1 text-xs font-medium text-amber-600">框架运用不足</p>
+              <ul className="space-y-1">
+                {reportData.frameworkAnalysis.frameworkGaps.map((g: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-600">- {g}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {reportData.frameworkAnalysis.suggestedFrameworks?.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-medium text-blue-600">建议学习的框架</p>
+              <div className="flex flex-wrap gap-1">
+                {reportData.frameworkAnalysis.suggestedFrameworks.map((fw: string, i: number) => (
+                  <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{fw}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* BANT Qualification Score */}
+      {reportData?.bantScore && reportData.bantScore.overall && (
+        <Card className="border-sky-200 bg-sky-50/30">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-sky-700">
+            <Gauge className="h-4 w-4" />
+            BANT线索判定
+          </h4>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-sky-600">
+                {reportData.bantScore.overall.score}
+              </div>
+              <div className="text-xs text-gray-500">综合评分</div>
+            </div>
+            <div className="h-8 w-px bg-gray-200" />
+            <div className="text-sm font-medium text-sky-700">
+              {reportData.bantScore.overall.rating}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {["budget", "authority", "need", "timeline"].map((dim) => {
+              const labels: Record<string, string> = { budget: "预算", authority: "决策权", need: "需求", timeline: "时间线" };
+              const d = reportData.bantScore[dim];
+              if (!d) return null;
+              return (
+                <div key={dim} className="rounded-lg bg-white p-2 border border-sky-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-700">{labels[dim]}</span>
+                    <span className={cn(
+                      'text-xs font-bold',
+                      d.score >= 7 ? 'text-green-600' : d.score >= 4 ? 'text-yellow-600' : 'text-red-600',
+                    )}>
+                      {d.score}/10
+                    </span>
+                  </div>
+                  <span className={cn(
+                    'text-[10px]',
+                    d.status === '已确认' ? 'text-green-500' : d.status === '部分确认' ? 'text-yellow-500' : 'text-gray-400',
+                  )}>
+                    {d.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Signal Analysis */}
+      {reportData?.signalAnalysis && (
+        <Card className="border-orange-200 bg-orange-50/30">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-700">
+            <Zap className="h-4 w-4" />
+            信号分析
+          </h4>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="text-center">
+              <div className="text-xl font-bold text-green-600">{reportData.signalAnalysis.buying_signals}</div>
+              <div className="text-xs text-gray-500">购买信号</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-bold text-red-600">{reportData.signalAnalysis.objections}</div>
+              <div className="text-xs text-gray-500">异议次数</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-bold text-blue-600">{reportData.signalAnalysis.decision_readiness * 100}%</div>
+              <div className="text-xs text-gray-500">决策就绪</div>
+            </div>
+          </div>
+          {reportData.signalAnalysis.pain_points?.length > 0 && (
+            <div className="mb-2">
+              <p className="text-xs font-medium text-orange-600 mb-1">客户痛点</p>
+              <div className="flex flex-wrap gap-1">
+                {reportData.signalAnalysis.pain_points.map((p: string, i: number) => (
+                  <span key={i} className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-700">{p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {reportData.signalAnalysis.recommended_action && (
+            <p className="text-xs text-orange-600 mt-2">
+              <span className="font-medium">建议: </span>{reportData.signalAnalysis.recommended_action}
+            </p>
           )}
         </Card>
       )}

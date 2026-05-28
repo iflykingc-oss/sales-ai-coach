@@ -15,6 +15,7 @@ import json
 from app.harness.feature_list import FeatureList, ItemStatus
 from app.models.router import model_router
 from app.core.logging import logger
+from app.harness.planner import FRAMEWORK_DEFINITIONS
 
 
 class TaskExecutor:
@@ -87,11 +88,36 @@ class TaskExecutor:
                 if dep_item:
                     dep_results[dep_item.description] = dep_item.result
 
+            # Enhanced system prompt for framework analysis steps
+            system_prompt = "你是一个专业的执行助手。根据任务描述和上下文，高质量地完成指定任务。只输出JSON格式的结果，不要输出其他内容。"
+            frameworks = item.metadata.get("frameworks", [])
+            if frameworks:
+                fw_defs = []
+                for fw_id in frameworks:
+                    if fw_id in FRAMEWORK_DEFINITIONS:
+                        fw_defs.append(FRAMEWORK_DEFINITIONS[fw_id])
+                if fw_defs:
+                    system_prompt = (
+                        "你是一个精通销售分析框架的专家。你必须严格按照以下框架定义进行分析，"
+                        "输出结构化的JSON结果。\n\n可用框架:\n" + "\n\n".join(fw_defs) +
+                        "\n\n请将分析结果以JSON格式输出，使用框架ID作为key（如swotAnalysis, scenario5w2h等）。"
+                    )
+            elif item.metadata.get("input_type"):
+                # Generation step — check if framework analysis is a dependency
+                has_framework_dep = any(
+                    self.fl.get_item(dep_id) and self.fl.get_item(dep_id).metadata.get("frameworks")
+                    for dep_id in item.dependencies
+                )
+                if has_framework_dep:
+                    system_prompt = (
+                        "你是一个专业的销售话术生成专家。请根据前置任务中的分析框架结果，"
+                        "将分析结论有机融入话术生成。每种话术风格都要体现框架分析的洞察。"
+                        "输出JSON格式：{\"speech_styles\": [...], \"reasoning\": [...], \"pitfalls\": [...], "
+                        "以及将框架分析结果原样保留在对应key中（如swotAnalysis, scenario5w2h等）。"
+                    )
+
             messages = [
-                {
-                    "role": "system",
-                    "content": "你是一个专业的执行助手。根据任务描述和上下文，高质量地完成指定任务。只输出JSON格式的结果，不要输出其他内容。",
-                },
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ]
 
@@ -126,6 +152,15 @@ class TaskExecutor:
             parts.append(f"输入类型: {item.metadata['input_type']}")
         if item.metadata.get("max_rounds"):
             parts.append(f"最大轮数: {item.metadata['max_rounds']}")
+
+        # Add framework-specific instructions
+        frameworks = item.metadata.get("frameworks", [])
+        if frameworks:
+            parts.append(
+                f"请使用以下分析框架: {', '.join(frameworks)}。"
+                "输出JSON中，用框架ID作为key（如swotAnalysis, scenario5w2h等），"
+                "value为该框架的结构化分析结果。"
+            )
 
         # Add dependency results as context
         for dep_id in item.dependencies:

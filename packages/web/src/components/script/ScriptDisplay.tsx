@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X,
   Target, MessageCircleQuestion, Shield, TrendingUp, Lightbulb, ChevronRight,
-  Swords,
+  Swords, Network, ChevronDown, Gauge,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
@@ -63,6 +63,7 @@ export default function ScriptDisplay() {
   const { activeSessionId } = useSessionStore();
   const navigate = useNavigate();
   const [compareMode, setCompareMode] = useState(false);
+  const [showFrameworkDetails, setShowFrameworkDetails] = useState(false);
 
   const handlePractice = useCallback(() => {
     // Navigate to practice page with session context
@@ -364,6 +365,183 @@ export default function ScriptDisplay() {
               </div>
             </div>
           )}
+
+          {/* Framework Analysis */}
+          {currentScript.frameworkAnalysis && (
+            <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-violet-700">
+                <Network className="h-4 w-4" />
+                框架分析
+              </h4>
+              <div className="space-y-3">
+                {currentScript.frameworkAnalysis.detectedFrameworks?.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-violet-600">识别到的框架</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {currentScript.frameworkAnalysis.detectedFrameworks.map((fw, i) => (
+                        <span key={i} className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-300">
+                          {fw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {typeof currentScript.frameworkAnalysis.frameworkUsageQuality === 'number' && (
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-violet-600">
+                      <span>框架运用质量</span>
+                      <span className="font-medium">{currentScript.frameworkAnalysis.frameworkUsageQuality}/100</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full rounded-full bg-violet-100">
+                      <div
+                        className="h-full rounded-full bg-violet-500 transition-all"
+                        style={{ width: `${currentScript.frameworkAnalysis.frameworkUsageQuality}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {currentScript.frameworkAnalysis.stageProgression && (
+                  <div>
+                    <p className="text-xs font-medium text-violet-600">阶段推进</p>
+                    <p className="mt-0.5 text-sm text-violet-800">{currentScript.frameworkAnalysis.stageProgression}</p>
+                  </div>
+                )}
+                {currentScript.frameworkAnalysis.frameworkStrengths?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-violet-600">框架运用亮点</p>
+                    <ul className="mt-1 space-y-1">
+                      {currentScript.frameworkAnalysis.frameworkStrengths.map((s, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-violet-800">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" />
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {currentScript.frameworkAnalysis.frameworkGaps?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-violet-600">框架运用不足</p>
+                    <ul className="mt-1 space-y-1">
+                      {currentScript.frameworkAnalysis.frameworkGaps.map((g, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-violet-800">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" />
+                          {g}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {currentScript.frameworkAnalysis.suggestedFrameworks?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-violet-600">建议使用的框架</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {currentScript.frameworkAnalysis.suggestedFrameworks.map((fw, i) => (
+                        <span key={i} className="rounded-full bg-violet-100/60 px-2.5 py-0.5 text-xs text-violet-600">
+                          {fw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Individual Framework Analyses (collapsible) */}
+          {(() => {
+            const frameworkCards: { key: string; label: string; color: string; data: Record<string, unknown> }[] = [];
+            if (currentScript.swotAnalysis && Object.keys(currentScript.swotAnalysis).length > 0)
+              frameworkCards.push({ key: 'swot', label: 'SWOT 分析', color: 'blue', data: currentScript.swotAnalysis });
+            if (currentScript.scenario5w2h && Object.keys(currentScript.scenario5w2h).length > 0)
+              frameworkCards.push({ key: '5w2h', label: '5W2H 场景分析', color: 'cyan', data: currentScript.scenario5w2h });
+            if (currentScript.aidaFlow && Object.keys(currentScript.aidaFlow).length > 0)
+              frameworkCards.push({ key: 'aida', label: 'AIDA 营销漏斗', color: 'pink', data: currentScript.aidaFlow });
+            if (currentScript.fabMapping && Object.keys(currentScript.fabMapping).length > 0)
+              frameworkCards.push({ key: 'fab', label: 'FAB 映射', color: 'amber', data: currentScript.fabMapping });
+            if (currentScript.bantQualification && Object.keys(currentScript.bantQualification).length > 0)
+              frameworkCards.push({ key: 'bant', label: 'BANT 资格认证', color: 'sky', data: currentScript.bantQualification });
+            if (currentScript.meddicAnalysis && Object.keys(currentScript.meddicAnalysis).length > 0)
+              frameworkCards.push({ key: 'meddic', label: 'MEDDIC 分析', color: 'emerald', data: currentScript.meddicAnalysis });
+            if (currentScript.porterForces && Object.keys(currentScript.porterForces).length > 0)
+              frameworkCards.push({ key: 'porter', label: '波特五力', color: 'red', data: currentScript.porterForces });
+            if (currentScript.journeyStage && Object.keys(currentScript.journeyStage).length > 0)
+              frameworkCards.push({ key: 'journey', label: '客户旅程', color: 'orange', data: currentScript.journeyStage });
+            if (currentScript.scqaNarrative && Object.keys(currentScript.scqaNarrative).length > 0)
+              frameworkCards.push({ key: 'scqa', label: 'SCQA 叙事', color: 'teal', data: currentScript.scqaNarrative });
+            if (currentScript.challengerInsight && Object.keys(currentScript.challengerInsight).length > 0)
+              frameworkCards.push({ key: 'challenger', label: 'Challenger 洞察', color: 'purple', data: currentScript.challengerInsight });
+
+            if (frameworkCards.length === 0) return null;
+
+            const colorMap: Record<string, { border: string; bg: string; text: string; badge: string }> = {
+              blue: { border: 'border-blue-200', bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-700' },
+              cyan: { border: 'border-cyan-200', bg: 'bg-cyan-50', text: 'text-cyan-700', badge: 'bg-cyan-100 text-cyan-700' },
+              pink: { border: 'border-pink-200', bg: 'bg-pink-50', text: 'text-pink-700', badge: 'bg-pink-100 text-pink-700' },
+              amber: { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700' },
+              sky: { border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700', badge: 'bg-sky-100 text-sky-700' },
+              emerald: { border: 'border-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
+              red: { border: 'border-red-200', bg: 'bg-red-50', text: 'text-red-700', badge: 'bg-red-100 text-red-700' },
+              orange: { border: 'border-orange-200', bg: 'bg-orange-50', text: 'text-orange-700', badge: 'bg-orange-100 text-orange-700' },
+              teal: { border: 'border-teal-200', bg: 'bg-teal-50', text: 'text-teal-700', badge: 'bg-teal-100 text-teal-700' },
+              purple: { border: 'border-purple-200', bg: 'bg-purple-50', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-700' },
+            };
+
+            return (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowFrameworkDetails(!showFrameworkDetails)}
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Gauge className="h-4 w-4 text-violet-500" />
+                    详细框架分析 ({frameworkCards.length})
+                  </span>
+                  {showFrameworkDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {showFrameworkDetails && (
+                  <div className="mt-2 space-y-2">
+                    {frameworkCards.map(({ key, label, color, data }) => {
+                      const c = colorMap[color] || colorMap.blue;
+                      return (
+                        <div key={key} className={cn('rounded-lg border p-3', c.border, c.bg)}>
+                          <h5 className={cn('mb-2 text-xs font-semibold', c.text)}>{label}</h5>
+                          <div className="space-y-1.5">
+                            {Object.entries(data).map(([field, value]) => {
+                              if (value == null || (Array.isArray(value) && value.length === 0)) return null;
+                              const displayKey = field.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
+                              return (
+                                <div key={field}>
+                                  <p className={cn('text-[10px] font-medium uppercase tracking-wide', c.text, 'opacity-70')}>
+                                    {displayKey}
+                                  </p>
+                                  {Array.isArray(value) ? (
+                                    <ul className="mt-0.5 space-y-0.5">
+                                      {value.map((item, i) => (
+                                        <li key={i} className={cn('text-xs', c.text)}>
+                                          {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : typeof value === 'object' ? (
+                                    <pre className={cn('mt-0.5 whitespace-pre-wrap text-xs', c.text)}>
+                                      {JSON.stringify(value, null, 2)}
+                                    </pre>
+                                  ) : (
+                                    <p className={cn('text-xs font-medium', c.text)}>{String(value)}</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Reason for this approach */}
           {currentScript.reasoning.length > 0 && (

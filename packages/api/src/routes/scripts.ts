@@ -9,7 +9,7 @@ const router = Router();
 
 router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), async (req, res, next) => {
   try {
-    const { input, inputType, industry, context, sessionId } = req.body;
+    const { input, inputType, industry, context, sessionId, frameworks } = req.body;
 
     // RAG: search user's knowledge base for relevant content
     let knowledgeContext = context || '';
@@ -53,6 +53,7 @@ router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), 
 
     const result = await generateScript({
       input, inputType, industry, context: knowledgeContext, userId: req.user!.id,
+      frameworks: frameworks || [],
     });
 
     // Save generated scripts and collect IDs
@@ -95,6 +96,18 @@ router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), 
       followUpQuestions: raw.follow_up_questions || raw.followUpQuestions || [],
       objectionHandling: raw.objection_handling || raw.objectionHandling || [],
       closingStrategy: raw.closing_strategy || raw.closingStrategy || null,
+      // Framework analysis fields
+      swotAnalysis: raw.swotAnalysis || raw.swot_analysis || null,
+      scenario5w2h: raw.scenario5w2h || raw.scenario_5w2h || null,
+      aidaFlow: raw.aidaFlow || raw.aida_flow || null,
+      fabMapping: raw.fabMapping || raw.fab_mapping || null,
+      bantQualification: raw.bantQualification || raw.bant_qualification || null,
+      meddicAnalysis: raw.meddicAnalysis || raw.meddic_analysis || null,
+      porterForces: raw.porterForces || raw.porter_forces || null,
+      journeyStage: raw.journeyStage || raw.journey_stage || null,
+      scqaNarrative: raw.scqaNarrative || raw.scqa_narrative || null,
+      challengerInsight: raw.challengerInsight || raw.challenger_insight || null,
+      frameworkAnalysis: raw.frameworkAnalysis || raw.framework_analysis || null,
     };
     res.json({ success: true, data: normalized, scriptIds: createdIds });
   } catch (err) { next(err); }

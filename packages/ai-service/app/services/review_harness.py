@@ -15,6 +15,8 @@ from app.harness.evaluator import OutputEvaluator, EvalCriterion
 from app.core.logging import logger
 from app.core.sanitization import wrap_user_input
 from app.utils.json_parser import extract_json
+from app.services.framework_recommender import FrameworkRecommender
+from app.services.qualification_scorer import QualificationScorer
 
 
 class ReviewAnalyzer:
@@ -80,6 +82,20 @@ class ReviewAnalyzer:
                 output=json.dumps(report, ensure_ascii=False),
                 context=convo_text[:500],
             )
+
+        # Add framework recommendation
+        recommender = FrameworkRecommender()
+        detected_fw = report.get("frameworkAnalysis", {}).get("detectedFrameworks", [])
+        fw_recommendation = recommender.recommend_for_review(
+            transcript=conversations,
+            detected_frameworks=detected_fw,
+        )
+        report["frameworkRecommendation"] = fw_recommendation
+
+        # Add BANT/MEDDIC qualification scoring
+        scorer = QualificationScorer()
+        report["bantScore"] = scorer.score_bant(conversations)
+        report["meddicScore"] = scorer.score_meddic(conversations)
 
         return {
             **report,
@@ -185,6 +201,14 @@ class ReviewAnalyzer:
     "沟通表达": 75,
     "价值传递": 60,
     "信任建立": 70
+  }},
+  "frameworkAnalysis": {{
+    "detectedFrameworks": ["识别到的框架名称"],
+    "frameworkUsageQuality": 0-100分,
+    "stageProgression": "框架阶段推进情况描述",
+    "frameworkStrengths": ["框架运用亮点"],
+    "frameworkGaps": ["框架运用不足"],
+    "suggestedFrameworks": ["建议使用的框架名称"]
   }}
 }}
 
@@ -199,7 +223,8 @@ class ReviewAnalyzer:
 2. 优势和改进要具体，引用对话中的例子
 3. 建议要可执行，不是泛泛而谈
 4. 评分要基于对话内容真实评估，不能全部一样
-5. 如果有历史复盘，分析趋势变化（进步/退步/持平）"""
+5. 如果有历史复盘，分析趋势变化（进步/退步/持平）
+6. frameworkAnalysis 分析销售是否运用了结构化销售框架（如SPIN/SWOT/AIDA/FAB/BANT/MEDDIC/LAER/SCQA等），评估运用质量，指出亮点和不足，建议适合的框架"""
 
         messages = [
             {"role": "system", "content": "你是资深销售教练，擅长精准复盘和给出可执行建议。"},
@@ -227,5 +252,13 @@ class ReviewAnalyzer:
             "radarScores": {
                 "情绪管理": 70, "需求挖掘": 70, "异议处理": 70, "促单能力": 70,
                 "产品知识": 70, "沟通表达": 70, "价值传递": 70, "信任建立": 70,
+            },
+            "frameworkAnalysis": {
+                "detectedFrameworks": [],
+                "frameworkUsageQuality": 50,
+                "stageProgression": "未检测到明确的框架使用",
+                "frameworkStrengths": [],
+                "frameworkGaps": ["建议学习并运用结构化销售框架"],
+                "suggestedFrameworks": ["SPIN销售法", "AIDA营销漏斗", "异议四步化解法"],
             },
         }

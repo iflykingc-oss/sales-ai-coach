@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     # Rate Limiting
     requests_per_minute: int = 60
 
+    # OCR
+    ocr_api_key: str = ""
+    ocr_api_secret: str = ""
+    ocr_endpoint: str = ""
+
+    # CORS
+    cors_origins: list[str] = ["http://localhost:5173"]
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

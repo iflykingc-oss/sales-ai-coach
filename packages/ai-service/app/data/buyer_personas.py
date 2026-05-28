@@ -6,6 +6,12 @@ to generate specific, realistic customer personas for practice sessions.
 
 Each archetype defines a distinct buyer personality with traits, objection
 styles, communication patterns, and decision-making behavior.
+
+Psychology foundations:
+- DISC personality model (Dominance, Influence, Steadiness, Conscientiousness)
+- Cialdini's 6 principles of influence (Reciprocity, Commitment, Social Proof, Authority, Scarcity, Liking)
+- Behavioral economics (Loss Aversion, Anchoring, Framing Effect)
+- Buyer psychology stages (Awareness → Interest → Evaluation → Decision → Retention)
 """
 
 import random
@@ -104,6 +110,101 @@ BUYER_PERSONA_ARCHETYPES: dict[str, dict] = {
             "这个价格超预算了",
         ],
         "emotion_range": {"baseline": "neutral", "peak": "interested_if_cheap"},
+        "psychology_profile": {
+            "disc_type": "C",  # Conscientiousness — detail-oriented, price-comparing
+            "influence_susceptibility": {"scarcity": 0.8, "social_proof": 0.5, "authority": 0.3, "reciprocity": 0.4, "commitment": 0.3, "liking": 0.2},
+            "cognitive_biases": ["anchoring", "loss_aversion"],
+            "decision_driver": "价格/性价比",
+            "emotional_trigger": "省钱/赚到",
+        },
+    },
+    "social_proof_seeker": {
+        "name": "从众型买家",
+        "description": "看重同行选择和口碑，需要看到大家都在用才放心",
+        "traits": ["从众心理强", "重视口碑", "害怕做错选择", "信任大品牌"],
+        "objection_style": "求证型",
+        "communication": "喜欢问别人都怎么做的",
+        "decision_pattern": "跟随决策，需要社会认同",
+        "typical_objections": [
+            "有谁在用?",
+            "同行都选了哪家?",
+            "口碑怎么样?",
+            "我怕选错了被领导批评",
+        ],
+        "emotion_range": {"baseline": "cautious", "peak": "reassured"},
+        "psychology_profile": {
+            "disc_type": "S",  # Steadiness — cautious, follows others
+            "influence_susceptibility": {"social_proof": 0.95, "authority": 0.8, "commitment": 0.5, "liking": 0.6, "reciprocity": 0.3, "scarcity": 0.4},
+            "cognitive_biases": ["social_proof", "bandwagon_effect"],
+            "decision_driver": "同行选择/口碑",
+            "emotional_trigger": "安全感/不落后",
+        },
+    },
+    "authority_responsive": {
+        "name": "权威崇拜型买家",
+        "description": "信任专家和权威背书，看重品牌实力和行业地位",
+        "traits": ["尊重权威", "看重资质", "信任大品牌", "重视行业认可"],
+        "objection_style": "资质验证型",
+        "communication": "喜欢听案例和权威数据",
+        "decision_pattern": "权威驱动决策",
+        "typical_objections": [
+            "你们有什么资质?",
+            "得过什么奖?",
+            "有权威机构认证吗?",
+            "行业大佬推荐吗?",
+        ],
+        "emotion_range": {"baseline": "neutral", "peak": "impressed"},
+        "psychology_profile": {
+            "disc_type": "D",  # Dominance — respects authority and power
+            "influence_susceptibility": {"authority": 0.95, "social_proof": 0.7, "scarcity": 0.5, "commitment": 0.4, "reciprocity": 0.3, "liking": 0.4},
+            "cognitive_biases": ["authority_bias", "halo_effect"],
+            "decision_driver": "权威背书/品牌实力",
+            "emotional_trigger": "尊贵感/被重视",
+        },
+    },
+    "loss_averse": {
+        "name": "损失厌恶型买家",
+        "description": "害怕做错决定导致损失，需要大量保障和退路才敢行动",
+        "traits": ["风险厌恶", "过度谨慎", "需要保障", "害怕后悔"],
+        "objection_style": "风险放大型",
+        "communication": "总问最坏情况怎么办",
+        "decision_pattern": "极慢决策，需要大量安全网",
+        "typical_objections": [
+            "万一不行怎么办?",
+            "能退款吗?",
+            "有没有试用期?",
+            "风险太大了",
+        ],
+        "emotion_range": {"baseline": "anxious", "peak": "secure"},
+        "psychology_profile": {
+            "disc_type": "SC",  # Steadiness + Conscientiousness
+            "influence_susceptibility": {"commitment": 0.8, "reciprocity": 0.7, "authority": 0.6, "social_proof": 0.6, "scarcity": 0.3, "liking": 0.4},
+            "cognitive_biases": ["loss_aversion", "status_quo_bias", "ambiguity_aversion"],
+            "decision_driver": "风险规避/保障承诺",
+            "emotional_trigger": "安全感/零风险",
+        },
+    },
+    "reciprocity_responsive": {
+        "name": "互惠型买家",
+        "description": "重视人情往来，你帮他他就会帮你，容易被免费/赠品打动",
+        "traits": ["重人情", "讲义气", "喜欢免费", "回报心理强"],
+        "objection_style": "人情试探型",
+        "communication": "喜欢聊关系和人情",
+        "decision_pattern": "人情驱动决策",
+        "typical_objections": [
+            "能不能给个优惠?",
+            "送点什么东西?",
+            "下次有好项目也介绍给你",
+            "看在老关系上给个折扣",
+        ],
+        "emotion_range": {"baseline": "friendly", "peak": "grateful"},
+        "psychology_profile": {
+            "disc_type": "I",  # Influence — social, relationship-oriented
+            "influence_susceptibility": {"reciprocity": 0.95, "liking": 0.8, "commitment": 0.6, "social_proof": 0.5, "authority": 0.4, "scarcity": 0.5},
+            "cognitive_biases": ["reciprocity_bias", "endowment_effect"],
+            "decision_driver": "人情/赠品/互惠",
+            "emotional_trigger": "被关照/赚人情",
+        },
     },
 }
 
@@ -124,8 +225,8 @@ DIFFICULTY_LEVELS: dict[str, dict] = {
     },
     "medium": {
         "label": "中级",
-        "description": "分析型/表现型买家，适度异议",
-        "archetype_keys": ["analytical", "expressive"],
+        "description": "分析型/表现型/从众型买家，适度异议",
+        "archetype_keys": ["analytical", "expressive", "social_proof_seeker"],
         "objection_frequency": 0.35,
         "convince_resistance": 0.5,
         "patience_rounds": 10,
@@ -133,8 +234,8 @@ DIFFICULTY_LEVELS: dict[str, dict] = {
     },
     "hard": {
         "label": "高级",
-        "description": "驱动型/怀疑型买家，强烈异议，难以说服",
-        "archetype_keys": ["driver", "skeptical"],
+        "description": "驱动型/怀疑型/权威崇拜型买家，强烈异议，难以说服",
+        "archetype_keys": ["driver", "skeptical", "authority_responsive"],
         "objection_frequency": 0.55,
         "convince_resistance": 0.75,
         "patience_rounds": 8,
@@ -142,8 +243,8 @@ DIFFICULTY_LEVELS: dict[str, dict] = {
     },
     "expert": {
         "label": "地狱",
-        "description": "组合型买家，价格敏感+怀疑型，多重异议",
-        "archetype_keys": ["price_sensitive", "skeptical", "driver"],
+        "description": "组合型买家，价格敏感+损失厌恶+互惠型，多重异议",
+        "archetype_keys": ["price_sensitive", "skeptical", "driver", "loss_averse", "reciprocity_responsive"],
         "objection_frequency": 0.7,
         "convince_resistance": 0.9,
         "patience_rounds": 6,

@@ -12,6 +12,7 @@ class ScriptGenerateRequest(BaseModel):
     industry: str = ""
     context: str = ""
     userId: str = ""
+    frameworks: list[str] = []  # Analytical framework IDs to apply
     useHarness: bool = True  # Use harness pipeline by default
 
 
@@ -29,6 +30,7 @@ async def generate_script(req: ScriptGenerateRequest):
         input_type=req.inputType,
         industry=req.industry,
         knowledge_context=req.context,
+        frameworks=req.frameworks or None,
     )
     logger.info(
         f"Script generated: quality={result.get('quality_report', {}).get('score', 'N/A')}, "

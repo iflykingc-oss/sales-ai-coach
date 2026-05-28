@@ -28,7 +28,130 @@ from app.core.logging import logger
 from app.core.sanitization import wrap_user_input
 from app.utils.json_parser import extract_json
 from app.services.evaluation_dimensions import EVALUATION_DIMENSIONS
+from app.services.framework_recommender import FrameworkRecommender
 from app.data.buyer_personas import select_archetype, get_difficulty_config, DIFFICULTY_LEVELS
+from app.data.objection_library import detect_objection_type, get_objection_response
+from app.services.intent_detector import IntentDetector
+
+
+# Shared stage display names for all frameworks
+STAGE_DISPLAY_NAMES = {
+    "status-confirm": "现状确认（了解客户当前状态和痛点）",
+    "goal-align": "目标对齐（与客户就改善目标达成共识）",
+    "path-plan": "路径规划（制定具体可行的执行方案）",
+    "benchmark": "标准对标（明确行业/考试标准）",
+    "current-assess": "现状评估（客观评估当前水平，找出差距）",
+    "catchup": "追赶策略（制定针对性提升方案）",
+    "case-show": "案例呈现（用相似案例建立信任）",
+    "data-support": "数据支撑（用客观数据证明效果）",
+    "custom-plan": "专属方案（为客户定制个性化方案）",
+    "pain-identify": "痛点确认（确认客户的核心痛点）",
+    "consequence": "后果推演（引导思考不改变的后果）",
+    "solution": "方案呈现（提供解决痛点的方案）",
+    "situation": "情境问题（了解客户现状、业务背景）",
+    "problem": "问题问题（引导客户表达痛点和不满）",
+    "implication": "暗示问题（放大问题影响、让客户意识到紧迫性）",
+    "need-payoff": "需求-效益问题（让客户自己说出解决方案的价值）",
+    "strengths-assess": "优势挖掘（识别核心竞争优势）",
+    "weaknesses-identify": "劣势预判（准备防御话术）",
+    "opportunities-map": "机会捕捉（识别未被满足的需求）",
+    "threats-evaluate": "威胁应对（差异化定位）",
+    "who-analysis": "对象分析（明确决策人、影响人）",
+    "what-analysis": "需求定义（精准定义核心需求）",
+    "when-analysis": "时机判断（把握决策节奏）",
+    "where-analysis": "场景定位（明确使用场景）",
+    "why-analysis": "动机深挖（理解深层驱动力）",
+    "how-analysis": "方案设计（展示实施路径）",
+    "howmuch-analysis": "价值量化（用数字说话）",
+    "listen": "倾听异议（完整听完顾虑）",
+    "acknowledge": "认同感受（降低防御心理）",
+    "explore": "深层探索（找到真实原因）",
+    "respond": "精准回应（用证据化解顾虑）",
+    "trial-close": "试探性收尾（测试购买意愿）",
+    "confirmation": "需求确认（让客户亲口确认价值）",
+    "assumptive-close": "假设成交（跳过是否买讨论如何实施）",
+    "urgency": "紧迫感塑造（创造合理决策紧迫感）",
+    "final-close": "最终收尾（锁定下一步行动）",
+    "attention": "抓注意力（30秒内抓住客户）",
+    "interest": "激发兴趣（痛点共鸣和价值展示）",
+    "desire": "激发欲望（从不错到我想要）",
+    "action": "推动行动（降低门槛促决策）",
+    "feature-identify": "特征识别（核心功能特征）",
+    "advantage-translate": "优势转化（比竞品好在哪）",
+    "benefit-map": "利益映射（业务和个人价值）",
+    "budget-assess": "预算评估（预算范围和投入意愿）",
+    "authority-identify": "决策链确认（决策人和审批流程）",
+    "need-confirm": "需求确认（刚性需求和紧迫性）",
+    "timeline-clarify": "时间线明确（决策和实施时间表）",
+    "metrics-quantify": "价值量化（指标和ROI模型）",
+    "economic-buyer": "经济买家定位（最终拍板人）",
+    "decision-criteria": "决策标准（供应商评估标准）",
+    "decision-process": "决策流程（评估到签约流程）",
+    "identify-pain": "痛点深挖（业务和个人痛点）",
+    "champion-develop": "内部拥护者（培养支持者）",
+    "supplier-power": "供应商议价力（上游供应链分析）",
+    "buyer-power": "买方议价力（客户客户画像）",
+    "new-entrants": "新进入者威胁（壁垒构建）",
+    "substitutes": "替代品威胁（不可替代性）",
+    "industry-rivalry": "行业竞争格局（差异化定位）",
+    "awareness": "认知阶段（问题唤醒和行业洞察）",
+    "consideration": "考虑阶段（差异化展示）",
+    "evaluation": "评估阶段（POC和风险消除）",
+    "decision": "决策阶段（临门一脚）",
+    "retention": "留存阶段（价值交付和续约）",
+    "complication": "冲突揭示（矛盾和挑战）",
+    "question": "问题提出（转化为关键问题）",
+    "answer": "答案呈现（方案作为最佳答案）",
+    "teach": "教育客户（独到行业洞察）",
+    "tailor": "定制沟通（按角色KPI定制）",
+    "take-control": "掌控节奏（主动推进决策）",
+}
+
+STAGE_COACHING_TIPS = {
+    "status-confirm": "当前处于现状确认阶段。建议：多问开放式问题了解客户当前状态，不要急于推销。",
+    "goal-align": "当前处于目标对齐阶段。建议：引导客户表达期望，寻找共同目标。",
+    "path-plan": "当前处于路径规划阶段。建议：提出具体可行的方案，分步骤说明。",
+    "benchmark": "当前处于标准对标阶段。建议：用行业标准和数据建立参照系。",
+    "current-assess": "当前处于现状评估阶段。建议：客观分析差距，避免让客户感到被否定。",
+    "catchup": "当前处于追赶策略阶段。建议：给出可执行的提升方案，强调可行性。",
+    "case-show": "当前处于案例呈现阶段。建议：选择与客户相似的成功案例，增强说服力。",
+    "data-support": "当前处于数据支撑阶段。建议：用具体数字而非笼统描述。",
+    "custom-plan": "当前处于专属方案阶段。建议：突出方案的个性化和针对性。",
+    "pain-identify": "当前处于痛点确认阶段。建议：引导客户自己说出痛点，而非直接指出。",
+    "consequence": "当前处于后果推演阶段。建议：让客户意识到不改变的代价。",
+    "solution": "当前处于方案呈现阶段。建议：方案要具体、可执行、有时间表。",
+    "situation": "SPIN-情境问题阶段。建议：了解客户的业务背景和现状。",
+    "problem": "SPIN-问题问题阶段。建议：引导客户表达不满和痛点。",
+    "implication": "SPIN-暗示问题阶段。建议：放大问题影响，让客户意识到紧迫性。",
+    "need-payoff": "SPIN-需求-效益阶段。建议：让客户自己说出解决方案的价值。",
+    "strengths-assess": "SWOT-优势挖掘。建议：用数据和案例佐证核心竞争力。",
+    "weaknesses-identify": "SWOT-劣势预判。建议：坦诚承认不足，转化为差异化特点。",
+    "opportunities-map": "SWOT-机会捕捉。建议：关联行业趋势，创造切入点。",
+    "threats-evaluate": "SWOT-威胁应对。建议：突出差异化，锚定独特价值。",
+    "listen": "LAER-倾听异议。建议：不打断、不辩解，让客户说完。",
+    "acknowledge": "LAER-认同感受。建议：让客户感到被理解，降低防御。",
+    "explore": "LAER-深层探索。建议：用假设提问找到真实原因。",
+    "respond": "LAER-精准回应。建议：用案例和证据化解顾虑。",
+    "trial-close": "成交-试探收尾。建议：用非承诺性问题测试意愿。",
+    "confirmation": "成交-需求确认。建议：让客户亲口确认核心需求。",
+    "assumptive-close": "成交-假设成交。建议：直接讨论实施方案，跳过是否买。",
+    "urgency": "成交-紧迫感。建议：用限时优惠或机会成本创造紧迫感。",
+    "final-close": "成交-最终收尾。建议：明确下一步行动和时间。",
+    "attention": "AIDA-抓注意力。建议：用数据冲击或好奇钩子开场。",
+    "interest": "AIDA-激发兴趣。建议：痛点共鸣+方案预览。",
+    "desire": "AIDA-激发欲望。建议：场景描绘+损失厌恶。",
+    "action": "AIDA-推动行动。建议：降低门槛+限时激励。",
+    "feature-identify": "FAB-特征识别。建议：聚焦核心差异化功能。",
+    "advantage-translate": "FAB-优势转化。建议：量化对比竞品优势。",
+    "benefit-map": "FAB-利益映射。建议：关联客户KPI和个人价值。",
+    "budget-assess": "BANT-预算评估。建议：了解范围和审批流程。",
+    "authority-identify": "BANT-决策链。建议：找到最终决策人。",
+    "need-confirm": "BANT-需求确认。建议：确认刚性需求和紧迫性。",
+    "timeline-clarify": "BANT-时间线。建议：倒推实施计划。",
+    "teach": "挑战者-教育。建议：分享独到行业洞察。",
+    "tailor": "挑战者-定制。建议：按角色和KPI定制信息。",
+    "take-control": "挑战者-掌控。建议：主动推进，不被拖延。",
+}
 
 
 class PracticeHarness:
@@ -68,6 +191,7 @@ class PracticeHarness:
         self.difficulty_config: dict = get_difficulty_config("medium")
         self.archetype_key: str = ""
         self.archetype: dict = {}
+        self._framework_recommendation: dict = {}
 
     async def init_session(
         self,
@@ -187,6 +311,15 @@ class PracticeHarness:
 
         self.fl.complete_item(greeting_id, result=greeting["response"])
 
+        # Recommend frameworks based on scenario and persona
+        recommender = FrameworkRecommender()
+        fw_recommendation = recommender.recommend(
+            scenario=scenario,
+            industry=industry,
+            customer_persona=persona,
+        )
+        self._framework_recommendation = fw_recommendation
+
         return {
             "session_id": self.session_id,
             "customer_persona": persona,
@@ -196,6 +329,7 @@ class PracticeHarness:
             "difficulty": difficulty,
             "archetype_key": archetype_key,
             "archetype_name": archetype["name"],
+            "frameworkRecommendation": fw_recommendation,
         }
 
     async def respond(self, sales_message: str, logic_framework: str = "") -> dict:
@@ -252,6 +386,10 @@ class PracticeHarness:
         # Track emotion
         self.emotion_history.append(customer_result["emotion"])
 
+        # Detect customer intent
+        intent_detector = IntentDetector()
+        intent_result = intent_detector.detect(customer_result["response"], role="customer")
+
         # Add customer response to context
         self.ctx.add_message("assistant", customer_result["response"])
 
@@ -297,6 +435,7 @@ class PracticeHarness:
             "emotion_history": list(self.emotion_history),
             "logicFramework": logic_framework,
             "detectedStage": self.detected_stage,
+            "intent": intent_result,
         }
 
     async def respond_stream(self, sales_message: str, logic_framework: str = "") -> AsyncIterator[dict]:
@@ -413,31 +552,10 @@ class PracticeHarness:
         if logic_framework:
             stage_context = ""
             if detected_stage:
-                stage_names = {
-                    "status-confirm": "现状确认（了解客户当前状态和痛点）",
-                    "goal-align": "目标对齐（与客户就改善目标达成共识）",
-                    "path-plan": "路径规划（制定具体可行的执行方案）",
-                    "benchmark": "标准对标（明确行业/考试标准）",
-                    "current-assess": "现状评估（客观评估当前水平，找出差距）",
-                    "catchup": "追赶策略（制定针对性提升方案）",
-                    "case-show": "案例呈现（用相似案例建立信任）",
-                    "data-support": "数据支撑（用客观数据证明效果）",
-                    "custom-plan": "专属方案（为客户定制个性化方案）",
-                    "pain-identify": "痛点确认（确认客户的核心痛点）",
-                    "consequence": "后果推演（引导思考不改变的后果）",
-                    "solution": "方案呈现（提供解决痛点的方案）",
-                    "situation": "情境问题（了解客户现状、业务背景）",
-                    "problem": "问题问题（引导客户表达痛点和不满）",
-                    "implication": "暗示问题（放大问题影响、让客户意识到紧迫性）",
-                    "need-payoff": "需求-效益问题（让客户自己说出解决方案的价值）",
-                }
-                stage_name = stage_names.get(detected_stage, detected_stage)
+                stage_name = STAGE_DISPLAY_NAMES.get(detected_stage, detected_stage)
                 stage_context = f"""
 销售当前阶段: {stage_name}
-请根据你的角色，做出符合该阶段的自然反应：
-- 在现状确认阶段：客户通常会配合回答，但会保持一定的防备
-- 在目标对齐阶段：客户会表达期望，情绪偏向积极
-- 在路径规划阶段：客户会关注具体方案，情绪偏向犹豫到兴趣"""
+请根据你的角色和该阶段特点，做出自然的客户反应。"""
 
             framework_context = f"""
 销售逻辑框架提示:
@@ -497,25 +615,7 @@ class PracticeHarness:
         # Build stage context
         stage_hint = ""
         if self.detected_stage:
-            stage_tips = {
-                "status-confirm": "当前处于现状确认阶段。建议：多问开放式问题了解客户当前状态，不要急于推销。",
-                "goal-align": "当前处于目标对齐阶段。建议：引导客户表达期望，寻找共同目标。",
-                "path-plan": "当前处于路径规划阶段。建议：提出具体可行的方案，分步骤说明。",
-                "benchmark": "当前处于标准对标阶段。建议：用行业标准和数据建立参照系。",
-                "current-assess": "当前处于现状评估阶段。建议：客观分析差距，避免让客户感到被否定。",
-                "catchup": "当前处于追赶策略阶段。建议：给出可执行的提升方案，强调可行性。",
-                "case-show": "当前处于案例呈现阶段。建议：选择与客户相似的成功案例，增强说服力。",
-                "data-support": "当前处于数据支撑阶段。建议：用具体数字而非笼统描述。",
-                "custom-plan": "当前处于专属方案阶段。建议：突出方案的个性化和针对性。",
-                "pain-identify": "当前处于痛点确认阶段。建议：引导客户自己说出痛点，而非直接指出。",
-                "consequence": "当前处于后果推演阶段。建议：让客户意识到不改变的代价。",
-                "solution": "当前处于方案呈现阶段。建议：方案要具体、可执行、有时间表。",
-                "situation": "SPIN-情境问题阶段。建议：了解客户的业务背景和现状。",
-                "problem": "SPIN-问题问题阶段。建议：引导客户表达不满和痛点。",
-                "implication": "SPIN-暗示问题阶段。建议：放大问题影响，让客户意识到紧迫性。",
-                "need-payoff": "SPIN-需求-效益阶段。建议：让客户自己说出解决方案的价值。",
-            }
-            stage_hint = stage_tips.get(self.detected_stage, "")
+            stage_hint = STAGE_COACHING_TIPS.get(self.detected_stage, "")
 
         # Analyze emotion trend
         emotion_trend = ""
@@ -707,6 +807,20 @@ class PracticeHarness:
         report["archetype_name"] = self.archetype.get("name", "")
         report["transcript"] = self.ctx.get_messages()
 
+        # Add framework recommendation analysis
+        recommender = FrameworkRecommender()
+        report["frameworkRecommendation"] = recommender.recommend_for_review(
+            transcript=self.ctx.get_messages(),
+            detected_frameworks=list(set(self.stage_history)),
+            customer_persona=json.loads(self.customer_persona) if self.customer_persona else {},
+        )
+
+        # Add intent/signal analysis
+        intent_detector = IntentDetector()
+        report["signalAnalysis"] = intent_detector.analyze_conversation_signals(
+            self.ctx.get_messages()
+        )
+
         self.fl.add_item(description="生成复盘报告")
         self.fl.items[-1].status = ItemStatus.COMPLETED
         self.fl.items[-1].result = json.dumps(report, ensure_ascii=False)
@@ -722,12 +836,31 @@ class PracticeHarness:
             "价值展示法": "value-demo",
             "痛点放大法": "pain-amplify",
             "SPIN销售法": "spin-selling",
+            "SWOT竞争分析": "swot-analysis",
+            "5W2H场景拆解": "5w2h-analysis",
+            "异议四步化解法": "objection-handling",
+            "LAER": "objection-handling",
+            "成交五步推进法": "closing-techniques",
+            "AIDA营销漏斗": "aida-model",
+            "FAB利益展示法": "fab-principle",
+            "BANT线索判定": "bant-qualification",
+            "MEDDIC大客户销售": "meddic-enterprise",
+            "波特五力分析": "porter-forces",
+            "客户旅程地图": "customer-journey",
+            "SCQA故事框架": "scqa-narrative",
+            "挑战者销售法": "challenger-sale",
         }
         for zh_name, en_id in framework_map.items():
             if zh_name in logic_framework:
                 return en_id
-        # Try direct match (already an English ID)
-        if logic_framework in ("expectation-sync", "gap-analysis", "value-demo", "pain-amplify", "spin-selling"):
+        # Try direct match
+        all_ids = {
+            "expectation-sync", "gap-analysis", "value-demo", "pain-amplify", "spin-selling",
+            "swot-analysis", "5w2h-analysis", "objection-handling", "closing-techniques",
+            "aida-model", "fab-principle", "bant-qualification", "meddic-enterprise",
+            "porter-forces", "customer-journey", "scqa-narrative", "challenger-sale",
+        }
+        if logic_framework in all_ids:
             return logic_framework
         return logic_framework
 
@@ -764,6 +897,84 @@ class PracticeHarness:
                 {"id": "implication", "name": "暗示问题", "key_questions": "放大问题影响、让客户意识到紧迫性"},
                 {"id": "need-payoff", "name": "需求-效益问题", "key_questions": "让客户自己说出解决方案的价值"},
             ],
+            "swot-analysis": [
+                {"id": "strengths-assess", "name": "优势挖掘", "key_questions": "差异化优势、成功案例、客户认可点"},
+                {"id": "weaknesses-identify", "name": "劣势预判", "key_questions": "可能犹豫点、竞品攻击点、短板转化"},
+                {"id": "opportunities-map", "name": "机会捕捉", "key_questions": "行业趋势、新挑战、新可能"},
+                {"id": "threats-evaluate", "name": "威胁应对", "key_questions": "竞品对比、主打卖点、差异化"},
+            ],
+            "5w2h-analysis": [
+                {"id": "who-analysis", "name": "对象分析", "key_questions": "决策人、影响人、支持者"},
+                {"id": "what-analysis", "name": "需求定义", "key_questions": "核心问题、期望效果、硬性要求"},
+                {"id": "when-analysis", "name": "时机判断", "key_questions": "上线时间、节点约束、预算周期"},
+                {"id": "where-analysis", "name": "场景定位", "key_questions": "使用场景、区域覆盖、系统环境"},
+                {"id": "why-analysis", "name": "动机深挖", "key_questions": "为什么现在、不解决怎样、个人意义"},
+                {"id": "how-analysis", "name": "方案设计", "key_questions": "落地方式、阶段划分、效果保证"},
+                {"id": "howmuch-analysis", "name": "价值量化", "key_questions": "投入产出比、成本节省、回本周期"},
+            ],
+            "objection-handling": [
+                {"id": "listen", "name": "倾听异议", "key_questions": "详细说明、其他顾虑"},
+                {"id": "acknowledge", "name": "认同感受", "key_questions": "顾虑合理、同样想法"},
+                {"id": "explore", "name": "深层探索", "key_questions": "假设解决、根因定位"},
+                {"id": "respond", "name": "精准回应", "key_questions": "解决方案、案例佐证"},
+            ],
+            "closing-techniques": [
+                {"id": "trial-close", "name": "试探性收尾", "key_questions": "方案合适何时定、其他确认项"},
+                {"id": "confirmation", "name": "需求确认", "key_questions": "核心需求确认、方案覆盖"},
+                {"id": "assumptive-close", "name": "假设成交", "key_questions": "从哪开始、时间倾向"},
+                {"id": "urgency", "name": "紧迫感塑造", "key_questions": "优惠截止、不定影响"},
+                {"id": "final-close", "name": "最终收尾", "key_questions": "就这么定、下一步准备"},
+            ],
+            "aida-model": [
+                {"id": "attention", "name": "抓注意力", "key_questions": "数据冲击、场景共鸣、好奇钩子"},
+                {"id": "interest", "name": "激发兴趣", "key_questions": "痛点共鸣、价值展示、成功故事"},
+                {"id": "desire", "name": "激发欲望", "key_questions": "场景描绘、损失厌恶、社会认同"},
+                {"id": "action", "name": "推动行动", "key_questions": "降低门槛、限时激励、明确行动"},
+            ],
+            "fab-principle": [
+                {"id": "feature-identify", "name": "特征识别", "key_questions": "核心功能、独特之处、差异化特征"},
+                {"id": "advantage-translate", "name": "优势转化", "key_questions": "比竞品好哪、效率提升、痛点解决"},
+                {"id": "benefit-map", "name": "利益映射", "key_questions": "业务价值、个人KPI、ROI量化"},
+            ],
+            "bant-qualification": [
+                {"id": "budget-assess", "name": "预算评估", "key_questions": "预算范围、审批流程、投入意愿"},
+                {"id": "authority-identify", "name": "决策链确认", "key_questions": "最终决策人、参与人、审批环节"},
+                {"id": "need-confirm", "name": "需求确认", "key_questions": "核心问题、替代方案、不解决后果"},
+                {"id": "timeline-clarify", "name": "时间线明确", "key_questions": "启动时间、节点压力、上线时间"},
+            ],
+            "meddic-enterprise": [
+                {"id": "metrics-quantify", "name": "价值量化", "key_questions": "业务指标、改善预期、ROI"},
+                {"id": "economic-buyer", "name": "经济买家定位", "key_questions": "预算审批权、关注点、信任建立"},
+                {"id": "decision-criteria", "name": "决策标准", "key_questions": "评估标准、权重、匹配度"},
+                {"id": "decision-process", "name": "决策流程", "key_questions": "评估步骤、环节、周期"},
+                {"id": "identify-pain", "name": "痛点深挖", "key_questions": "业务痛点、个人痛点、尝试方案"},
+                {"id": "champion-develop", "name": "内部拥护者", "key_questions": "支持者、个人诉求、内部认可"},
+            ],
+            "porter-forces": [
+                {"id": "supplier-power", "name": "供应商议价力", "key_questions": "供应商集中度、供应链风险、降低依赖"},
+                {"id": "buyer-power", "name": "买方议价力", "key_questions": "客户客户画像、议价能力、业务压力"},
+                {"id": "new-entrants", "name": "新进入者威胁", "key_questions": "新进入者、优势、壁垒构建"},
+                {"id": "substitutes", "name": "替代品威胁", "key_questions": "替代方案、优劣势、不可替代性"},
+                {"id": "industry-rivalry", "name": "行业竞争格局", "key_questions": "竞争格局、对手动态、突围方向"},
+            ],
+            "customer-journey": [
+                {"id": "awareness", "name": "认知阶段", "key_questions": "问题发现、行业趋势、权威建立"},
+                {"id": "consideration", "name": "考虑阶段", "key_questions": "方案对比、差异化、案例佐证"},
+                {"id": "evaluation", "name": "评估阶段", "key_questions": "验证需求、POC设计、风险消除"},
+                {"id": "decision", "name": "决策阶段", "key_questions": "障碍清除、紧迫感、促成行动"},
+                {"id": "retention", "name": "留存阶段", "key_questions": "效果回顾、新需求、续约扩展"},
+            ],
+            "scqa-narrative": [
+                {"id": "situation", "name": "情境铺设", "key_questions": "行业现状、当前做法、共识建立"},
+                {"id": "complication", "name": "冲突揭示", "key_questions": "变化因素、挑战、认知冲击"},
+                {"id": "question", "name": "问题提出", "key_questions": "核心问题、解决方案、求解动机"},
+                {"id": "answer", "name": "答案呈现", "key_questions": "方案解决、独特优势、效果佐证"},
+            ],
+            "challenger-sale": [
+                {"id": "teach", "name": "教育客户", "key_questions": "行业洞察、数据颠覆、新视角"},
+                {"id": "tailor", "name": "定制沟通", "key_questions": "角色关注、KPI关联、信息定制"},
+                {"id": "take-control", "name": "掌控节奏", "key_questions": "下一步、不被拖延、推进决策"},
+            ],
         }
 
         stages = framework_stages.get(framework_id, [])
@@ -779,14 +990,24 @@ class PracticeHarness:
 
 销售的话: {sales_message}
 
-判断标准:
-- 如果销售在了解现状、确认痛点、问之前尝试的方法 → 第一阶段(status-confirm/benchmark/case-show/pain-identify)
-- 如果销售在设定目标、讨论期望效果、达成共识 → 第二阶段(goal-align/current-assess/data-support/consequence)
-- 如果销售在提出具体方案、分阶段计划、合作事项 → 第三阶段(path-plan/catchup/custom-plan/solution)
-- 如果销售在了解客户现状、业务背景、决策流程 → 情境问题(situation)
-- 如果销售在引导客户表达痛点和不满 → 问题问题(problem)
-- 如果销售在放大问题影响、让客户意识到紧迫性 → 暗示问题(implication)
-- 如果销售在让客户自己说出解决方案的价值 → 需求-效益问题(need-payoff)
+判断标准（按框架分组）:
+- 预期同步法: 了解现状→status-confirm, 设定目标→goal-align, 方案计划→path-plan
+- 差距分析法: 行业标准→benchmark, 评估差距→current-assess, 提升方案→catchup
+- 价值展示法: 案例故事→case-show, 数据证明→data-support, 定制方案→custom-plan
+- 痛点放大法: 确认痛点→pain-identify, 推演后果→consequence, 呈现方案→solution
+- SPIN: 了解现状→situation, 发现痛点→problem, 放大影响→implication, 引导价值→need-payoff
+- SWOT: 优势挖掘→strengths-assess, 劣势预判→weaknesses-identify, 机会捕捉→opportunities-map, 威胁应对→threats-evaluate
+- 5W2H: 对象→who-analysis, 需求→what-analysis, 时机→when-analysis, 场景→where-analysis, 动机→why-analysis, 方案→how-analysis, 价值→howmuch-analysis
+- LAER异议处理: 倾听→listen, 认同→acknowledge, 探索→explore, 回应→respond
+- 成交推进: 试探→trial-close, 确认→confirmation, 假设→assumptive-close, 紧迫→urgency, 收尾→final-close
+- AIDA: 注意→attention, 兴趣→interest, 欲望→desire, 行动→action
+- FAB: 特征→feature-identify, 优势→advantage-translate, 利益→benefit-map
+- BANT: 预算→budget-assess, 决策权→authority-identify, 需求→need-confirm, 时间线→timeline-clarify
+- MEDDIC: 价值量化→metrics-quantify, 经济买家→economic-buyer, 决策标准→decision-criteria, 决策流程→decision-process, 痛点→identify-pain, 拥护者→champion-develop
+- 波特五力: 供应商→supplier-power, 买方→buyer-power, 新进入者→new-entrants, 替代品→substitutes, 竞争→industry-rivalry
+- 客户旅程: 认知→awareness, 考虑→consideration, 评估→evaluation, 决策→decision, 留存→retention
+- SCQA: 情境→situation, 冲突→complication, 问题→question, 答案→answer
+- 挑战者: 教育→teach, 定制→tailor, 掌控→take-control
 
 请只输出阶段ID（如"status-confirm"），不要输出其他内容。如果无法判断，输出""。"""
 
@@ -821,31 +1042,10 @@ class PracticeHarness:
         if logic_framework:
             stage_context = ""
             if detected_stage:
-                stage_names = {
-                    "status-confirm": "现状确认（了解客户当前状态和痛点）",
-                    "goal-align": "目标对齐（与客户就改善目标达成共识）",
-                    "path-plan": "路径规划（制定具体可行的执行方案）",
-                    "benchmark": "标准对标（明确行业/考试标准）",
-                    "current-assess": "现状评估（客观评估当前水平，找出差距）",
-                    "catchup": "追赶策略（制定针对性提升方案）",
-                    "case-show": "案例呈现（用相似案例建立信任）",
-                    "data-support": "数据支撑（用客观数据证明效果）",
-                    "custom-plan": "专属方案（为客户定制个性化方案）",
-                    "pain-identify": "痛点确认（确认客户的核心痛点）",
-                    "consequence": "后果推演（引导思考不改变的后果）",
-                    "solution": "方案呈现（提供解决痛点的方案）",
-                    "situation": "情境问题（了解客户现状、业务背景）",
-                    "problem": "问题问题（引导客户表达痛点和不满）",
-                    "implication": "暗示问题（放大问题影响、让客户意识到紧迫性）",
-                    "need-payoff": "需求-效益问题（让客户自己说出解决方案的价值）",
-                }
-                stage_name = stage_names.get(detected_stage, detected_stage)
+                stage_name = STAGE_DISPLAY_NAMES.get(detected_stage, detected_stage)
                 stage_context = f"""
 销售当前阶段: {stage_name}
-请根据你的角色，做出符合该阶段的自然反应：
-- 在现状确认阶段：客户通常会配合回答，但会保持一定的防备
-- 在目标对齐阶段：客户会表达期望，情绪偏向积极
-- 在路径规划阶段：客户会关注具体方案，情绪偏向犹豫到兴趣"""
+请根据你的角色和该阶段特点，做出自然的客户反应。"""
 
             framework_context = f"""
 销售逻辑框架提示:
@@ -934,13 +1134,35 @@ class PracticeHarness:
 销售当前使用的逻辑框架: {logic_framework}
 请评估销售是否正确运用了该框架的核心逻辑。"""
 
+        # Get DISC type from persona for objection response tailoring
+        disc_type = ""
+        psych_profile = persona.get("psychology_profile", {})
+        if psych_profile:
+            disc_type = psych_profile.get("disc_type", "")
+        elif self.archetype:
+            disc_type = self.archetype.get("psychology_profile", {}).get("disc_type", "")
+
+        # Detect objection and provide psychology context for evaluation
+        objection_context = ""
+        objection_type = detect_objection_type(customer_response)
+        if objection_type:
+            obj_response = get_objection_response(objection_type, disc_type=disc_type)
+            if obj_response:
+                objection_context = f"""
+异议分析:
+客户提出了「{obj_response['objection_name']}」类型的异议。
+心理学根源: {obj_response['psychology_root']}
+推荐回应框架: {obj_response['framework']}
+推荐策略: {obj_response['strategy_name']} — {obj_response['psychology']}
+请评估销售的回应是否有效处理了该异议。"""
+
         dimensions_json = json.dumps(EVALUATION_DIMENSIONS, ensure_ascii=False)
 
         eval_prompt = f"""评估销售在这轮对话中的表现，按以下9个维度分别打分。
 
 客户画像: {persona.get('name', '')} ({persona.get('personality', '')})
 客户当前情绪: {emotion}
-客户回复: {customer_response}{framework_eval}
+客户回复: {customer_response}{framework_eval}{objection_context}
 
 销售的话: {sales_message}
 

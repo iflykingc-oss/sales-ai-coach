@@ -26,6 +26,18 @@ router.post('/register', authLimiter, async (req, res: Response, next: NextFunct
       },
     });
 
+    // Record initial consents (privacy policy + terms accepted at registration)
+    const consentVersion = '2024-01-15';
+    const ip = req.ip || req.headers['x-forwarded-for'] as string || null;
+    const userAgent = req.headers['user-agent'] || null;
+    await prisma.consentRecord.createMany({
+      data: [
+        { userId: user.id, type: 'PRIVACY_POLICY', version: consentVersion, accepted: true, ip, userAgent },
+        { userId: user.id, type: 'TERMS_OF_SERVICE', version: consentVersion, accepted: true, ip, userAgent },
+        { userId: user.id, type: 'DATA_PROCESSING', version: consentVersion, accepted: true, ip, userAgent },
+      ],
+    });
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       getJwtSecret(),

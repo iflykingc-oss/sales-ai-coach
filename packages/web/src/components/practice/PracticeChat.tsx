@@ -11,7 +11,12 @@ import {
 } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
-import { salesLogicFrameworks, getFrameworkById } from '@sales-ai-coach/shared';
+import {
+  salesLogicFrameworks,
+  getFrameworkById,
+  getConversationalFrameworks,
+  getAnalyticalFrameworks,
+} from '@sales-ai-coach/shared';
 
 const skillFocusOptions = [
   { id: 'objection', name: '异议处理' },
@@ -187,18 +192,38 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
           <h4 className="font-medium text-gray-900">销售逻辑框架（可选）</h4>
         </div>
         <p className="text-xs text-gray-500">选择销售逻辑框架，AI客户将识别你的话术逻辑并做出更真实的反应</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {salesLogicFrameworks.map((fw) => (
+
+        {(() => {
+          const conversational = getConversationalFrameworks();
+          const analytical = getAnalyticalFrameworks();
+
+          // AI recommendation based on selected skill focus
+          const recommendationMap: Record<string, string[]> = {
+            objection: ['objection-handling', 'spin-selling', 'pain-amplify'],
+            closing: ['closing-techniques', 'aida', 'value-demo'],
+            discovery: ['gap-analysis', 'spin-selling', 'bant', 'meddic'],
+            rapport: ['expectation-sync', 'value-demo'],
+            negotiation: ['fab', 'value-demo', 'pain-amplify'],
+            presentation: ['fab', 'aida', 'value-demo'],
+          };
+          const recommendedIds = selectedSkill ? (recommendationMap[selectedSkill] || []) : [];
+
+          const renderFrameworkCard = (fw: typeof salesLogicFrameworks[0], isRecommended: boolean) => (
             <button
               key={fw.id}
               onClick={() => setSelectedFramework(selectedFramework === fw.id ? '' : fw.id)}
               className={cn(
-                'rounded-lg border-2 p-3 text-left transition-all',
+                'rounded-lg border-2 p-3 text-left transition-all relative',
                 selectedFramework === fw.id
                   ? 'border-primary-500 bg-primary-50'
                   : 'border-gray-200 bg-white hover:border-gray-300',
               )}
             >
+              {isRecommended && (
+                <span className="absolute -top-2 -right-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                  AI推荐
+                </span>
+              )}
               <div className="flex items-center justify-between">
                 <span className="font-medium text-gray-900">{fw.name}</span>
                 <span className="text-xs text-gray-400">{fw.stages.length}阶段</span>
@@ -220,8 +245,34 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
                 ))}
               </div>
             </button>
-          ))}
-        </div>
+          );
+
+          return (
+            <div className="space-y-4">
+              {/* Conversational frameworks */}
+              <div>
+                <h5 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                  对话型框架 — 引导对话节奏
+                </h5>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {conversational.map((fw) => renderFrameworkCard(fw, recommendedIds.includes(fw.id)))}
+                </div>
+              </div>
+
+              {/* Analytical frameworks */}
+              <div>
+                <h5 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
+                  <span className="inline-block h-2 w-2 rounded-full bg-violet-400" />
+                  分析型框架 — 结构化分析场景
+                </h5>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {analytical.map((fw) => renderFrameworkCard(fw, recommendedIds.includes(fw.id)))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Difficulty Selector */}

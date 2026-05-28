@@ -10,6 +10,9 @@ import {
   X,
   Camera,
   MicOff,
+  ChevronDown,
+  ChevronUp,
+  Network,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Input } from '@/components/ui/Input';
@@ -19,6 +22,7 @@ import { useSessionStore } from '@/stores/sessionStore';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useScriptStore } from '@/stores/scriptStore';
 import { generateScript } from '@/services/scriptService';
+import { getAnalyticalFrameworks } from '@sales-ai-coach/shared';
 import type { InputType } from '@sales-ai-coach/shared';
 
 type InputMode = 'TEXT' | 'IMAGE' | 'VOICE' | 'FORM' | 'PASTE';
@@ -81,9 +85,13 @@ export default function InputBar({ onSend }: InputBarProps) {
     resetTranscript: resetVoiceTranscript,
   } = useVoiceInput();
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
+  const [showFrameworks, setShowFrameworks] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pasteAreaRef = useRef<HTMLDivElement>(null);
+
+  const analyticalFrameworks = getAnalyticalFrameworks();
 
   const handleGenerateScript = useCallback(
     async (input: string, inputType: InputMode) => {
@@ -110,6 +118,7 @@ export default function InputBar({ onSend }: InputBarProps) {
           sessionId: activeSessionId,
           content: input,
           inputType,
+          frameworks: selectedFrameworks,
         });
 
         if (result?.success && result?.data) {
@@ -242,6 +251,50 @@ export default function InputBar({ onSend }: InputBarProps) {
           >
             关闭
           </button>
+        </div>
+      )}
+
+      {/* Framework selector toggle */}
+      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-1.5">
+        <button
+          onClick={() => setShowFrameworks(!showFrameworks)}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+        >
+          <Network className="h-3.5 w-3.5" />
+          <span>分析框架{selectedFrameworks.length > 0 ? ` (${selectedFrameworks.length})` : ''}</span>
+          {showFrameworks ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+        {selectedFrameworks.length > 0 && (
+          <button
+            onClick={() => setSelectedFrameworks([])}
+            className="text-[10px] text-gray-400 hover:text-gray-600"
+          >
+            清除
+          </button>
+        )}
+      </div>
+
+      {/* Framework chips (collapsible) */}
+      {showFrameworks && (
+        <div className="flex flex-wrap gap-1.5 border-b border-gray-100 px-3 py-2">
+          {analyticalFrameworks.map((fw) => (
+            <button
+              key={fw.id}
+              onClick={() => {
+                setSelectedFrameworks((prev) =>
+                  prev.includes(fw.id) ? prev.filter((id) => id !== fw.id) : [...prev, fw.id]
+                );
+              }}
+              className={cn(
+                'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+                selectedFrameworks.includes(fw.id)
+                  ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+              )}
+            >
+              {fw.name}
+            </button>
+          ))}
         </div>
       )}
 

@@ -83,9 +83,10 @@ async def _try_paddleocr(image_bytes: bytes) -> str | None:
 
 async def _try_cloud_ocr(image_bytes: bytes) -> str | None:
     """Try cloud OCR API (Baidu/Tencent/OCR.space)."""
-    ocr_api_key = os.getenv("OCR_API_KEY", "")
-    ocr_api_secret = os.getenv("OCR_API_SECRET", "")
-    ocr_endpoint = os.getenv("OCR_ENDPOINT", "")
+    settings = get_settings()
+    ocr_api_key = settings.ocr_api_key
+    ocr_api_secret = settings.ocr_api_secret
+    ocr_endpoint = settings.ocr_endpoint
 
     if not ocr_api_key:
         return None

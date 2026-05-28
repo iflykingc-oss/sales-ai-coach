@@ -5,6 +5,7 @@ interface GenerateScriptParams {
   content: string;
   inputType?: string;
   industry?: string;
+  frameworks?: string[];  // Analytical framework IDs to apply
 }
 
 export async function generateScript(params: GenerateScriptParams) {
@@ -21,6 +22,7 @@ export async function generateScript(params: GenerateScriptParams) {
     inputType: params.inputType || 'TEXT',
     industry: params.industry,
     sessionId: params.sessionId,
+    frameworks: params.frameworks || [],
   });
 
   return response as unknown as { success: boolean; data: any; scriptIds?: string[] };
