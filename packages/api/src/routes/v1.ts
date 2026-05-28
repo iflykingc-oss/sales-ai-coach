@@ -113,7 +113,7 @@ router.post('/scripts/generate', requirePermission('scripts:generate'), async (r
       throw new Error(`AI service error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result: any = await response.json();
 
     // Save generated scripts
     const scriptIds: string[] = [];
@@ -237,7 +237,7 @@ router.post('/practices/start', requirePermission('practices:create'), async (re
       throw new Error(`AI service error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result: any = await response.json();
 
     return res.json({
       success: true,
@@ -291,7 +291,7 @@ router.post('/practices/message', requirePermission('practices:create'), async (
       throw new Error(`AI service error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result: any = await response.json();
     return res.json({ success: true, data: result.data || result });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -342,7 +342,7 @@ router.post('/reviews/analyze', requirePermission('reviews:create'), async (req:
       throw new Error(`AI service error: ${response.status}`);
     }
 
-    const result = await response.json();
+    const result: any = await response.json();
 
     // Save review report
     const report = await prisma.reviewReport.create({

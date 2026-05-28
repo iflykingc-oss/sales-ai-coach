@@ -150,7 +150,7 @@ router.get('/docs', (_req: Request, res: Response) => {
             strengths: ['string'],
             improvements: ['string'],
             recommendations: [{ dimension: 'string', advice: 'string' }],
-            radarScores: { '情绪管理': 'number', '需求挖掘': 'number', ... },
+            radarScores: '{ 情绪管理: number, 需求挖掘: number, ... }',
           },
         },
       },

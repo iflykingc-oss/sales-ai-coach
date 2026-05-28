@@ -183,7 +183,7 @@ router.get('/', async (req: Request, res: Response) => {
 // PATCH /api-keys/:id — Update key (name, active status, limits)
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const body = z
       .object({
         name: z.string().min(1).max(100).optional(),
@@ -218,7 +218,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 // DELETE /api-keys/:id — Revoke and delete key
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const key = await prisma.apiKey.findFirst({
       where: { id, userId: req.user!.id },
@@ -239,7 +239,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // GET /api-keys/:id/usage — Usage stats for a key
 router.get('/:id/usage', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const days = Math.min(parseInt(req.query.days as string) || 30, 90);
 
     const key = await prisma.apiKey.findFirst({
