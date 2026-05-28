@@ -1,8 +1,9 @@
 {
   "version": 2,
+  "rootDirectory": "packages/web",
   "installCommand": "corepack enable && pnpm install",
-  "buildCommand": "pnpm run --filter @sales-ai-coach/web build",
-  "outputDirectory": "packages/web/dist",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
