@@ -1,10 +1,8 @@
 {
   "version": 2,
-  "rootDirectory": "packages/web",
   "installCommand": "corepack enable && pnpm install",
-  "buildCommand": "pnpm run build",
-  "outputDirectory": "dist",
-  "framework": "vite",
+  "buildCommand": "cd packages/web && pnpm run build",
+  "outputDirectory": "packages/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
