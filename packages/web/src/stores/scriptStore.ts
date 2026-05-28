@@ -34,6 +34,13 @@ export interface FrameworkAnalysis {
   frameworkId: string;
   frameworkName: string;
   analysis: Record<string, unknown>;
+  // Extended fields from AI service
+  detectedFrameworks?: string[];
+  frameworkUsageQuality?: number;
+  stageProgression?: string;
+  frameworkStrengths?: string[];
+  frameworkGaps?: string[];
+  suggestedFrameworks?: string[];
 }
 
 export interface ScriptStateData {

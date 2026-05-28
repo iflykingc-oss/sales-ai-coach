@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X,
   Target, MessageCircleQuestion, Shield, TrendingUp, Lightbulb, ChevronRight,
-  Swords, Network, ChevronDown, Gauge,
+  Swords, Network, ChevronDown, ChevronUp, Gauge,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
@@ -374,11 +374,11 @@ export default function ScriptDisplay() {
                 框架分析
               </h4>
               <div className="space-y-3">
-                {currentScript.frameworkAnalysis.detectedFrameworks?.length > 0 && (
+                {(currentScript.frameworkAnalysis.detectedFrameworks?.length ?? 0) > 0 && (
                   <div>
                     <p className="mb-1.5 text-xs font-medium text-violet-600">识别到的框架</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {currentScript.frameworkAnalysis.detectedFrameworks.map((fw, i) => (
+                      {currentScript.frameworkAnalysis.detectedFrameworks?.map((fw, i) => (
                         <span key={i} className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-300">
                           {fw}
                         </span>
@@ -406,11 +406,11 @@ export default function ScriptDisplay() {
                     <p className="mt-0.5 text-sm text-violet-800">{currentScript.frameworkAnalysis.stageProgression}</p>
                   </div>
                 )}
-                {currentScript.frameworkAnalysis.frameworkStrengths?.length > 0 && (
+                {(currentScript.frameworkAnalysis.frameworkStrengths?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-violet-600">框架运用亮点</p>
                     <ul className="mt-1 space-y-1">
-                      {currentScript.frameworkAnalysis.frameworkStrengths.map((s, i) => (
+                      {currentScript.frameworkAnalysis.frameworkStrengths?.map((s, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-violet-800">
                           <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" />
                           {s}
@@ -419,11 +419,11 @@ export default function ScriptDisplay() {
                     </ul>
                   </div>
                 )}
-                {currentScript.frameworkAnalysis.frameworkGaps?.length > 0 && (
+                {(currentScript.frameworkAnalysis.frameworkGaps?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-violet-600">框架运用不足</p>
                     <ul className="mt-1 space-y-1">
-                      {currentScript.frameworkAnalysis.frameworkGaps.map((g, i) => (
+                      {currentScript.frameworkAnalysis.frameworkGaps?.map((g, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-violet-800">
                           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" />
                           {g}
@@ -432,11 +432,11 @@ export default function ScriptDisplay() {
                     </ul>
                   </div>
                 )}
-                {currentScript.frameworkAnalysis.suggestedFrameworks?.length > 0 && (
+                {(currentScript.frameworkAnalysis.suggestedFrameworks?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-violet-600">建议使用的框架</p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      {currentScript.frameworkAnalysis.suggestedFrameworks.map((fw, i) => (
+                      {currentScript.frameworkAnalysis.suggestedFrameworks?.map((fw, i) => (
                         <span key={i} className="rounded-full bg-violet-100/60 px-2.5 py-0.5 text-xs text-violet-600">
                           {fw}
                         </span>

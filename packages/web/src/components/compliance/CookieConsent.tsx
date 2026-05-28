@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { X, Shield, Cookie } from 'lucide-react';
-import { cn } from '@/utils/cn';
 
 interface ConsentPreferences {
   necessary: boolean;     // Always true
