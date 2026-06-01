@@ -18,6 +18,7 @@ const PluginPage = lazy(() => import('./app/pages/PluginPage'));
 const AdminPage = lazy(() => import('./app/pages/AdminPage'));
 const AnalyticsPage = lazy(() => import('./app/pages/AnalyticsPage'));
 const DataRightsPage = lazy(() => import('./app/pages/DataRightsPage'));
+const PricingPage = lazy(() => import('./app/pages/PricingPage'));
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="admin" element={<AdminPage />} />
               <Route path="data-rights" element={<DataRightsPage />} />
+              <Route path="pricing" element={<PricingPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

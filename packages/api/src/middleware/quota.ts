@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 
-const PLAN_LIMITS: Record<string, Record<string, number>> = {
+export const PLAN_LIMITS: Record<string, Record<string, number>> = {
   FREE: { scripts: 5, practices: 3, reviews: 1 },
   PROFESSIONAL: { scripts: -1, practices: -1, reviews: -1 },
   TEAM: { scripts: -1, practices: -1, reviews: -1 },

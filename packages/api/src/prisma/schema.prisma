@@ -92,6 +92,7 @@ model User {
   sharedScripts   SharedScript[]
   assignedTasks   TeamTask[]
   apiKeys         ApiKey[]
+  planChanges     PlanChange[]
 
   @@map("users")
 }
@@ -431,4 +432,18 @@ enum DeletionStatus {
   PROCESSING
   COMPLETED
   REJECTED
+}
+
+model PlanChange {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromPlan  Plan     @map("from_plan")
+  toPlan    Plan     @map("to_plan")
+  changedBy String   @map("changed_by") // "user" | "admin:<userId>" | "system"
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("plan_changes")
 }

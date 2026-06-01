@@ -16,6 +16,7 @@ import apiKeyRoutes from './api-keys.js';
 import v1Routes from './v1.js';
 import apiDocsRoutes from './api-docs.js';
 import complianceRoutes from './compliance.js';
+import planRoutes from './plans.js';
 
 const router = Router();
 
@@ -45,5 +46,8 @@ router.use('/v1', apiDocsRoutes);
 
 // Compliance & data rights (cookie auth)
 router.use('/compliance', complianceRoutes);
+
+// Plan management (cookie auth)
+router.use('/plans', planRoutes);
 
 export default router;

@@ -54,9 +54,10 @@ export interface SystemUser {
   status: 'active' | 'disabled';
   lastLogin: string;
   plan: string;
+  createdAt: string;
 }
 
-export type AdminTab = 'stats' | 'knowledge' | 'models' | 'plugins' | 'settings';
+export type AdminTab = 'stats' | 'users' | 'knowledge' | 'models' | 'plugins' | 'settings';
 
 interface AdminState {
   // Active tab
@@ -89,6 +90,7 @@ interface AdminState {
   systemUsers: SystemUser[];
   setSystemUsers: (users: SystemUser[]) => void;
   toggleUserStatus: (id: string) => void;
+  updateUserPlan: (id: string, plan: string) => void;
 
   // Loading
   loading: boolean;
@@ -137,6 +139,12 @@ export const useAdminStore = create<AdminState>((set) => ({
     set((state) => ({
       systemUsers: state.systemUsers.map((u) =>
         u.id === id ? { ...u, status: u.status === 'active' ? 'disabled' : 'active' } : u,
+      ),
+    })),
+  updateUserPlan: (id, plan) =>
+    set((state) => ({
+      systemUsers: state.systemUsers.map((u) =>
+        u.id === id ? { ...u, plan } : u,
       ),
     })),
 

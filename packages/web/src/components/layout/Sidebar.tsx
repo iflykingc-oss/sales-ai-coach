@@ -11,6 +11,7 @@ import {
   Puzzle,
   Settings,
   LogOut,
+  Crown,
 } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
 import { toast } from '@/hooks/useToast';
@@ -106,6 +107,22 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               <p className="text-xs text-gray-400">{user.email}</p>
             </div>
           )}
+          {/* Plan badge */}
+          <NavLink
+            to="/app/pricing"
+            onClick={handleNavClick}
+            className="mx-2 mb-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm transition-colors hover:bg-amber-100"
+          >
+            <Crown className="h-4 w-4 text-amber-600" />
+            <div className="flex-1">
+              <span className="font-medium text-amber-800">
+                {user?.plan === 'FREE' ? '免费版' : user?.plan === 'PROFESSIONAL' ? '专业版' : user?.plan === 'TEAM' ? '团队版' : user?.plan === 'ENTERPRISE' ? '企业版' : '免费版'}
+              </span>
+              {user?.plan === 'FREE' && (
+                <span className="ml-2 text-xs text-amber-600">升级 →</span>
+              )}
+            </div>
+          </NavLink>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-red-600"

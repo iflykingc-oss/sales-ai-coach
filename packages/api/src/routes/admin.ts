@@ -97,6 +97,57 @@ router.post('/users/:id/disable', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PUT /admin/users/:id/plan — admin changes user's plan
+router.put('/users/:id/plan', async (req, res, next) => {
+  try {
+    const { plan, reason } = req.body;
+    const validPlans = ['FREE', 'PROFESSIONAL', 'TEAM', 'ENTERPRISE'];
+    if (!plan || !validPlans.includes(plan)) {
+      return res.status(400).json({ success: false, error: 'Invalid plan' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id as string },
+      select: { id: true, plan: true },
+    });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const adminUser = (req as any).user;
+    const [updatedUser] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.params.id as string },
+        data: { plan },
+        select: { id: true, name: true, email: true, role: true, plan: true },
+      }),
+      prisma.planChange.create({
+        data: {
+          userId: req.params.id as string,
+          fromPlan: user.plan,
+          toPlan: plan,
+          changedBy: `admin:${adminUser.id}`,
+          reason: reason || `Admin changed plan from ${user.plan} to ${plan}`,
+        },
+      }),
+    ]);
+
+    res.json({ success: true, data: updatedUser });
+  } catch (err) { next(err); }
+});
+
+// GET /admin/users/:id/plan-history — admin views user's plan change history
+router.get('/users/:id/plan-history', async (req, res, next) => {
+  try {
+    const history = await prisma.planChange.findMany({
+      where: { userId: req.params.id as string },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json({ success: true, data: history });
+  } catch (err) { next(err); }
+});
+
 router.post('/plugins', async (req, res, next) => {
   try {
     const { name, industry, scripts, scenarios, knowledge, customerProfiles, bestPractices } = req.body;

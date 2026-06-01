@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Brain, FileText, TrendingUp, ArrowRight, Zap, GitBranch } from 'lucide-react';
+import { MessageSquare, Brain, FileText, TrendingUp, ArrowRight, Zap, GitBranch, Crown } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useUserStore } from '@/stores/userStore';
@@ -88,6 +88,27 @@ export default function DashboardPage() {
           </button>
         ))}
       </div>
+
+      {/* Plan & Usage */}
+      {user?.plan === 'FREE' && (
+        <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <Crown className="h-5 w-5 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">免费版 · 每日限额</p>
+                <p className="text-xs text-amber-600">话术 5次 · 陪练 3次 · 复盘 1次</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/app/pricing')}
+              className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+            >
+              升级解锁无限
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Pipeline Overview */}
       {loading ? (

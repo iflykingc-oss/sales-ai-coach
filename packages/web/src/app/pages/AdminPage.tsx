@@ -6,6 +6,7 @@ import { KnowledgeAdmin } from '@/components/admin/KnowledgeAdmin';
 import { ModelConfig } from '@/components/admin/ModelConfig';
 import { PluginAdmin } from '@/components/admin/PluginAdmin';
 import { SystemSettings } from '@/components/admin/SystemSettings';
+import { UserAdmin } from '@/components/admin/UserAdmin';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
@@ -133,6 +134,7 @@ export default function AdminPage() {
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)}>
           <TabsList className="w-full justify-start">
             <TabsTrigger value="stats">数据统计</TabsTrigger>
+            <TabsTrigger value="users">用户管理</TabsTrigger>
             <TabsTrigger value="knowledge">知识库管理</TabsTrigger>
             <TabsTrigger value="models">模型配置</TabsTrigger>
             <TabsTrigger value="plugins">插件包管理</TabsTrigger>
@@ -141,6 +143,10 @@ export default function AdminPage() {
 
           <TabsContent value="stats">
             <AdminStats />
+          </TabsContent>
+
+          <TabsContent value="users">
+            <UserAdmin />
           </TabsContent>
 
           <TabsContent value="knowledge">
