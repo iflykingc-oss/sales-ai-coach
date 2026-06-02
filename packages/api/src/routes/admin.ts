@@ -229,4 +229,39 @@ router.put('/models/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
+// Test model connection
+router.post('/models/test', requireAdmin, async (req, res, next) => {
+  try {
+    const { baseUrl, apiKey, modelId } = req.body;
+
+    if (!apiKey || !modelId) {
+      return res.status(400).json({ success: false, message: '缺少必要参数' });
+    }
+
+    // Try to make a simple API call to test the connection
+    const testUrl = (baseUrl || 'https://api.openai.com/v1') + '/chat/completions';
+    const response = await fetch(testUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 5,
+      }),
+    });
+
+    if (response.ok) {
+      res.json({ success: true, message: '连接成功' });
+    } else {
+      const error = await response.text();
+      res.json({ success: false, message: `连接失败: ${response.status}` });
+    }
+  } catch (err: any) {
+    res.json({ success: false, message: `连接错误: ${err.message}` });
+  }
+});
+
 export default router;

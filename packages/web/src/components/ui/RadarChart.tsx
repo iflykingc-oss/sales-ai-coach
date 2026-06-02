@@ -164,9 +164,11 @@ export function RadarChart({
         let anchor: 'start' | 'middle' | 'end' = 'middle';
         if (isRight) anchor = 'start';
         if (isLeft) anchor = 'end';
-        let dy = '0.35em';
-        if (isTop) dy = '-0.5em';
-        if (isBottom) dy = '1em';
+        let dyValue = 0.35;
+        if (isTop) dyValue = -0.5;
+        if (isBottom) dyValue = 1;
+        const dy = `${dyValue}em`;
+        const scoreDy = `${dyValue + (isTop ? -0.8 : isBottom ? 1.2 : 1)}em`;
         return (
           <g key={`label-${i}`}>
             <text
@@ -191,7 +193,7 @@ export function RadarChart({
               fill={p.score > 0 ? strokeColor : '#9ca3af'}
               fontSize="10"
               fontWeight="600"
-              dy={Number(dy) + (isTop ? -0.8 : isBottom ? 1.2 : 1)}
+              dy={scoreDy}
             >
               {p.score}
             </text>
