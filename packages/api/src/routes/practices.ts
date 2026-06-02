@@ -16,7 +16,7 @@ function autoSelectFramework(skillFocus?: string, scenario?: string): string {
     discovery: 'spin-selling',
     rapport: 'expectation-sync',
     negotiation: 'value-demo',
-    presentation: 'fab',
+    presentation: 'fab-principle',
   };
 
   if (skillFocus && skillFrameworkMap[skillFocus]) {

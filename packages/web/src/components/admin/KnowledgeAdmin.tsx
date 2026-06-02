@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Upload, Globe, Mic, FileSpreadsheet, Presentation, Edit3, Check, X, Eye } from 'lucide-react';
+import { FileText, Upload, Globe, Mic, FileSpreadsheet, Presentation, Edit3, Check, X, Eye, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/Dialog';
 import { useAdminStore, type KnowledgeItem } from '@/stores/adminStore';
+import { toast } from '@/hooks/useToast';
 
 const sourceIcons: Record<string, React.ReactNode> = {
   Word: <FileText className="h-4 w-4 text-blue-500" />,
@@ -45,7 +46,7 @@ const importMethods: { key: ImportMethod; label: string; icon: React.ReactNode; 
 ];
 
 export function KnowledgeAdmin() {
-  const { knowledgeItems, setKnowledgeItems, approveKnowledge, rejectKnowledge } = useAdminStore();
+  const { knowledgeItems, setKnowledgeItems, approveKnowledge, rejectKnowledge, updateKnowledge, deleteKnowledge } = useAdminStore();
 
   const pendingItems = knowledgeItems.filter((item) => item.status === 'pending');
   const approvedItems = knowledgeItems.filter((item) => item.status === 'approved');
@@ -57,6 +58,37 @@ export function KnowledgeAdmin() {
   const [manualTitle, setManualTitle] = useState('');
   const [manualContent, setManualContent] = useState('');
   const [manualCategory, setManualCategory] = useState('');
+
+  // Edit state
+  const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+
+  const handleEdit = (item: KnowledgeItem) => {
+    setEditingItem(item);
+    setEditTitle(item.title);
+    setEditContent(item.content || '');
+    setEditCategory(item.category);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingItem || !editTitle || !editContent) return;
+    updateKnowledge(editingItem.id, {
+      title: editTitle,
+      content: editContent,
+      category: editCategory || '其他',
+    });
+    setEditingItem(null);
+    toast.success('知识条目已更新');
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('确定要删除这条知识条目吗？此操作不可撤销。')) {
+      deleteKnowledge(id);
+      toast.success('知识条目已删除');
+    }
+  };
 
   const handleImport = () => {
     if (importMethod === 'web' && !importUrl) return;
@@ -148,7 +180,7 @@ export function KnowledgeAdmin() {
                     <X className="mr-1 h-3.5 w-3.5 text-red-600" />
                     拒绝
                   </Button>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
                     <Edit3 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -185,6 +217,12 @@ export function KnowledgeAdmin() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-400">{item.createdAt}</span>
                   <Badge variant={statusVariants[item.status]}>{statusLabels[item.status]}</Badge>
+                  <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                  </Button>
                 </div>
               </div>
             ))
@@ -263,6 +301,46 @@ export function KnowledgeAdmin() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => { setShowImportDialog(false); setImportMethod(null); }}>取消</Button>
             <Button onClick={handleImport}>确认导入</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingItem} onOpenChange={() => setEditingItem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑知识条目</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">标题</label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="知识条目标题"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">分类</label>
+              <Input
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                placeholder="如：销售技巧、产品知识"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">内容</label>
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="输入知识内容..."
+                rows={6}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingItem(null)}>取消</Button>
+            <Button onClick={handleSaveEdit}>保存修改</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

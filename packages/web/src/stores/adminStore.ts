@@ -30,6 +30,8 @@ export interface ModelConfig {
   maxTokens: number;
   repetitionPenalty: number;
   apiKey: string;
+  baseUrl?: string;
+  modelId?: string;
   usageQuota: number;
   usageCurrent: number;
   alertThreshold: number;
@@ -73,11 +75,15 @@ interface AdminState {
   setKnowledgeItems: (items: KnowledgeItem[]) => void;
   approveKnowledge: (id: string) => void;
   rejectKnowledge: (id: string) => void;
+  updateKnowledge: (id: string, updates: Partial<KnowledgeItem>) => void;
+  deleteKnowledge: (id: string) => void;
 
   // Model configuration
   models: ModelConfig[];
   setModels: (models: ModelConfig[]) => void;
   updateModel: (id: string, updates: Partial<ModelConfig>) => void;
+  addModel: (model: ModelConfig) => void;
+  deleteModel: (id: string) => void;
 
   // Plugin management
   adminPlugins: PluginAdmin[];
@@ -118,12 +124,30 @@ export const useAdminStore = create<AdminState>((set) => ({
         item.id === id ? { ...item, status: 'rejected' } : item,
       ),
     })),
+  updateKnowledge: (id, updates) =>
+    set((state) => ({
+      knowledgeItems: state.knowledgeItems.map((item) =>
+        item.id === id ? { ...item, ...updates } : item,
+      ),
+    })),
+  deleteKnowledge: (id) =>
+    set((state) => ({
+      knowledgeItems: state.knowledgeItems.filter((item) => item.id !== id),
+    })),
 
   models: [],
   setModels: (models) => set({ models }),
   updateModel: (id, updates) =>
     set((state) => ({
       models: state.models.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+    })),
+  addModel: (model) =>
+    set((state) => ({
+      models: [...state.models, model],
+    })),
+  deleteModel: (id) =>
+    set((state) => ({
+      models: state.models.filter((m) => m.id !== id),
     })),
 
   adminPlugins: [],
