@@ -1092,6 +1092,38 @@ routes['GET /api/admin/models'] = async (req, res) => {
   }
 };
 
+// Create new model
+routes['POST /api/admin/models'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const data = await parseBody(req);
+
+    if (!data.name || !data.modelId || !data.apiKey) {
+      return sendJson(res, 400, { success: false, error: '缺少必填字段' });
+    }
+
+    const newModel = {
+      display_name: data.name,
+      provider: data.provider || 'custom',
+      model_id: data.modelId,
+      base_url: data.baseUrl || '',
+      api_key: data.apiKey,
+      temperature: data.temperature || 0.7,
+      max_tokens: data.maxTokens || 4096,
+      is_active: data.status === 'active',
+      is_primary: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const result = await sbInsert('model_configs', newModel);
+    sendJson(res, 201, { success: true, data: result[0] || result });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: '创建模型失败' });
+  }
+};
+
 routes['PUT /api/admin/models/:id'] = async (req, res) => {
   try {
     const jwt = requireAdmin(req);
@@ -1108,6 +1140,19 @@ routes['PUT /api/admin/models/:id'] = async (req, res) => {
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 200, { success: true });
+  }
+};
+
+// Delete model
+routes['DELETE /api/admin/models/:id'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { last } = safeId(req);
+    await sbDelete('model_configs', { id: last });
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: '删除模型失败' });
   }
 };
 

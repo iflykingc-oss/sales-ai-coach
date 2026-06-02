@@ -64,45 +64,65 @@ export function ModelConfig() {
     }
   };
 
-  const handleAddModel = () => {
+  const handleAddModel = async () => {
     if (!newModel.name || !newModel.apiKey || !newModel.modelId) {
       toast.error('请填写必填字段');
       return;
     }
 
-    const model: ModelConfig = {
-      id: `model-${Date.now()}`,
-      name: newModel.name || '',
-      provider: newModel.provider || 'OpenAI',
-      baseUrl: newModel.baseUrl || '',
-      apiKey: newModel.apiKey || '',
-      modelId: newModel.modelId || '',
-      temperature: newModel.temperature || 0.7,
-      maxTokens: newModel.maxTokens || 4096,
-      repetitionPenalty: newModel.repetitionPenalty || 1.0,
-      usageQuota: newModel.usageQuota || 10000,
-      usageCurrent: 0,
-      alertThreshold: newModel.alertThreshold || 80,
-      status: 'active',
-    };
+    try {
+      // Save to database via API
+      const res = await api.post('/admin/models', {
+        name: newModel.name,
+        provider: newModel.provider || 'OpenAI',
+        baseUrl: newModel.baseUrl || '',
+        apiKey: newModel.apiKey,
+        modelId: newModel.modelId,
+        temperature: newModel.temperature || 0.7,
+        maxTokens: newModel.maxTokens || 4096,
+        status: 'active',
+      });
 
-    addModel(model);
-    setShowAddDialog(false);
-    setNewModel({
-      name: '',
-      provider: 'OpenAI',
-      baseUrl: '',
-      apiKey: '',
-      modelId: '',
-      temperature: 0.7,
-      maxTokens: 4096,
-      repetitionPenalty: 1.0,
-      usageQuota: 10000,
-      usageCurrent: 0,
-      alertThreshold: 80,
-      status: 'active',
-    });
-    toast.success('模型添加成功');
+      const savedModel = res.data;
+
+      // Add to frontend state with database ID
+      const model: ModelConfig = {
+        id: savedModel?.id || `model-${Date.now()}`,
+        name: newModel.name || '',
+        provider: newModel.provider || 'OpenAI',
+        baseUrl: newModel.baseUrl || '',
+        apiKey: newModel.apiKey || '',
+        modelId: newModel.modelId || '',
+        temperature: newModel.temperature || 0.7,
+        maxTokens: newModel.maxTokens || 4096,
+        repetitionPenalty: 1.0,
+        usageQuota: 10000,
+        usageCurrent: 0,
+        alertThreshold: 80,
+        status: 'active',
+      };
+
+      addModel(model);
+      setShowAddDialog(false);
+      setNewModel({
+        name: '',
+        provider: 'OpenAI',
+        baseUrl: '',
+        apiKey: '',
+        modelId: '',
+        temperature: 0.7,
+        maxTokens: 4096,
+        repetitionPenalty: 1.0,
+        usageQuota: 10000,
+        usageCurrent: 0,
+        alertThreshold: 80,
+        status: 'active',
+      });
+      toast.success('模型添加成功');
+    } catch (err) {
+      console.error('Failed to add model:', err);
+      toast.error('添加失败', { description: '请稍后重试' });
+    }
   };
 
   const handleTestModel = async (model: ModelConfig) => {
@@ -137,10 +157,16 @@ export function ModelConfig() {
     }
   };
 
-  const handleDeleteModel = (id: string) => {
-    if (confirm('确定要删除这个模型配置吗？')) {
+  const handleDeleteModel = async (id: string) => {
+    if (!confirm('确定要删除这个模型配置吗？')) return;
+
+    try {
+      await api.delete(`/admin/models/${id}`);
       deleteModel(id);
       toast.success('模型已删除');
+    } catch (err) {
+      console.error('Failed to delete model:', err);
+      toast.error('删除失败');
     }
   };
 
