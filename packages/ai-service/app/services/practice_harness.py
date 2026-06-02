@@ -699,7 +699,18 @@ class PracticeHarness:
             )
             hint_text = result["content"].strip().strip('"').strip("'")
         except Exception:
-            hint_text = "观察客户反应，调整沟通策略。"
+            # Use local engine for coaching hints
+            from app.models.local_engine import generate_coaching_hint, detect_conversation_stage, analyze_message
+            last_msg = self.ctx.messages[-1]['content'] if self.ctx.messages else ''
+            analysis = analyze_message(last_msg)
+            stage = detect_conversation_stage(self.round_count, analysis)
+            local_hint = generate_coaching_hint(
+                round_num=self.round_count,
+                emotion=self.emotion_history[-1] if self.emotion_history else '中立',
+                stage=stage,
+                scores=self.round_dimension_scores[-1] if self.round_dimension_scores else None,
+            )
+            hint_text = local_hint['hint']
 
         # Determine hint type
         hint_type = "general"
@@ -1140,21 +1151,37 @@ class PracticeHarness:
         if self.ctx.summary:
             messages[0]["content"] += f"\n\n--- 对话背景 ---\n{self.ctx.summary}"
 
-        result = await model_router.chat_with_fallback(
-            messages, temperature=0.8, max_tokens=256
-        )
+        # Try AI model first, fallback to local engine
+        try:
+            result = await model_router.chat_with_fallback(
+                messages, temperature=0.8, max_tokens=256
+            )
+            content = result["content"]
 
-        content = result["content"]
+            # Extract emotion marker
+            emotion_match = re.search(r"\[emotion[：:](.+?)\]", content)
+            emotion_val = emotion_match.group(1).strip() if emotion_match else "中立"
 
-        # Extract emotion marker
-        emotion_match = re.search(r"\[emotion[：:](.+?)\]", content)
-        emotion_val = emotion_match.group(1).strip() if emotion_match else "中立"
+            # Clean marker from response
+            clean_content = re.sub(r"\s*\[emotion[：:].*?\]", "", content).strip()
 
-        # Clean marker from response
-        clean_content = re.sub(r"\s*\[emotion[：:].*?\]", "", content).strip()
+            # Check for session end
+            is_complete = "[结束]" in content or "不想继续" in clean_content
 
-        # Check for session end
-        is_complete = "[结束]" in content or "不想继续" in clean_content
+        except Exception as e:
+            logger.warning(f"AI model failed, using local engine: {e}")
+            # Use local engine as fallback
+            from app.models.local_engine import generate_customer_response
+            local_result = generate_customer_response(
+                sales_message=sales_message,
+                persona=persona,
+                round_num=self.round_count,
+                emotion=emotion,
+                difficulty=self.difficulty,
+            )
+            clean_content = local_result['response']
+            emotion_val = local_result['emotion']
+            is_complete = local_result.get('is_complete', False)
 
         return {
             "response": clean_content,
@@ -1248,10 +1275,16 @@ class PracticeHarness:
                 "feedback": data.get("feedback", ""),
             }
         except (json.JSONDecodeError, ValueError):
-            return {
-                "scores": {dim: 0.5 for dim in EVALUATION_DIMENSIONS},
-                "feedback": "",
-            }
+            # Use local engine for evaluation
+            from app.models.local_engine import evaluate_round
+            local_result = evaluate_round(
+                sales_message=sales_message,
+                customer_response=customer_response,
+                emotion=emotion,
+                round_num=self.round_count,
+                persona=persona,
+            )
+            return local_result
 
     def _build_fallback_report(self) -> dict:
         """Build a basic report when LLM report generation fails."""
