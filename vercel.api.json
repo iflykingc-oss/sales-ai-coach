@@ -2,17 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "packages/api/src/index.ts",
+      "src": "packages/api/test.ts",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/(.*)",
-      "dest": "packages/api/src/index.ts"
+      "src": "/health",
+      "dest": "packages/api/test.ts"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
