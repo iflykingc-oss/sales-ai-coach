@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Clock, Target } from 'lucide-react';
+import { Send, Lightbulb, BookOpen, Brain, Clock, Target, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
+import { TalkTimeRatio } from './TalkTimeRatio';
+import { SessionHealthIndicator } from './SessionHealthIndicator';
+import { CustomScenarioBuilder, type CustomScenario } from './CustomScenarioBuilder';
 import {
   usePracticeStore,
   type ChatMessage,
   type EmotionType,
   type PracticeMode,
 } from '@/stores/practiceStore';
+import { useCustomScenarioStore } from '@/stores/customScenarioStore';
 import { cn } from '@/utils/cn';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
 import { getFrameworkById } from '@sales-ai-coach/shared/data';
@@ -38,7 +42,9 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   const [selectedScenario, setSelectedScenario] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
+  const [showCustomBuilder, setShowCustomBuilder] = useState(false);
   const { recentScenarioIds } = usePracticeStore();
+  const { scenarios: customScenarios, addScenario } = useCustomScenarioStore();
 
   const recentScenarios = useMemo(() => {
     return recentScenarioIds
@@ -54,13 +60,21 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
 
   const handleStart = () => {
     if (!selectedMode) return;
+    // Check if it's a custom scenario
+    const customScenario = customScenarios.find((s) => s.id === selectedScenario);
     const scenario = practiceScenarios.find((s) => s.id === selectedScenario);
+
     onStart(selectedMode, {
       scenarioId: selectedScenario || undefined,
-      industry: scenario?.industry,
+      industry: customScenario?.industry || scenario?.industry,
       skillFocus: selectedSkill || undefined,
-      difficulty: selectedDifficulty,
+      difficulty: customScenario?.difficulty || selectedDifficulty,
     });
+  };
+
+  const handleSaveCustomScenario = (scenario: CustomScenario) => {
+    addScenario(scenario);
+    setSelectedScenario(scenario.id);
   };
 
   const canStart =
@@ -98,6 +112,46 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
 
       {selectedMode === 'scenario' && (
         <div className="space-y-4">
+          {/* Custom scenario button */}
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-gray-900">选择场景</h4>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowCustomBuilder(true)}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              创建自定义场景
+            </Button>
+          </div>
+
+          {/* Custom scenarios */}
+          {customScenarios.length > 0 && (
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
+              <h4 className="mb-3 flex items-center gap-2 font-medium text-primary-900">
+                <Sparkles className="h-4 w-4 text-primary-500" />
+                自定义场景
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {customScenarios.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedScenario(s.id)}
+                    className={cn(
+                      'rounded-full border px-4 py-2 text-sm transition-colors',
+                      selectedScenario === s.id
+                        ? 'border-primary-500 bg-primary-100 text-primary-700'
+                        : 'border-primary-200 bg-white text-primary-600 hover:border-primary-300',
+                    )}
+                  >
+                    {s.name}
+                    <span className="ml-1 text-xs text-primary-400">({s.industry})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Recent scenarios */}
           {recentScenarios.length > 0 && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -152,6 +206,13 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
               ))}
             </div>
           </div>
+
+          {/* Custom Scenario Builder Dialog */}
+          <CustomScenarioBuilder
+            open={showCustomBuilder}
+            onOpenChange={setShowCustomBuilder}
+            onSave={handleSaveCustomScenario}
+          />
         </div>
       )}
 
@@ -515,6 +576,22 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
               {currentFramework.name}
             </span>
           )}
+          {/* Talk-time ratio */}
+          {session.userCharCount !== undefined && session.userCharCount > 0 && (
+            <TalkTimeRatio
+              userCharCount={session.userCharCount}
+              assistantCharCount={session.assistantCharCount || 0}
+            />
+          )}
+          {/* Session health indicator */}
+          <SessionHealthIndicator
+            emotion={session.customerEmotion}
+            round={session.round}
+            maxRounds={session.maxRounds}
+            roundScores={session.messages
+              .filter((m) => m.roundScore !== undefined)
+              .map((m) => m.roundScore as number)}
+          />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={handleSuggestion} disabled={isLoading || hintLoading}>

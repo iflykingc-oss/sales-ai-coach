@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp, FileSearch, Network, Gauge, Zap } from 'lucide-react';
+import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp, FileSearch, Network, Gauge, Zap, Download, Copy, Link } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { RadarChart } from '@/components/ui/RadarChart';
@@ -10,6 +10,7 @@ import { usePracticeStore } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { api } from '@/services/api';
 import { EVALUATION_DIMENSIONS } from '@sales-ai-coach/shared';
+import { toast } from '@/hooks/useToast';
 import EmotionTimeline from './EmotionTimeline';
 import RoundScores from './RoundScores';
 
@@ -122,6 +123,79 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   };
 
   const gradeInfo = getScoreGrade(totalScore);
+
+  // Export functions
+  const handleExport = useCallback(() => {
+    if (!summary || !session) return;
+
+    const reportText = `
+销冠AI教练 - 陪练报告
+========================
+
+场景: ${session.scenarioName || '自由对练'}
+轮数: ${session.round}
+买家类型: ${session.archetypeName || '未知'}
+难度: ${session.difficulty === 'easy' ? '初级' : session.difficulty === 'medium' ? '中级' : session.difficulty === 'hard' ? '高级' : '地狱'}
+
+综合评分: ${totalScore}分 (${gradeInfo.grade}级)
+
+维度评分:
+${radarDimensions.map(d => `- ${d.label}: ${d.score}分`).join('\n')}
+
+优势:
+${summary.strengths.map(s => `- ${s}`).join('\n')}
+
+待改进:
+${summary.improvements.map(i => `- ${i}`).join('\n')}
+
+建议:
+${summary.recommendations.map(r => `- ${r}`).join('\n')}
+
+生成时间: ${new Date().toLocaleString('zh-CN')}
+    `.trim();
+
+    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `陪练报告-${session.scenarioName || '自由对练'}-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('报告已导出');
+  }, [summary, session, totalScore, gradeInfo, radarDimensions]);
+
+  const handleCopyLink = useCallback(() => {
+    const link = `${window.location.origin}/app/practice/summary/${session?.id || 'latest'}`;
+    navigator.clipboard.writeText(link).then(() => {
+      toast.success('分享链接已复制到剪贴板');
+    }).catch(() => {
+      toast.error('复制失败，请手动复制');
+    });
+  }, [session]);
+
+  const handleCopyReport = useCallback(() => {
+    if (!summary) return;
+
+    const reportText = `
+【销冠AI教练 - 陪练报告】
+
+场景: ${session?.scenarioName || '自由对练'}
+综合评分: ${totalScore}分 (${gradeInfo.grade}级)
+
+最强维度: ${radarDimensions.sort((a, b) => b.score - a.score).slice(0, 3).map(d => d.label).join('、')}
+待改进: ${summary.improvements.slice(0, 2).join('、')}
+
+${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ ${s}`).join('\n') : ''}
+    `.trim();
+
+    navigator.clipboard.writeText(reportText).then(() => {
+      toast.success('报告摘要已复制到剪贴板');
+    }).catch(() => {
+      toast.error('复制失败');
+    });
+  }, [summary, session, totalScore, gradeInfo, radarDimensions]);
 
   // Extract per-round emotion and score data from session messages
   const roundData = useMemo(() => {
@@ -641,6 +715,27 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
           </Button>
         )}
       </div>
+
+      {/* Export & Share */}
+      {summary && (
+        <Card>
+          <h4 className="mb-3 text-sm font-medium text-gray-700">导出与分享</h4>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={handleExport}>
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              导出报告
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleCopyReport}>
+              <Copy className="mr-1.5 h-3.5 w-3.5" />
+              复制摘要
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleCopyLink}>
+              <Link className="mr-1.5 h-3.5 w-3.5" />
+              复制分享链接
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

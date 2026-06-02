@@ -37,6 +37,9 @@ export interface PracticeSession {
   state: CustomerState;
   startedAt: number;
   completedAt?: number;
+  // Talk-time tracking
+  userCharCount?: number;
+  assistantCharCount?: number;
 }
 
 export interface PracticeSummary {
@@ -85,10 +88,15 @@ export const usePracticeStore = create<PracticeState>()(
       addMessage: (message) =>
         set((state) => {
           if (!state.session) return state;
+          // Track character counts for talk-time ratio
+          const charCount = message.content.length;
+          const isUser = message.role === 'user';
           return {
             session: {
               ...state.session,
               messages: [...state.session.messages, message],
+              userCharCount: (state.session.userCharCount || 0) + (isUser ? charCount : 0),
+              assistantCharCount: (state.session.assistantCharCount || 0) + (!isUser ? charCount : 0),
             },
           };
         }),
