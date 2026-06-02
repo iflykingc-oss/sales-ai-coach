@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Clock, Target } from 'lucide-react';
+import { Send, Lightbulb, BookOpen, Brain, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
@@ -11,12 +11,6 @@ import {
 } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
-import {
-  salesLogicFrameworks,
-  getFrameworkById,
-  getConversationalFrameworks,
-  getAnalyticalFrameworks,
-} from '@sales-ai-coach/shared';
 
 const skillFocusOptions = [
   { id: 'objection', name: '异议处理' },
@@ -35,14 +29,13 @@ const difficultyOptions = [
 ];
 
 interface PracticeModeSelectorProps {
-  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string; difficulty?: string }) => void;
+  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; difficulty?: string }) => void;
 }
 
 export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   const [selectedMode, setSelectedMode] = useState<PracticeMode | null>(null);
   const [selectedScenario, setSelectedScenario] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('');
-  const [selectedFramework, setSelectedFramework] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
   const { recentScenarioIds } = usePracticeStore();
 
@@ -56,7 +49,6 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
     setSelectedMode(mode);
     setSelectedScenario('');
     setSelectedSkill('');
-    setSelectedFramework('');
   };
 
   const handleStart = () => {
@@ -66,7 +58,6 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
       scenarioId: selectedScenario || undefined,
       industry: scenario?.industry,
       skillFocus: selectedSkill || undefined,
-      logicFramework: selectedFramework || undefined,
       difficulty: selectedDifficulty,
     });
   };
@@ -185,95 +176,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
         </div>
       )}
 
-      {/* Logic Framework Selector */}
-      <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div className="flex items-center gap-2">
-          <Target className="h-4 w-4 text-gray-400" />
-          <h4 className="font-medium text-gray-900">销售逻辑框架（可选）</h4>
-        </div>
-        <p className="text-xs text-gray-500">选择销售逻辑框架，AI客户将识别你的话术逻辑并做出更真实的反应</p>
-
-        {(() => {
-          const conversational = getConversationalFrameworks();
-          const analytical = getAnalyticalFrameworks();
-
-          // AI recommendation based on selected skill focus
-          const recommendationMap: Record<string, string[]> = {
-            objection: ['objection-handling', 'spin-selling', 'pain-amplify'],
-            closing: ['closing-techniques', 'aida', 'value-demo'],
-            discovery: ['gap-analysis', 'spin-selling', 'bant', 'meddic'],
-            rapport: ['expectation-sync', 'value-demo'],
-            negotiation: ['fab', 'value-demo', 'pain-amplify'],
-            presentation: ['fab', 'aida', 'value-demo'],
-          };
-          const recommendedIds = selectedSkill ? (recommendationMap[selectedSkill] || []) : [];
-
-          const renderFrameworkCard = (fw: typeof salesLogicFrameworks[0], isRecommended: boolean) => (
-            <button
-              key={fw.id}
-              onClick={() => setSelectedFramework(selectedFramework === fw.id ? '' : fw.id)}
-              className={cn(
-                'rounded-lg border-2 p-3 text-left transition-all relative',
-                selectedFramework === fw.id
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300',
-              )}
-            >
-              {isRecommended && (
-                <span className="absolute -top-2 -right-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm">
-                  AI推荐
-                </span>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-gray-900">{fw.name}</span>
-                <span className="text-xs text-gray-400">{fw.stages.length}阶段</span>
-              </div>
-              <p className="mt-1 line-clamp-1 text-xs text-gray-500">{fw.description}</p>
-              <div className="mt-2 flex gap-1">
-                {fw.stages.map((stage) => (
-                  <span
-                    key={stage.id}
-                    className={cn(
-                      'rounded px-1.5 py-0.5 text-[10px]',
-                      selectedFramework === fw.id
-                        ? 'bg-primary-100 text-primary-700'
-                        : 'bg-gray-100 text-gray-500',
-                    )}
-                  >
-                    {stage.name}
-                  </span>
-                ))}
-              </div>
-            </button>
-          );
-
-          return (
-            <div className="space-y-4">
-              {/* Conversational frameworks */}
-              <div>
-                <h5 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-                  对话型框架 — 引导对话节奏
-                </h5>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {conversational.map((fw) => renderFrameworkCard(fw, recommendedIds.includes(fw.id)))}
-                </div>
-              </div>
-
-              {/* Analytical frameworks */}
-              <div>
-                <h5 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
-                  <span className="inline-block h-2 w-2 rounded-full bg-violet-400" />
-                  分析型框架 — 结构化分析场景
-                </h5>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {analytical.map((fw) => renderFrameworkCard(fw, recommendedIds.includes(fw.id)))}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
+      {/* Logic Framework - Hidden from user, auto-selected by backend based on scenario/skill */}
 
       {/* Difficulty Selector */}
       <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">

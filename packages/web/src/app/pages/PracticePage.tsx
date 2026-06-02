@@ -63,7 +63,7 @@ export default function PracticePage() {
     }
   }, [view]);
 
-  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; logicFramework?: string; difficulty?: string }) => {
+  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; difficulty?: string }) => {
     setIsStarting(true);
 
     // Save currently unlocked achievements for comparison after practice
@@ -87,7 +87,7 @@ export default function PracticePage() {
         maxRounds: 10,
         sessionId: navState?.sessionId || '',
         scriptId: navState?.scriptId || '',
-        logicFramework: options?.logicFramework || '',
+        skillFocus: options?.skillFocus || '',
         difficulty: options?.difficulty || 'medium',
       });
 
@@ -109,7 +109,6 @@ export default function PracticePage() {
         scenarioName: scenario?.name,
         industry: options?.industry || navState?.industry,
         skillFocus: options?.skillFocus,
-        logicFramework: options?.logicFramework,
         difficulty: options?.difficulty,
         archetypeName: initData.archetype_name,
         linkedSessionId: navState?.sessionId,

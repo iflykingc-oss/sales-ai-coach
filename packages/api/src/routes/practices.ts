@@ -7,10 +7,33 @@ import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const router = Router();
 
+// Auto-select logic framework based on skill focus or scenario
+function autoSelectFramework(skillFocus?: string, scenario?: string): string {
+  // Skill-based recommendations (internal logic, not exposed to frontend)
+  const skillFrameworkMap: Record<string, string> = {
+    objection: 'objection-handling',
+    closing: 'closing-techniques',
+    discovery: 'spin-selling',
+    rapport: 'expectation-sync',
+    negotiation: 'value-demo',
+    presentation: 'fab',
+  };
+
+  if (skillFocus && skillFrameworkMap[skillFocus]) {
+    return skillFrameworkMap[skillFocus];
+  }
+
+  // Default framework for general scenarios
+  return 'expectation-sync';
+}
+
 // Harness-powered endpoints (direct proxy to AI service)
 router.post('/init', authMiddleware, async (req, res, next) => {
   try {
-    const { scenario, industry, mode, maxRounds, sessionId, scriptId, logicFramework, difficulty } = req.body;
+    const { scenario, industry, mode, maxRounds, sessionId, scriptId, logicFramework, difficulty, skillFocus } = req.body;
+
+    // Auto-select framework if not provided (backend logic, hidden from user)
+    const selectedFramework = logicFramework || autoSelectFramework(skillFocus, scenario);
 
     // Fetch knowledge context for realistic practice
     let knowledgeContext = '';
@@ -35,7 +58,7 @@ router.post('/init', authMiddleware, async (req, res, next) => {
         sessionId: sessionId || '',
         scriptId: scriptId || '',
         userId: req.user!.id,
-        logicFramework: logicFramework || '',
+        logicFramework: selectedFramework,
         difficulty: difficulty || 'medium',
         knowledgeContext,
       },
