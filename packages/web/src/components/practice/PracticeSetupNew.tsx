@@ -1,0 +1,453 @@
+import { useState } from 'react';
+import {
+  Target, ChevronRight, CheckCircle,
+  FileUp, Sparkles, MessageSquare
+} from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { cn } from '@/utils/cn';
+import { DocumentUpload } from './DocumentUpload';
+
+// 专业场景库 - 按销售阶段分类
+const SCENARIO_CATEGORIES = [
+  {
+    id: 'prospecting',
+    title: '客户开发',
+    icon: '🎯',
+    scenarios: [
+      {
+        id: 'cold-call',
+        title: '冷启动电话',
+        desc: '首次联系潜在客户，建立初步印象',
+        difficulty: 'medium',
+        customerProfile: '忙碌的中层管理者，对陌生来电有防备心理',
+        greeting: '喂，您好，请问哪位？',
+        objectives: ['引起兴趣', '获得进一步沟通机会'],
+      },
+      {
+        id: 'referral-visit',
+        title: '转介绍拜访',
+        desc: '通过老客户介绍，拜访新客户',
+        difficulty: 'easy',
+        customerProfile: '对介绍人信任，愿意了解但保持谨慎',
+        greeting: '你好，老王跟我提过你，说说你们的情况吧。',
+        objectives: ['利用信任背书', '深入了解需求'],
+      },
+    ],
+  },
+  {
+    id: 'discovery',
+    title: '需求挖掘',
+    icon: '🔍',
+    scenarios: [
+      {
+        id: 'needs-analysis',
+        title: '需求诊断',
+        desc: '深入了解客户痛点和真实需求',
+        difficulty: 'medium',
+        customerProfile: '有明确问题但不确定解决方案的客户',
+        greeting: '我们确实有些问题想解决，你先介绍一下吧。',
+        objectives: ['挖掘核心痛点', '建立需求共识'],
+      },
+      {
+        id: 'consultative',
+        title: '顾问式销售',
+        desc: '以专家身份为客户提供建议',
+        difficulty: 'hard',
+        customerProfile: '理性决策者，需要数据和案例支撑',
+        greeting: '你们的方案和别家有什么不同？我需要看到具体的数据。',
+        objectives: ['展示专业性', '差异化定位'],
+      },
+    ],
+  },
+  {
+    id: 'presentation',
+    title: '方案展示',
+    icon: '📊',
+    scenarios: [
+      {
+        id: 'product-demo',
+        title: '产品演示',
+        desc: '向客户展示产品功能和价值',
+        difficulty: 'medium',
+        customerProfile: '有兴趣但担心实施风险的技术负责人',
+        greeting: '我对你们的产品挺感兴趣，演示一下吧。',
+        objectives: ['展示核心价值', '处理技术疑虑'],
+      },
+      {
+        id: 'solution-proposal',
+        title: '方案提报',
+        desc: '提交完整的解决方案',
+        difficulty: 'hard',
+        customerProfile: '多方对比的决策者，关注ROI',
+        greeting: '方案我看了，但我还需要对比一下其他家的。',
+        objectives: ['突出差异化', '量化价值'],
+      },
+    ],
+  },
+  {
+    id: 'negotiation',
+    title: '商务谈判',
+    icon: '💰',
+    scenarios: [
+      {
+        id: 'price-negotiation',
+        title: '价格谈判',
+        desc: '客户对价格有异议，需要价值塑造',
+        difficulty: 'hard',
+        customerProfile: '价格敏感型客户，善于比价',
+        greeting: '你们的报价太高了，能不能便宜点？',
+        objectives: ['价值塑造', '灵活报价策略'],
+      },
+      {
+        id: 'terms-negotiation',
+        title: '条款协商',
+        desc: '合同条款、付款方式等细节谈判',
+        difficulty: 'hard',
+        customerProfile: '法务参与，对条款要求严格',
+        greeting: '合同条款我们需要再讨论一下，有几个点不能接受。',
+        objectives: ['平衡双方利益', '促成签约'],
+      },
+    ],
+  },
+  {
+    id: 'closing',
+    title: '促单成交',
+    icon: '🤝',
+    scenarios: [
+      {
+        id: 'urgency-close',
+        title: '紧迫感促单',
+        desc: '创造紧迫感，推动客户快速决策',
+        difficulty: 'hard',
+        customerProfile: '犹豫不决，需要临门一脚',
+        hesitation: '我再考虑考虑吧。',
+        greeting: '方案不错，但我还需要再考虑一下。',
+        objectives: ['制造紧迫感', '消除决策障碍'],
+      },
+      {
+        id: 'final-objection',
+        title: '最后异议',
+        desc: '处理成交前的最后顾虑',
+        difficulty: 'expert',
+        customerProfile: '即将签约但有最后担忧',
+        greeting: '其实我还有一个顾虑...',
+        objectives: ['化解最后异议', '锁定成交'],
+      },
+    ],
+  },
+  {
+    id: 'retention',
+    title: '客户维护',
+    icon: '📞',
+    scenarios: [
+      {
+        id: 'follow-up',
+        title: '跟进回访',
+        desc: '维护关系，挖掘新需求',
+        difficulty: 'easy',
+        customerProfile: '老客户，有合作基础',
+        greeting: '你好，上次的事情我们内部讨论了一下。',
+        objectives: ['深化关系', '挖掘新机会'],
+      },
+      {
+        id: 'complaint-handling',
+        title: '投诉处理',
+        desc: '处理客户投诉，挽回客户关系',
+        difficulty: 'hard',
+        customerProfile: '不满的客户，情绪激动',
+        greeting: '你们这个产品太让人失望了！我要投诉！',
+        objectives: ['平息情绪', '解决问题', '挽回关系'],
+      },
+    ],
+  },
+];
+
+const DIFFICULTY_CONFIG = {
+  easy: { label: '初级', desc: '友善客户，少异议', color: 'bg-green-100 text-green-700 border-green-200', icon: '🟢' },
+  medium: { label: '中级', desc: '理性客户，适度异议', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: '🟡' },
+  hard: { label: '高级', desc: '难缠客户，强烈异议', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: '🟠' },
+  expert: { label: '专家', desc: '组合型客户，多重异议', color: 'bg-red-100 text-red-700 border-red-200', icon: '🔴' },
+};
+
+interface PracticeSetupNewProps {
+  onStart: (config: {
+    scenarioId: string;
+    scenarioTitle: string;
+    scenarioDesc: string;
+    difficulty: string;
+    greeting: string;
+    customerProfile: string;
+    objectives: string[];
+    documentContext?: string;
+  }) => void;
+  isLoading?: boolean;
+}
+
+export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) {
+  const [step, setStep] = useState<'category' | 'scenario' | 'config'>('category');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<any>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
+  const [showDocUpload, setShowDocUpload] = useState(false);
+  const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
+
+  const handleCategorySelect = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setStep('scenario');
+  };
+
+  const handleScenarioSelect = (scenario: any) => {
+    setSelectedScenario(scenario);
+    setSelectedDifficulty(scenario.difficulty || 'medium');
+    setStep('config');
+  };
+
+  const handleStart = () => {
+    if (!selectedScenario) return;
+
+    onStart({
+      scenarioId: selectedScenario.id,
+      scenarioTitle: selectedScenario.title,
+      scenarioDesc: selectedScenario.desc,
+      difficulty: selectedDifficulty,
+      greeting: selectedScenario.greeting,
+      customerProfile: selectedScenario.customerProfile,
+      objectives: selectedScenario.objectives || [],
+      documentContext: uploadedDocs.length > 0
+        ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
+        : undefined,
+    });
+  };
+
+  const category = SCENARIO_CATEGORIES.find(c => c.id === selectedCategory);
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      {/* 进度指示器 */}
+      <div className="mb-8 flex items-center justify-center gap-4">
+        {[
+          { id: 'category', label: '选择类型', icon: Target },
+          { id: 'scenario', label: '选择场景', icon: MessageSquare },
+          { id: 'config', label: '确认配置', icon: CheckCircle },
+        ].map((s, idx) => {
+          const Icon = s.icon;
+          const isActive = s.id === step;
+          const isCompleted =
+            (s.id === 'category' && selectedCategory) ||
+            (s.id === 'scenario' && selectedScenario);
+
+          return (
+            <div key={s.id} className="flex items-center gap-2">
+              {idx > 0 && (
+                <div className={cn('h-px w-8', isCompleted ? 'bg-primary-500' : 'bg-gray-200')} />
+              )}
+              <div className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium',
+                isActive ? 'bg-primary-500 text-white' :
+                isCompleted ? 'bg-primary-100 text-primary-700' :
+                'bg-gray-100 text-gray-400'
+              )}>
+                {isCompleted ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+              </div>
+              <span className={cn(
+                'text-sm font-medium',
+                isActive ? 'text-primary-700' : isCompleted ? 'text-gray-700' : 'text-gray-400'
+              )}>
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Step 1: 选择类型 */}
+      {step === 'category' && (
+        <div>
+          <h2 className="mb-2 text-center text-xl font-bold text-gray-900">选择练习类型</h2>
+          <p className="mb-6 text-center text-sm text-gray-500">根据你想提升的能力选择对应的练习类型</p>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {SCENARIO_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => handleCategorySelect(cat.id)}
+                className="group rounded-xl border-2 border-gray-200 bg-white p-5 text-left transition-all hover:border-primary-300 hover:shadow-md"
+              >
+                <span className="text-3xl">{cat.icon}</span>
+                <h3 className="mt-3 font-semibold text-gray-900 group-hover:text-primary-700">
+                  {cat.title}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500">{cat.scenarios.length} 个场景</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: 选择场景 */}
+      {step === 'scenario' && category && (
+        <div>
+          <button
+            onClick={() => setStep('category')}
+            className="mb-4 text-sm text-gray-500 hover:text-gray-700"
+          >
+            ← 返回选择类型
+          </button>
+
+          <h2 className="mb-2 text-xl font-bold text-gray-900">
+            {category.icon} {category.title}
+          </h2>
+          <p className="mb-6 text-sm text-gray-500">选择具体的练习场景</p>
+
+          <div className="space-y-3">
+            {category.scenarios.map((scenario) => {
+              const diffConfig = DIFFICULTY_CONFIG[scenario.difficulty as keyof typeof DIFFICULTY_CONFIG];
+              return (
+                <button
+                  key={scenario.id}
+                  onClick={() => handleScenarioSelect(scenario)}
+                  className="group w-full rounded-xl border-2 border-gray-200 bg-white p-5 text-left transition-all hover:border-primary-300 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 group-hover:text-primary-700">
+                        {scenario.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-600">{scenario.desc}</p>
+                    </div>
+                    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', diffConfig.color)}>
+                      {diffConfig.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {scenario.objectives?.map((obj, idx) => (
+                      <span key={idx} className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                        {obj}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+                    <MessageSquare className="h-3 w-3" />
+                    <span>开场: "{scenario.greeting}"</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: 配置确认 */}
+      {step === 'config' && selectedScenario && (
+        <div>
+          <button
+            onClick={() => setStep('scenario')}
+            className="mb-4 text-sm text-gray-500 hover:text-gray-700"
+          >
+            ← 返回选择场景
+          </button>
+
+          <h2 className="mb-6 text-xl font-bold text-gray-900">确认练习配置</h2>
+
+          {/* 场景信息 */}
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
+            <h3 className="font-semibold text-gray-900">{selectedScenario.title}</h3>
+            <p className="mt-1 text-sm text-gray-600">{selectedScenario.desc}</p>
+
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500">客户画像</p>
+                <p className="mt-1 text-sm text-gray-700">{selectedScenario.customerProfile}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">练习目标</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {selectedScenario.objectives?.map((obj: string, idx: number) => (
+                    <span key={idx} className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700">
+                      {obj}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">客户开场白</p>
+              <p className="mt-1 text-sm italic text-gray-700">"{selectedScenario.greeting}"</p>
+            </div>
+          </div>
+
+          {/* 难度选择 */}
+          <div className="mb-6">
+            <h3 className="mb-3 text-sm font-medium text-gray-700">调整难度</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.entries(DIFFICULTY_CONFIG).map(([key, config]) => (
+                <button
+                  key={key}
+                  onClick={() => setSelectedDifficulty(key)}
+                  className={cn(
+                    'rounded-lg border-2 p-3 text-center transition-all',
+                    selectedDifficulty === key
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  )}
+                >
+                  <div>{config.icon}</div>
+                  <div className="mt-1 text-xs font-medium">{config.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 上传文档 */}
+          <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <button
+              onClick={() => setShowDocUpload(!showDocUpload)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <div className="flex items-center gap-2">
+                <FileUp className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">上传相关资料（可选）</span>
+              </div>
+              <ChevronRight className={cn('h-4 w-4 text-gray-400 transition-transform', showDocUpload && 'rotate-90')} />
+            </button>
+            {showDocUpload && (
+              <div className="mt-4">
+                <p className="mb-3 text-xs text-gray-500">
+                  上传产品手册、客户资料等，AI会基于这些信息进行更精准的陪练
+                </p>
+                <DocumentUpload
+                  onDocumentsReady={setUploadedDocs}
+                  maxFiles={3}
+                  maxSizeMB={5}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 开始按钮 */}
+          <Button
+            size="lg"
+            onClick={handleStart}
+            disabled={isLoading}
+            className="w-full"
+          >
+            {isLoading ? (
+              <>
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                AI正在准备客户画像...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                开始陪练
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
