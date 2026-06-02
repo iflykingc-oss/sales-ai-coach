@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Brain, FileText, TrendingUp, ArrowRight, Zap, GitBranch, Crown } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
 import { cn } from '@/utils/cn';
+import { toast } from '@/hooks/useToast';
 
 interface PipelineSession {
   id: string;
@@ -49,15 +50,17 @@ export default function DashboardPage() {
   useEffect(() => {
     api.get('/dashboard')
       .then((res: any) => setData(res.data))
-      .catch(() => {})
+      .catch(() => {
+        toast.error('加载仪表盘失败', { description: '请刷新页面重试' });
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const quickActions = [
+  const quickActions = useMemo(() => [
     { icon: MessageSquare, label: '生成话术', desc: '输入场景生成专业话术', path: '/app', color: 'bg-blue-500' },
     { icon: Brain, label: 'AI陪练', desc: '模拟客户对话练习', path: '/app/practice', color: 'bg-purple-500' },
     { icon: FileText, label: '对话复盘', desc: '上传对话获取分析报告', path: '/app/review', color: 'bg-emerald-500' },
-  ];
+  ], []);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -236,24 +239,56 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* Pro tip */}
-      <Card className="border-amber-200 bg-amber-50">
-        <div className="flex items-start gap-3">
-          <Zap className="mt-0.5 h-5 w-5 text-amber-500" />
-          <div>
-            <p className="text-sm font-medium text-amber-800">今日小技巧</p>
-            <p className="mt-1 text-sm text-amber-700">
-              话术生成时，上传知识库中的产品资料，AI会基于真实信息生成更精准的话术。
-              陪练时选择「销售逻辑框架」，客户会识别你的销售逻辑并做出更真实的反应。
-            </p>
+      {/* AI Insights */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* AI推荐练习 */}
+        <Card className="border-blue-200 bg-blue-50">
+          <div className="flex items-start gap-3">
+            <Brain className="mt-0.5 h-5 w-5 text-blue-500" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">AI推荐练习</p>
+              <p className="mt-1 text-sm text-blue-700">
+                {data?.recentPractices?.length
+                  ? (() => {
+                      const lastScore = data.recentPractices[0]?.score || 0;
+                      if (lastScore < 60) return '上次练习得分较低，建议重新练习同一场景，注意客户情绪变化。';
+                      if (lastScore < 80) return '表现不错！试试更高难度的挑战，提升异议处理能力。';
+                      return '优秀！可以尝试新的行业场景，拓展销售技能广度。';
+                    })()
+                  : '开始你的第一次AI陪练，系统会根据表现推荐后续练习。'
+                }
+              </p>
+              <button
+                onClick={() => navigate('/app/practice')}
+                className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800"
+              >
+                开始练习 →
+              </button>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+
+        {/* 智能提示 */}
+        <Card className="border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <Zap className="mt-0.5 h-5 w-5 text-amber-500" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">智能提示</p>
+              <p className="mt-1 text-sm text-amber-700">
+                {data?.stats?.totalPractices
+                  ? `你已完成${data.stats.totalPractices}次陪练。话术生成时上传产品资料，AI会生成更精准的话术。`
+                  : '上传知识库中的产品资料，AI会基于真实信息生成更精准的话术。'
+                }
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }: {
+const StatCard = memo(function StatCard({ icon: Icon, label, value, sub, color }: {
   icon: React.ElementType; label: string; value: number; sub: string; color: string;
 }) {
   return (
@@ -268,7 +303,7 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
       </div>
     </Card>
   );
-}
+});
 
 function getGreeting() {
   const h = new Date().getHours();
