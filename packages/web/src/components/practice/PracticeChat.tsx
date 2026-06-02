@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Clock } from 'lucide-react';
+import { Send, Lightbulb, BookOpen, Brain, Clock, Target } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
@@ -11,6 +11,7 @@ import {
 } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
+import { getFrameworkById } from '@sales-ai-coach/shared/data';
 
 const skillFocusOptions = [
   { id: 'objection', name: '异议处理' },
