@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/Dialog';
 import { useAdminStore, type KnowledgeItem } from '@/stores/adminStore';
 import { toast } from '@/hooks/useToast';
@@ -235,6 +235,7 @@ export function KnowledgeAdmin() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>导入知识库</DialogTitle>
+            <DialogDescription>选择导入方式，将知识内容添加到知识库</DialogDescription>
           </DialogHeader>
 
           {importMethod === 'web' && (
@@ -310,6 +311,7 @@ export function KnowledgeAdmin() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>编辑知识条目</DialogTitle>
+            <DialogDescription>修改知识条目的标题、分类和内容</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

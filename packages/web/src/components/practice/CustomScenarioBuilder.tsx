@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/Dialog';
 import { cn } from '@/utils/cn';
 import { toast } from '@/hooks/useToast';
@@ -91,6 +91,7 @@ export function CustomScenarioBuilder({ open, onOpenChange, onSave }: CustomScen
             <Sparkles className="h-5 w-5 text-primary-500" />
             创建自定义练习场景
           </DialogTitle>
+          <DialogDescription>定义行业、客户画像和异议类型，创建个性化练习场景</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">

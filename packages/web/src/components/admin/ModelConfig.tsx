@@ -10,7 +10,7 @@ import { useAdminStore, type ModelConfig } from '@/stores/adminStore';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/Dialog';
 
 const statusLabels: Record<string, string> = {
@@ -370,6 +370,7 @@ export function ModelConfig() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>添加自定义模型</DialogTitle>
+            <DialogDescription>配置自定义AI模型的连接信息</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
