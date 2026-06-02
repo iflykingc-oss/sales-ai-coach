@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>销冠AI教练</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 360px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f9fafb;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.inactive {
+      background: #6b7280;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .section {
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric {
+      background: white;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .metric-value.good { color: #10b981; }
+    .metric-value.warning { color: #f59e0b; }
+    .metric-value.bad { color: #ef4444; }
+
+    .tips {
+      background: white;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+    }
+
+    .tip-item {
+      display: flex;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .tip-item:last-child {
+      border-bottom: none;
+    }
+
+    .tip-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .tip-text {
+      font-size: 13px;
+      color: #374151;
+      line-height: 1.4;
+    }
+
+    .tip-time {
+      font-size: 10px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #374151;
+      border: 1px solid #e5e7eb;
+    }
+
+    .btn-secondary:hover {
+      background: #f9fafb;
+    }
+
+    .footer {
+      padding: 16px 20px;
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎯 销冠AI教练</h1>
+    <p>实时销售通话辅助</p>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">检测中...</span>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="section">
+      <div class="section-title">实时指标</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">发言比例</div>
+          <div class="metric-value" id="talkRatio">-</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">异议次数</div>
+          <div class="metric-value" id="objectionCount">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">通话时长</div>
+          <div class="metric-value" id="callDuration">0:00</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">会话评分</div>
+          <div class="metric-value" id="sessionScore">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">最近提示</div>
+      <div class="tips" id="tipsList">
+        <div class="tip-item">
+          <span class="tip-icon">💡</span>
+          <div>
+            <div class="tip-text">准备就绪，开始通话后将提供实时建议</div>
+            <div class="tip-time">刚刚</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="actions">
+        <button class="btn btn-primary" id="openDashboard">
+          📊 打开数据面板
+        </button>
+        <button class="btn btn-secondary" id="openPractice">
+          🎯 开始陪练
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="https://www.aisalecoach.work" target="_blank">www.aisalecoach.work</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

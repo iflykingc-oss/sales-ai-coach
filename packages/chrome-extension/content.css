@@ -1,0 +1,246 @@
+/* 销冠AI教练 - Content Script Styles */
+
+#sales-coach-assistant {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 300px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2);
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+#sales-coach-assistant:hover {
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.sc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.sc-logo {
+  font-size: 20px;
+}
+
+.sc-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sc-toggle {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.sc-toggle:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.sc-content {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  transition: all 0.3s ease;
+}
+
+.sc-content.collapsed {
+  max-height: 0;
+  padding: 0 16px;
+  overflow: hidden;
+}
+
+.sc-tip {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  margin-bottom: 12px;
+  animation: slideIn 0.3s ease;
+}
+
+.sc-tip-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.sc-tip-success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.sc-tip-objection {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.sc-tip-closing {
+  background: #fdf4ff;
+  border-color: #e9d5ff;
+}
+
+.sc-tip-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.sc-tip-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+}
+
+.sc-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sc-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 10px;
+}
+
+.sc-metric-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.sc-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.sc-metric-value.sc-good {
+  color: #10b981;
+}
+
+.sc-metric-value.sc-warning {
+  color: #f59e0b;
+}
+
+.sc-metric-value.sc-info {
+  color: #3b82f6;
+}
+
+.sc-persona {
+  padding: 12px;
+  background: #faf5ff;
+  border-radius: 10px;
+  border: 1px solid #e9d5ff;
+}
+
+.sc-persona-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+  margin-bottom: 8px;
+}
+
+.sc-persona-info {
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.sc-persona-info strong {
+  color: #111827;
+}
+
+/* 提示浮窗 */
+#sc-tip-overlay {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999998;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+#sc-tip-overlay.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.sc-tip-overlay-content {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(102, 126, 234, 0.4);
+  max-width: 350px;
+}
+
+.sc-tip-overlay-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.sc-tip-overlay-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* 动画 */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 滚动条 */
+.sc-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sc-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sc-content::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.sc-content::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
