@@ -73,16 +73,20 @@ export default function PracticePage() {
       const scenario = options?.scenarioId ? practiceScenarios.find((s) => s.id === options.scenarioId) : null;
 
       // Build scenario description for the AI
-      const scenarioDesc = scenario
-        ? `${scenario.name}: ${scenario.description}`
-        : options?.skillFocus
-          ? `专项练习: ${SKILL_NAMES[options.skillFocus] || options.skillFocus}`
-          : '自由对话对练';
+      let scenarioDesc = '';
+      if (scenario) {
+        scenarioDesc = `${scenario.name}: ${scenario.description}`;
+      } else if (options?.skillFocus) {
+        scenarioDesc = `专项练习: ${SKILL_NAMES[options.skillFocus] || options.skillFocus}`;
+      } else {
+        // Freeform mode - use a default scenario
+        scenarioDesc = '客户初次拜访：你正在拜访一位潜在客户，对方对你所在公司的产品/服务有一定兴趣，但还没有明确需求。你需要通过对话了解客户的真实需求，建立信任关系。';
+      }
 
       // Initialize session with the harness-powered API
       const response = await api.post('/practices/init', {
         scenario: scenarioDesc,
-        industry: options?.industry || navState?.industry || '',
+        industry: options?.industry || navState?.industry || '通用',
         mode: mode === 'freeform' ? 'freestyle' : 'scenario',
         maxRounds: 10,
         sessionId: navState?.sessionId || '',

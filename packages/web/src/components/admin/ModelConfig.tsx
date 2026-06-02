@@ -346,6 +346,36 @@ export function ModelConfig() {
                       />
                     </div>
 
+                    {/* Enable/Disable Toggle */}
+                    <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">模型状态</p>
+                        <p className="text-xs text-gray-500">
+                          {model.status === 'active' ? '模型已启用，可用于生成' : '模型已禁用，不会被使用'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newStatus = model.status === 'active' ? 'inactive' : 'active';
+                          updateModel(model.id, { status: newStatus });
+                          toast.success(newStatus === 'active' ? '模型已启用' : '模型已禁用');
+                        }}
+                        className={cn(
+                          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                          model.status === 'active' ? 'bg-green-500' : 'bg-gray-300'
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                            model.status === 'active' ? 'translate-x-6' : 'translate-x-1'
+                          )}
+                        />
+                      </button>
+                    </div>
+
                     {/* Save Button */}
                     <div className="mt-4 flex justify-end">
                       <Button

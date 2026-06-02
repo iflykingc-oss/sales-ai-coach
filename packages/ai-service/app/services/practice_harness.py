@@ -302,12 +302,47 @@ class PracticeHarness:
 
         greeting_id = self.fl.add_item(description="生成客户开场白", dependencies=[self.fl.items[0].id])
 
-        # Generate initial greeting from customer
-        greeting = await self._generate_customer_response(
-            sales_message="(开场)",
-            persona=persona,
-            emotion=persona.get("initial_emotion", "中立"),
-        )
+        # Generate contextual greeting based on scenario
+        greeting_prompt = f"""你正在扮演一个客户，销售刚刚联系你。
+
+客户画像:
+- 姓名: {persona.get('name', '王总')}
+- 职位: {persona.get('role', '采购负责人')}
+- 公司: {persona.get('company', '某公司')}
+- 性格: {persona.get('personality', '理性务实')}
+
+场景: {scenario}
+
+请生成一个自然的开场白，作为客户对销售联系的回应。
+要求:
+1. 简短自然，20-50字
+2. 符合客户性格和场景
+3. 可以是接到电话/收到消息的自然反应
+4. 不要主动提需求或异议，保持中立友好
+5. 在末尾用 [emotion:中立] 标记
+
+示例:
+- "喂，您好，哪位？"
+- "你好，请问有什么事吗？"
+- "哦，您好，您是？"
+
+只输出开场白内容，不要输出其他。"""
+
+        messages = [{"role": "user", "content": greeting_prompt}]
+        result = await model_router.chat_with_fallback(messages, temperature=0.8, max_tokens=100)
+
+        greeting_content = result["content"].strip()
+        # Extract emotion
+        import re
+        emotion_match = re.search(r'\[emotion[：:](.+?)\]', greeting_content)
+        greeting_emotion = emotion_match.group(1).strip() if emotion_match else "中立"
+        greeting_content = re.sub(r'\s*\[emotion[：:].*?\]', '', greeting_content).strip()
+
+        # Fallback if greeting is too short or empty
+        if len(greeting_content) < 5:
+            greeting_content = "您好，请问有什么可以帮您的？"
+
+        greeting = {"response": greeting_content, "emotion": greeting_emotion}
 
         self.fl.complete_item(greeting_id, result=greeting["response"])
 
@@ -583,23 +618,23 @@ class PracticeHarness:
 - 情绪波动: {self.difficulty_config['emotion_volatility']*100:.0f}%（越高情绪变化越剧烈）
 {framework_context}
 
-要求:
+核心要求:
 1. 保持角色一致性，像真实客户一样回复
-2. 回复简短自然，50-150字，像微信聊天
+2. 回复简短自然，30-100字，像微信聊天
 3. 根据销售的话和你的情绪做出真实反应
-4. 识别销售使用的逻辑框架，做出符合该阶段的情绪反应
-5. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/共情/感兴趣/犹豫/抗拒/敷衍/满意/生气
-6. 如果销售表现很差，情绪会升级
-7. 如果销售表现很好，情绪会改善
-8. 情绪变化应遵循: 抗拒→犹豫→兴趣→共情 的正常路径
-9. 体现你的异议风格「{persona.get('objection_style', '一般')}」，按此风格提出异议
-10. 根据异议频率决定是否提出异议，不要每轮都提
-11. 说服阻力越高，销售需要越充分的理由才能打动你
+4. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/感兴趣/犹豫/抗拒/敷衍/满意/生气
+5. 体现你的异议风格「{persona.get('objection_style', '一般')}」
 
-重要 - 对话阶段规则:
-- 如果销售只是打招呼（如"你好"、"您好"、"嗨"等），你应该礼貌回应，询问对方有什么事或介绍自己，不要主动提出异议或价格问题
-- 只有当销售开始介绍产品/服务、提出方案或试图推进销售流程时，才根据你的角色特点提出异议
-- 第一轮对话应该是自然的寒暄和破冰，不要过早进入谈判阶段"""
+对话阶段规则（必须严格遵守）:
+- 当销售打招呼（"你好"、"您好"、"嗨"等），你必须礼貌回应，简单问候或询问来意，绝对不能提出异议、价格问题或拒绝
+- 当销售还在了解阶段（问问题、寒暄），保持友好配合，不要主动提异议
+- 只有当销售明确介绍产品/报价/催促成交时，才根据角色提出异议
+- 对话前期（1-3轮）保持友好，中期（4-6轮）可以适度提出疑虑，后期（7轮+）才进入深度异议
+
+示例:
+- 销售说"你好" → 你回复"你好，请问有什么事吗？"或"您好，您是？"
+- 销售说"我是XX公司的" → 你回复"哦，XX公司啊，有什么可以帮您的？"
+- 销售开始介绍产品 → 此时可以根据角色提出疑问或异议"""
 
     async def generate_coaching_hint(self) -> dict:
         """Generate a contextual coaching hint based on current conversation state."""
