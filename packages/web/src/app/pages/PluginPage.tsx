@@ -7,15 +7,12 @@ import { usePluginStore } from '@/stores/pluginStore';
 import { cn } from '@/utils/cn';
 
 export default function PluginPage() {
-  const { loading, setLoading, selectedPlugin, setSelectedPlugin } = usePluginStore();
+  const { loading, selectedPlugin, setSelectedPlugin } = usePluginStore();
   const [activeView, setActiveView] = useState<'marketplace' | 'installed'>('marketplace');
 
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 500);
     usePluginStore.getState().fetchPlugins();
-    return () => clearTimeout(timer);
-  }, [setLoading]);
+  }, []);
 
   return (
     <div className="space-y-6">

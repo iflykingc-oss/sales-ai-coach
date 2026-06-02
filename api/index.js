@@ -1076,7 +1076,16 @@ routes['GET /api/admin/models'] = async (req, res) => {
       maxTokens: m.max_tokens, repetitionPenalty: 1.1, apiKey: m.api_key ? '****' : '',
       usageQuota: 10000, usageCurrent: 0, alertThreshold: 80
     }));
-    sendJson(res, 200, { data: mapped });
+    // Return default models if table is empty
+    if (mapped.length === 0) {
+      sendJson(res, 200, { data: [
+        { id: 'default-qwen', name: 'Qwen2.5-72B', provider: 'qwen', status: 'inactive', temperature: 0.7, maxTokens: 2048, repetitionPenalty: 1.1, apiKey: '', usageQuota: 10000, usageCurrent: 0, alertThreshold: 80 },
+        { id: 'default-gpt4', name: 'GPT-4o', provider: 'openai', status: 'inactive', temperature: 0.7, maxTokens: 4096, repetitionPenalty: 1.1, apiKey: '', usageQuota: 10000, usageCurrent: 0, alertThreshold: 80 },
+        { id: 'default-claude', name: 'Claude Sonnet 4', provider: 'anthropic', status: 'inactive', temperature: 0.7, maxTokens: 4096, repetitionPenalty: 1.1, apiKey: '', usageQuota: 10000, usageCurrent: 0, alertThreshold: 80 },
+      ]});
+    } else {
+      sendJson(res, 200, { data: mapped });
+    }
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 200, { data: [] });

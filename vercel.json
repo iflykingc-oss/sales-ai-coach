@@ -5,6 +5,7 @@
   "outputDirectory": "packages/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/health", "destination": "/api" }
+    { "source": "/health", "destination": "/api" },
+    { "source": "/((?!api/|health|assets/|favicon|robots|manifest).*)", "destination": "/index.html" }
   ]
 }
