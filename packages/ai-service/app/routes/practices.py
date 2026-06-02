@@ -58,6 +58,42 @@ class PracticeResponse(BaseModel):
     data: dict
 
 
+class AnalyzeDocumentRequest(BaseModel):
+    fileName: str
+    content: str
+
+
+@router.post("/analyze-document", response_model=PracticeResponse)
+async def analyze_document(req: AnalyzeDocumentRequest):
+    """Analyze uploaded document and extract key information for practice context."""
+    from app.models.router import model_router
+
+    prompt = f"""分析以下企业文档，提取关键信息用于销售陪练：
+
+文档名称: {req.fileName}
+文档内容:
+{req.content[:3000]}
+
+请提取并总结：
+1. 产品/服务核心卖点
+2. 目标客户画像
+3. 常见客户异议及应对策略
+4. 关键话术和销售技巧
+5. 行业背景知识
+
+输出格式要求：
+- 简洁明了，每个要点1-2句话
+- 总字数控制在300字以内
+- 重点突出可用于实战的内容"""
+
+    messages = [{"role": "user", "content": prompt}]
+    result = await model_router.chat_with_fallback(messages, temperature=0.3, max_tokens=500)
+
+    summary = result.get("content", "文档已分析")
+
+    return PracticeResponse(success=True, data={"summary": summary})
+
+
 @router.post("/init", response_model=PracticeResponse)
 async def init_session(req: PracticeInitRequest):
     """Initialize a new AI practice session with harness-powered persona generation."""

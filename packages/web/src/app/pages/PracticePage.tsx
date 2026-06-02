@@ -63,7 +63,7 @@ export default function PracticePage() {
     }
   }, [view]);
 
-  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; difficulty?: string }) => {
+  const handleStartPractice = async (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; difficulty?: string; documentContext?: string }) => {
     setIsStarting(true);
 
     // Save currently unlocked achievements for comparison after practice
@@ -93,6 +93,7 @@ export default function PracticePage() {
         scriptId: navState?.scriptId || '',
         skillFocus: options?.skillFocus || '',
         difficulty: options?.difficulty || 'medium',
+        documentContext: options?.documentContext || '',
       });
 
       const initData = response.data.data;

@@ -78,6 +78,25 @@ router.post('/message', authMiddleware, aiLimiter, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Analyze uploaded document for practice context
+router.post('/analyze-document', authMiddleware, async (req, res, next) => {
+  try {
+    const { fileName, content } = req.body;
+
+    if (!fileName || !content) {
+      return res.status(400).json({ success: false, error: '缺少文件名或内容' });
+    }
+
+    // Call AI service to analyze document
+    const result = await callAiService({
+      path: '/practices/analyze-document',
+      body: { fileName, content },
+    });
+
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
 // Streaming practice message (SSE proxy)
 router.post('/message/stream', authMiddleware, aiLimiter, async (req, res, next) => {
   try {

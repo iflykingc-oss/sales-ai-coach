@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Lightbulb, BookOpen, Brain, Clock, Target, Plus, Sparkles } from 'lucide-react';
+import { Send, Lightbulb, BookOpen, Brain, Clock, Target, Plus, Sparkles, FileUp } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmotionIndicator } from './EmotionIndicator';
 import { TalkTimeRatio } from './TalkTimeRatio';
 import { SessionHealthIndicator } from './SessionHealthIndicator';
 import { CustomScenarioBuilder, type CustomScenario } from './CustomScenarioBuilder';
+import { DocumentUpload } from './DocumentUpload';
 import {
   usePracticeStore,
   type ChatMessage,
@@ -34,7 +35,7 @@ const difficultyOptions = [
 ];
 
 interface PracticeModeSelectorProps {
-  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; difficulty?: string }) => void;
+  onStart: (mode: PracticeMode, options?: { scenarioId?: string; industry?: string; skillFocus?: string; difficulty?: string; documentContext?: string }) => void;
 }
 
 export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
@@ -43,6 +44,8 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   const [selectedSkill, setSelectedSkill] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
   const [showCustomBuilder, setShowCustomBuilder] = useState(false);
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const { recentScenarioIds } = usePracticeStore();
   const { scenarios: customScenarios, addScenario } = useCustomScenarioStore();
 
@@ -64,17 +67,27 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
     const customScenario = customScenarios.find((s) => s.id === selectedScenario);
     const scenario = practiceScenarios.find((s) => s.id === selectedScenario);
 
+    // Build document context from uploaded documents
+    const documentContext = uploadedDocuments.length > 0
+      ? uploadedDocuments.map(d => `【${d.name}】\n${d.summary || d.content.slice(0, 500)}`).join('\n\n')
+      : undefined;
+
     onStart(selectedMode, {
       scenarioId: selectedScenario || undefined,
       industry: customScenario?.industry || scenario?.industry,
       skillFocus: selectedSkill || undefined,
       difficulty: customScenario?.difficulty || selectedDifficulty,
+      documentContext,
     });
   };
 
   const handleSaveCustomScenario = (scenario: CustomScenario) => {
     addScenario(scenario);
     setSelectedScenario(scenario.id);
+  };
+
+  const handleDocumentsReady = (docs: any[]) => {
+    setUploadedDocuments(docs);
   };
 
   const canStart =
@@ -95,6 +108,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
             <button
               key={m.mode}
               onClick={() => handleModeSelect(m.mode)}
+              aria-pressed={selectedMode === m.mode}
               className={cn(
                 'rounded-xl border-2 p-4 text-left transition-all',
                 selectedMode === m.mode
@@ -240,6 +254,34 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
 
       {/* Logic Framework - Hidden from user, auto-selected by backend based on scenario/skill */}
 
+      {/* Document Upload */}
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileUp className="h-4 w-4 text-gray-400" />
+            <h4 className="font-medium text-gray-900">上传培训资料（可选）</h4>
+          </div>
+          <button
+            onClick={() => setShowDocumentUpload(!showDocumentUpload)}
+            className="text-xs text-primary-600 hover:text-primary-700"
+          >
+            {showDocumentUpload ? '收起' : '展开'}
+          </button>
+        </div>
+        {showDocumentUpload && (
+          <div className="mt-3">
+            <p className="mb-3 text-xs text-gray-500">
+              上传企业内部培训资料、产品文档等，AI将分析内容并进行针对性陪练
+            </p>
+            <DocumentUpload
+              onDocumentsReady={handleDocumentsReady}
+              maxFiles={3}
+              maxSizeMB={5}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Difficulty Selector */}
       <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div className="flex items-center gap-2">
@@ -276,7 +318,7 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
 }
 
 // Chat message bubble component
-function MessageBubble({ message }: { message: ChatMessage; isLast: boolean }) {
+function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
   // Detect coaching messages by content prefix
   const isCoachHint = !isUser && message.content.startsWith('💡');
@@ -709,11 +751,10 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
             </div>
           </div>
         )}
-        {session.messages.map((msg, idx) => (
+        {session.messages.map((msg) => (
           <MessageBubble
             key={msg.id}
             message={msg}
-            isLast={idx === session.messages.length - 1}
           />
         ))}
         {isLoading && (
