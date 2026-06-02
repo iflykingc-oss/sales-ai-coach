@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Target, Brain, RotateCcw, FileSearch, Download, Copy, Link,
   TrendingUp, ChevronDown, ChevronUp, Gauge, ArrowRight,
-  Sparkles, Star, Award, BarChart3, Clock, MessageSquare
+  Sparkles, Star, Award, BarChart3, Clock, MessageSquare, BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -17,6 +17,31 @@ import { toast } from '@/hooks/useToast';
 import EmotionTimeline from './EmotionTimeline';
 
 const defaultDimensions: string[] = [...EVALUATION_DIMENSIONS];
+
+interface RoundAnalysis {
+  round: number;
+  score: number;
+  summary: string;
+  feedback: string;
+  improvement?: string;
+}
+
+interface Exercise {
+  title: string;
+  description: string;
+  difficulty: string;
+  target_dimension?: string;
+}
+
+interface PracticeReportData {
+  transcript?: Array<Record<string, unknown>>;
+  round_analysis?: RoundAnalysis[];
+  improvement_plan?: {
+    priority?: string;
+    exercises?: Exercise[];
+    timeline?: string;
+  };
+}
 
 interface PracticeSummaryProps {
   onRestart: () => void;
@@ -52,7 +77,7 @@ function AnimatedCounter({ target, duration = 1500 }: { target: number; duration
 }
 
 // Grade badge component
-function GradeBadge({ grade }: { grade: string }) {
+const GradeBadge = memo(function GradeBadge({ grade }: { grade: string }) {
   const gradeConfig: Record<string, { color: string; bg: string; glow: string; label: string }> = {
     S: { color: 'from-amber-400 to-yellow-500', bg: 'bg-amber-500/10', glow: 'shadow-amber-500/30', label: '卓越' },
     A: { color: 'from-emerald-400 to-green-500', bg: 'bg-emerald-500/10', glow: 'shadow-emerald-500/30', label: '优秀' },
@@ -91,11 +116,11 @@ function GradeBadge({ grade }: { grade: string }) {
       </div>
     </div>
   );
-}
+});
 
 // Stat card component
-function StatCard({ icon: Icon, label, value, trend, color }: {
-  icon: any;
+const StatCard = memo(function StatCard({ icon: Icon, label, value, trend, color }: {
+  icon: React.ElementType;
   label: string;
   value: string | number;
   trend?: { value: number; isPositive: boolean };
@@ -130,10 +155,10 @@ function StatCard({ icon: Icon, label, value, trend, color }: {
       </div>
     </div>
   );
-}
+});
 
 // Dimension bar component
-function DimensionBar({ label, score, delay = 0 }: {
+const DimensionBar = memo(function DimensionBar({ label, score, delay = 0 }: {
   label: string;
   score: number;
   delay?: number;
@@ -169,7 +194,7 @@ function DimensionBar({ label, score, delay = 0 }: {
       </div>
     </div>
   );
-}
+});
 
 export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const { session, summary, setSummary, setIsGeneratingSummary } = usePracticeStore();
@@ -177,7 +202,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const [loading, setLoading] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
-  const [reportData, setReportData] = useState<any>(null);
+  const [reportData, setReportData] = useState<PracticeReportData | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleSaveAndReview = useCallback(async () => {
@@ -192,7 +217,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
         rounds: session.round,
         score: summary?.totalScore ? summary.totalScore / 100 : 0,
         feedback: reportData,
-        transcript: reportData.transcript || [],
+        transcript: reportData?.transcript || [],
       });
       const practiceId = saveRes.data?.data?.id;
       navigate('/app/review', {
@@ -233,12 +258,12 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
             totalScore: Math.round(report.overall_score * 100),
             strengths: report.strengths || [],
             improvements: report.weaknesses || [],
-            recommendations: report.recommendations?.map((r: any) =>
+            recommendations: report.recommendations?.map((r: Record<string, string>) =>
               `${r.dimension}: ${r.advice}`,
             ) || [],
             radarScores: normalizedScores,
           });
-          setReportData(report);
+          setReportData(report as PracticeReportData);
         }
       } catch (error) {
         console.error('Failed to fetch practice report:', error);
@@ -558,7 +583,7 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
             <h3 className="font-semibold text-gray-900">逐轮分析</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {reportData.round_analysis.map((ra: any) => (
+            {reportData.round_analysis.map((ra) => (
               <div key={ra.round} className="group">
                 <button
                   className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-gray-50"
@@ -677,7 +702,7 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
                 {reportData.improvement_plan.priority}
               </p>
             )}
-            {reportData.improvement_plan.exercises?.length > 0 && (
+            {reportData.improvement_plan.exercises && reportData.improvement_plan.exercises.length > 0 && (
               <div className="space-y-3">
                 {reportData.improvement_plan.exercises.map((ex: any, i: number) => (
                   <div key={i} className="rounded-xl border border-blue-200 bg-white p-4">
@@ -750,6 +775,46 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
               复制分享链接
             </Button>
           </div>
+        </Card>
+      )}
+
+      {/* Recommended Knowledge - Based on weak dimensions */}
+      {summary && weakDimensions.length > 0 && (
+        <Card className="border-purple-200 bg-purple-50">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-purple-800">
+            <BookOpen className="h-4 w-4" />
+            推荐学习资料
+          </h4>
+          <p className="mb-3 text-sm text-purple-700">
+            基于你的弱项维度，建议补充以下知识：
+          </p>
+          <div className="space-y-2">
+            {weakDimensions.map((dim) => (
+              <div key={dim.label} className="rounded-lg bg-white p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-purple-900">{dim.label}</span>
+                  <span className="text-xs text-purple-600">{dim.score}分</span>
+                </div>
+                <p className="mt-1 text-xs text-purple-600">
+                  {dim.label === '需求挖掘' && '学习SPIN提问法，多用开放性问题了解客户需求。'}
+                  {dim.label === '异议处理' && '掌握LAER四步法：倾听→认同→探索→回应。'}
+                  {dim.label === '促单能力' && '学习试探性收尾和假设成交技巧。'}
+                  {dim.label === '沟通表达' && '练习简洁表达，避免过多专业术语。'}
+                  {dim.label === '情绪管理' && '保持冷静，不因客户情绪波动而失控。'}
+                  {dim.label === '产品知识' && '深入了解产品特性和竞品对比。'}
+                  {dim.label === '信任建立' && '通过案例和数据建立专业信任。'}
+                  {dim.label === '价值传递' && '用FAB法则：特性→优势→利益。'}
+                  {dim.label === 'SPIN提问质量' && '多练习情境、问题、暗示、需求-效益四类提问。'}
+                </p>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => navigate('/app/knowledge')}
+            className="mt-3 text-sm font-medium text-purple-600 hover:text-purple-800"
+          >
+            查看知识库 →
+          </button>
         </Card>
       )}
     </div>
