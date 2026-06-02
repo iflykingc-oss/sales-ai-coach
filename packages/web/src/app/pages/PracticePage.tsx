@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PracticeModeSetup } from '@/components/practice/PracticeChat';
 import { PracticeChat } from '@/components/practice/PracticeChat';
-import { PracticeSummary } from '@/components/practice/PracticeSummary';
+import { PracticeSummary } from '@/components/practice/PracticeSummaryNew';
 import { usePracticeStore, type PracticeMode } from '@/stores/practiceStore';
 import { useActivityStore } from '@/stores/activityStore';
 import { useAchievementStore } from '@/stores/achievementStore';
