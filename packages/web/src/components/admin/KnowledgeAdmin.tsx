@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/Dialog';
 import { useAdminStore, type KnowledgeItem } from '@/stores/adminStore';
 import { toast } from '@/hooks/useToast';
+import { api } from '@/services/api';
 
 const sourceIcons: Record<string, React.ReactNode> = {
   Word: <FileText className="h-4 w-4 text-blue-500" />,
@@ -83,31 +84,57 @@ export function KnowledgeAdmin() {
     toast.success('知识条目已更新');
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('确定要删除这条知识条目吗？此操作不可撤销。')) {
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定要删除这条知识条目吗？此操作不可撤销。')) return;
+
+    try {
+      await api.delete(`/knowledge/${id}`);
       deleteKnowledge(id);
       toast.success('知识条目已删除');
+    } catch (err) {
+      console.error('Failed to delete knowledge:', err);
+      toast.error('删除失败');
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (importMethod === 'web' && !importUrl) return;
     if (importMethod === 'manual' && (!manualTitle || !manualContent)) return;
 
     if (importMethod === 'manual') {
-      const newItem: KnowledgeItem = {
-        id: `k${Date.now()}`,
-        title: manualTitle,
-        category: manualCategory || '其他',
-        source: 'Manual',
-        status: 'pending',
-        createdAt: new Date().toISOString().split('T')[0],
-        content: manualContent,
-      };
-      setKnowledgeItems([...knowledgeItems, newItem]);
-      setManualTitle('');
-      setManualContent('');
-      setManualCategory('');
+      try {
+        // Save to database
+        const res = await api.post('/knowledge', {
+          title: manualTitle,
+          content: manualContent,
+          category: manualCategory || '其他',
+          source: 'manual',
+          tags: [],
+          industry: manualCategory || '其他',
+          weight: 1,
+        });
+
+        const savedItem = res.data || res;
+
+        // Update frontend state
+        const newItem: KnowledgeItem = {
+          id: savedItem?.id || `k${Date.now()}`,
+          title: manualTitle,
+          category: manualCategory || '其他',
+          source: 'Manual',
+          status: 'approved',
+          createdAt: new Date().toISOString().split('T')[0],
+          content: manualContent,
+        };
+        setKnowledgeItems([...knowledgeItems, newItem]);
+        setManualTitle('');
+        setManualContent('');
+        setManualCategory('');
+        toast.success('知识条目已添加');
+      } catch (err) {
+        console.error('Failed to add knowledge:', err);
+        toast.error('添加失败');
+      }
     }
 
     setImportMethod(null);

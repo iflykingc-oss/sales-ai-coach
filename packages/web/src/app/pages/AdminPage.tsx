@@ -10,18 +10,20 @@ import { UserAdmin } from '@/components/admin/UserAdmin';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
+import { toast } from '@/hooks/useToast';
 
 export default function AdminPage() {
-  const { activeTab, setActiveTab, loading, setLoading, setStats, setModels, setSystemUsers } = useAdminStore();
+  const { activeTab, setActiveTab, loading, setLoading, setStats, setModels, setSystemUsers, setKnowledgeItems } = useAdminStore();
   const user = useUserStore((s) => s.user);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, modelsRes] = await Promise.all([
+      const [statsRes, usersRes, modelsRes, knowledgeRes] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/users'),
         api.get('/admin/models'),
+        api.get('/knowledge'),
       ]);
       const stats = statsRes.data;
       setStats({
@@ -36,12 +38,24 @@ export default function AdminPage() {
       });
       setSystemUsers(usersRes.data || []);
       setModels(modelsRes.data || []);
+      // Load knowledge items from database
+      const knowledgeData = knowledgeRes.data || knowledgeRes || [];
+      setKnowledgeItems(Array.isArray(knowledgeData) ? knowledgeData.map((k: any) => ({
+        id: k.id,
+        title: k.title || k.content?.slice(0, 50) || '未命名',
+        category: k.category || k.industry || '其他',
+        source: k.source || 'manual',
+        status: k.status || 'approved',
+        createdAt: k.createdAt || k.created_at || new Date().toISOString(),
+        content: k.content,
+      })) : []);
     } catch (e) {
       console.error('Failed to fetch admin data:', e);
+      toast.error('加载管理数据失败', { description: '请刷新页面重试' });
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setStats, setSystemUsers, setModels]);
+  }, [setLoading, setStats, setSystemUsers, setModels, setKnowledgeItems]);
 
   useEffect(() => {
     if (user?.role === 'ADMIN' || user?.role === 'TEAM_OWNER') {
