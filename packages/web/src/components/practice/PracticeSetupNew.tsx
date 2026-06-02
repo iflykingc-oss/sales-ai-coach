@@ -473,6 +473,20 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
             </div>
           )}
 
+          {/* AI Agent 推理展示 */}
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-blue-800">
+              <Sparkles className="h-4 w-4" />
+              AI Agent 分析
+            </h3>
+            <div className="space-y-2 text-sm text-blue-700">
+              <p>📋 <strong>任务规划:</strong> 根据场景自动选择客户画像和销售框架</p>
+              <p>🎯 <strong>框架推荐:</strong> 基于"{selectedCategory === 'custom' ? customTitle : selectedScenario?.title}"场景，AI将自动匹配最佳销售方法论</p>
+              <p>🧠 <strong>动态评估:</strong> 每轮对话后自动评估9个维度，低分时主动提供教练建议</p>
+              <p>📊 <strong>实时追踪:</strong> 监控客户情绪变化，检测异议和购买信号</p>
+            </div>
+          </div>
+
           {/* 难度选择 */}
           <div className="mb-6">
             <h3 className="mb-3 text-sm font-medium text-gray-700">调整难度</h3>

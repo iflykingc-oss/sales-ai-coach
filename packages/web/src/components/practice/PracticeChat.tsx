@@ -530,6 +530,85 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                     },
                   };
                 });
+
+                // Proactive coaching: Auto-trigger hint when score is low
+                const avgScore = data.round_score || 0;
+                if (avgScore < 0.5 && data.round >= 3) {
+                  setTimeout(async () => {
+                    try {
+                      const hintRes = await fetch('/api/practices/hint', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId: session.id }),
+                        credentials: 'include',
+                      });
+                      const hintJson = await hintRes.json();
+                      const hint = hintJson.data?.hint || '注意调整沟通策略，关注客户反应。';
+
+                      const autoHint: ChatMessage = {
+                        id: `auto-hint-${Date.now()}`,
+                        role: 'assistant',
+                        content: `💡 主动教练: ${hint}`,
+                        timestamp: Date.now(),
+                      };
+                      usePracticeStore.setState((state) => {
+                        if (!state.session) return state;
+                        return {
+                          session: {
+                            ...state.session,
+                            messages: [...state.session.messages, autoHint],
+                          },
+                        };
+                      });
+                    } catch { /* ignore */ }
+                  }, 1000);
+                }
+
+                // Proactive coaching: Alert when emotion is negative for 2+ rounds
+                const recentEmotions = usePracticeStore.getState().session?.messages
+                  .filter(m => m.emotion)
+                  .slice(-3)
+                  .map(m => m.emotion) || [];
+                const negativeCount = recentEmotions.filter(e =>
+                  e === '抗拒' || e === '生气' || e === '犹豫'
+                ).length;
+
+                if (negativeCount >= 2 && data.round >= 3) {
+                  const emotionAlert: ChatMessage = {
+                    id: `emotion-alert-${Date.now()}`,
+                    role: 'assistant',
+                    content: `⚠️ 情绪预警: 客户已连续${negativeCount}轮消极情绪，建议先缓和气氛，使用共情话术，不要急于推进。`,
+                    timestamp: Date.now() + 1,
+                  };
+                  usePracticeStore.setState((state) => {
+                    if (!state.session) return state;
+                    return {
+                      session: {
+                        ...state.session,
+                        messages: [...state.session.messages, emotionAlert],
+                      },
+                    };
+                  });
+                }
+
+                // Progress indicator at 60%
+                if (data.round >= 6 && data.round <= 7) {
+                  const progressMsg: ChatMessage = {
+                    id: `progress-${Date.now()}`,
+                    role: 'assistant',
+                    content: `📈 进度: 已完成${data.round}/${session.maxRounds}轮。当前表现: ${avgScore >= 0.7 ? '优秀' : avgScore >= 0.5 ? '良好' : '需要加油'}。`,
+                    timestamp: Date.now() + 2,
+                  };
+                  usePracticeStore.setState((state) => {
+                    if (!state.session) return state;
+                    return {
+                      session: {
+                        ...state.session,
+                        messages: [...state.session.messages, progressMsg],
+                      },
+                    };
+                  });
+                }
               }
 
               if (data.is_complete) completePractice();

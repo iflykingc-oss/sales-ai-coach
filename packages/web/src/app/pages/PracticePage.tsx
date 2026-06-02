@@ -56,6 +56,33 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
       // Use the greeting from config or from API
       const greeting = initData.greeting || config.greeting;
 
+      // Extract framework recommendation from AI
+      const frameworkRec = initData.frameworkRecommendation;
+
+      // Build a richer greeting message with AI reasoning
+      const messages: Array<{id: string; role: 'assistant'; content: string; timestamp: number}> = [];
+
+      if (greeting) {
+        messages.push({
+          id: `msg-${Date.now()}`,
+          role: 'assistant' as const,
+          content: greeting,
+          timestamp: Date.now(),
+        });
+      }
+
+      // Add AI reasoning message if framework recommendation exists
+      if (frameworkRec?.recommendedFramework) {
+        const fwName = frameworkRec.recommendedFramework.name || frameworkRec.recommendedFramework;
+        const reason = frameworkRec.reason || '';
+        messages.push({
+          id: `fw-${Date.now()}`,
+          role: 'assistant' as const,
+          content: `🎯 AI分析: 基于你的场景，推荐使用「${fwName}」销售框架${reason ? ` - ${reason}` : ''}`,
+          timestamp: Date.now() + 1,
+        });
+      }
+
       setSession({
         id: initData.session_id,
         mode: 'scenario' as PracticeMode,
@@ -63,12 +90,8 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
         scenarioName: config.scenarioTitle,
         difficulty: config.difficulty,
         archetypeName: initData.archetype_name,
-        messages: greeting ? [{
-          id: `msg-${Date.now()}`,
-          role: 'assistant' as const,
-          content: greeting,
-          timestamp: Date.now(),
-        }] : [],
+        logicFramework: frameworkRec?.recommendedFramework?.id || '',
+        messages,
         round: 0,
         maxRounds: 10,
         customerEmotion: 'interest',
