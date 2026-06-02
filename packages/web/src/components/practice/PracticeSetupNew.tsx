@@ -190,10 +190,19 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
   const [showDocUpload, setShowDocUpload] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
+  // Custom scenario state
+  const [customTitle, setCustomTitle] = useState('');
+  const [customDesc, setCustomDesc] = useState('');
+  const [customProfile, setCustomProfile] = useState('');
+  const [customGreeting, setCustomGreeting] = useState('');
 
   const handleCategorySelect = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    setStep('scenario');
+    if (categoryId === 'custom') {
+      setStep('config');
+    } else {
+      setStep('scenario');
+    }
   };
 
   const handleScenarioSelect = (scenario: any) => {
@@ -203,6 +212,25 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
   };
 
   const handleStart = () => {
+    // Custom scenario
+    if (selectedCategory === 'custom') {
+      if (!customTitle.trim() || !customDesc.trim()) return;
+      onStart({
+        scenarioId: 'custom',
+        scenarioTitle: customTitle.trim(),
+        scenarioDesc: customDesc.trim(),
+        difficulty: selectedDifficulty,
+        greeting: customGreeting.trim() || '你好，请问有什么可以帮您的？',
+        customerProfile: customProfile.trim() || '普通客户',
+        objectives: ['完成自定义场景练习'],
+        documentContext: uploadedDocs.length > 0
+          ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
+          : undefined,
+      });
+      return;
+    }
+
+    // Pre-built scenario
     if (!selectedScenario) return;
 
     onStart({
@@ -218,6 +246,10 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
         : undefined,
     });
   };
+
+  const canStart = selectedCategory === 'custom'
+    ? customTitle.trim().length > 0 && customDesc.trim().length > 0
+    : selectedScenario !== null;
 
   const category = SCENARIO_CATEGORIES.find(c => c.id === selectedCategory);
 
@@ -280,6 +312,18 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
                 <p className="mt-1 text-xs text-gray-500">{cat.scenarios.length} 个场景</p>
               </button>
             ))}
+
+            {/* Custom scenario option */}
+            <button
+              onClick={() => handleCategorySelect('custom')}
+              className="group rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-5 text-left transition-all hover:border-primary-300 hover:bg-primary-50"
+            >
+              <span className="text-3xl">✏️</span>
+              <h3 className="mt-3 font-semibold text-gray-900 group-hover:text-primary-700">
+                自定义场景
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">描述你自己的练习场景</p>
+            </button>
           </div>
         </div>
       )}
@@ -340,44 +384,94 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
       )}
 
       {/* Step 3: 配置确认 */}
-      {step === 'config' && selectedScenario && (
+      {step === 'config' && (
         <div>
           <button
-            onClick={() => setStep('scenario')}
+            onClick={() => setStep(selectedCategory === 'custom' ? 'category' : 'scenario')}
             className="mb-4 text-sm text-gray-500 hover:text-gray-700"
           >
-            ← 返回选择场景
+            ← 返回
           </button>
 
-          <h2 className="mb-6 text-xl font-bold text-gray-900">确认练习配置</h2>
+          <h2 className="mb-6 text-xl font-bold text-gray-900">
+            {selectedCategory === 'custom' ? '自定义练习场景' : '确认练习配置'}
+          </h2>
 
-          {/* 场景信息 */}
-          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-            <h3 className="font-semibold text-gray-900">{selectedScenario.title}</h3>
-            <p className="mt-1 text-sm text-gray-600">{selectedScenario.desc}</p>
-
-            <div className="mt-4 grid grid-cols-2 gap-4">
+          {/* Custom scenario form */}
+          {selectedCategory === 'custom' && (
+            <div className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5">
               <div>
-                <p className="text-xs text-gray-500">客户画像</p>
-                <p className="mt-1 text-sm text-gray-700">{selectedScenario.customerProfile}</p>
+                <label className="mb-1 block text-sm font-medium text-gray-700">场景名称 *</label>
+                <input
+                  type="text"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="例如：新产品推介、客户回访、竞品对比..."
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
               </div>
               <div>
-                <p className="text-xs text-gray-500">练习目标</p>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {selectedScenario.objectives?.map((obj: string, idx: number) => (
-                    <span key={idx} className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700">
-                      {obj}
-                    </span>
-                  ))}
+                <label className="mb-1 block text-sm font-medium text-gray-700">场景描述 *</label>
+                <textarea
+                  value={customDesc}
+                  onChange={(e) => setCustomDesc(e.target.value)}
+                  placeholder="描述具体的销售场景，例如：客户是一家制造企业的采购总监，对我们的智能制造方案有兴趣..."
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">客户画像</label>
+                <textarea
+                  value={customProfile}
+                  onChange={(e) => setCustomProfile(e.target.value)}
+                  placeholder="描述客户特点，例如：理性决策者，关注ROI，有预算限制..."
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">客户开场白</label>
+                <input
+                  type="text"
+                  value={customGreeting}
+                  onChange={(e) => setCustomGreeting(e.target.value)}
+                  placeholder="例如：你好，听说你们有款不错的产品？"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Pre-built scenario info */}
+          {selectedCategory !== 'custom' && selectedScenario && (
+            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
+              <h3 className="font-semibold text-gray-900">{selectedScenario.title}</h3>
+              <p className="mt-1 text-sm text-gray-600">{selectedScenario.desc}</p>
+
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500">客户画像</p>
+                  <p className="mt-1 text-sm text-gray-700">{selectedScenario.customerProfile}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">练习目标</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {selectedScenario.objectives?.map((obj: string, idx: number) => (
+                      <span key={idx} className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700">
+                        {obj}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-4 rounded-lg bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">客户开场白</p>
-              <p className="mt-1 text-sm italic text-gray-700">"{selectedScenario.greeting}"</p>
+              <div className="mt-4 rounded-lg bg-gray-50 p-3">
+                <p className="text-xs text-gray-500">客户开场白</p>
+                <p className="mt-1 text-sm italic text-gray-700">"{selectedScenario.greeting}"</p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 难度选择 */}
           <div className="mb-6">
@@ -431,7 +525,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
           <Button
             size="lg"
             onClick={handleStart}
-            disabled={isLoading}
+            disabled={!canStart || isLoading}
             className="w-full"
           >
             {isLoading ? (
