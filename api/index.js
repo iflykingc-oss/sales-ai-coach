@@ -1111,6 +1111,48 @@ routes['PUT /api/admin/models/:id'] = async (req, res) => {
   }
 };
 
+// Test model connection
+routes['POST /api/admin/models/test'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const data = await parseBody(req);
+    const { baseUrl, apiKey, modelId } = data;
+
+    if (!apiKey || !modelId) {
+      return sendJson(res, 400, { success: false, message: '缺少必要参数' });
+    }
+
+    // Build the test URL based on provider
+    let testUrl = baseUrl || 'https://api.openai.com/v1';
+    if (!testUrl.endsWith('/chat/completions')) {
+      testUrl = testUrl.replace(/\/$/, '') + '/chat/completions';
+    }
+
+    // Make a simple API call to test the connection
+    const response = await fetch(testUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 5,
+      }),
+    });
+
+    if (response.ok) {
+      sendJson(res, 200, { success: true, message: '连接成功' });
+    } else {
+      const errorText = await response.text().catch(() => '');
+      sendJson(res, 200, { success: false, message: `连接失败: HTTP ${response.status}` });
+    }
+  } catch (err) {
+    sendJson(res, 200, { success: false, message: `连接错误: ${err.message}` });
+  }
+};
+
 // --- Compliance ---
 routes['GET /api/compliance/export'] = async (req, res) => {
   try {
