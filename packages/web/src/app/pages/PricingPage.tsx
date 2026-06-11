@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Check, Crown, Zap, Users, Building2, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Check, Crown, Zap, Users, Building2, ArrowRight, Loader2, AlertCircle, X } from 'lucide-react';
+import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { cn } from '@/utils/cn';
 import { useUserStore } from '@/stores/userStore';
+import { useI18n } from '@/i18n';
 import { api } from '@/services/api';
+import { PayPalCheckout } from '@/components/payment/PayPalCheckout';
+import { formatPrice } from '@/utils/currency';
 
 interface PlanTier {
   id: string;
@@ -41,11 +45,12 @@ const ACTION_LABELS: Record<string, string> = {
 
 export function PricingPage() {
   const user = useUserStore((s) => s.user);
+  const { locale } = useI18n();
   const [tiers, setTiers] = useState<PlanTier[]>([]);
   const [currentPlan, setCurrentPlan] = useState<CurrentPlan | null>(null);
   const [loading, setLoading] = useState(true);
-  const [upgrading, setUpgrading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanTier | null>(null);
 
   useEffect(() => {
     loadData();
@@ -68,27 +73,24 @@ export function PricingPage() {
 
   async function handleUpgrade(targetPlan: string) {
     if (targetPlan === 'ENTERPRISE') {
-      // TODO: open contact form or email
       alert('企业版请联系我们：sales@aisalecoach.com');
       return;
     }
 
-    setUpgrading(targetPlan);
-    setError(null);
-
-    try {
-      await api.post('/plans/upgrade', { targetPlan });
-      // Refresh user data
-      const meRes = await api.get('/auth/me');
-      if (meRes.data.data) {
-        useUserStore.getState().setUser(meRes.data.data);
-      }
-      await loadData();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Upgrade failed');
-    } finally {
-      setUpgrading(null);
+    const plan = tiers.find(t => t.id === targetPlan);
+    if (plan) {
+      setSelectedPlan(plan);
     }
+  }
+
+  async function handlePaymentSuccess() {
+    setSelectedPlan(null);
+    // Refresh user data
+    const meRes = await api.get('/auth/me');
+    if (meRes.data.data) {
+      useUserStore.getState().setUser(meRes.data.data);
+    }
+    await loadData();
   }
 
   if (loading) {
@@ -186,11 +188,13 @@ export function PricingPage() {
 
               <div className="mb-4">
                 {tier.price === -1 ? (
-                  <div className={cn('text-2xl font-bold', colors.text)}>定制报价</div>
+                  <div className={cn('text-2xl font-bold', colors.text)}>
+                    {locale === 'zh' ? '定制报价' : 'Custom'}
+                  </div>
                 ) : (
                   <div className="flex items-baseline gap-1">
                     <span className={cn('text-3xl font-bold', colors.text)}>
-                      ¥{tier.price}
+                      {formatPrice(tier.price, locale)}
                     </span>
                     <span className="text-sm text-gray-500">/{tier.period}</span>
                   </div>
@@ -233,21 +237,13 @@ export function PricingPage() {
               ) : (
                 <button
                   onClick={() => handleUpgrade(tier.id)}
-                  disabled={upgrading === tier.id}
                   className={cn(
                     'w-full rounded-lg py-2 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2',
                     colors.button,
-                    upgrading === tier.id && 'opacity-70 cursor-not-allowed',
                   )}
                 >
-                  {upgrading === tier.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      立即升级
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
+                  立即升级
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -260,6 +256,28 @@ export function PricingPage() {
         <p>升级立即生效，按自然月计费。企业版支持定制化部署和专属服务。</p>
         <p className="mt-1">如有疑问请联系：sales@aisalecoach.com</p>
       </div>
+
+      {/* PayPal Checkout Modal */}
+      {selectedPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <button
+              onClick={() => setSelectedPlan(null)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">升级到 {selectedPlan.name}</h2>
+            <PayPalScriptProvider options={{ clientId: 'AahOPjypTzhAPRxiqfYysZ4lj528Du-FQeGIDHwsBPEEmAGa1HsrWjZx1z_BPWDKMRw3ZkQoPnQGrgVm', currency: 'CNY' }}>
+              <PayPalCheckout
+                plan={selectedPlan}
+                onSuccess={handlePaymentSuccess}
+                onCancel={() => setSelectedPlan(null)}
+              />
+            </PayPalScriptProvider>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

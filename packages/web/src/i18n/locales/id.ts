@@ -148,4 +148,79 @@ export default {
   'landing.stats.stages': 'Tahapan',
   'landing.stats.dimensions': 'Dimensi',
   'landing.stats.timeToValue': 'Waktu',
+
+  // User Levels
+  'level.beginner': 'Pemula',
+  'level.entry': 'Sales Junior',
+  'level.growing': 'Sales Berkembang',
+  'level.proficient': 'Sales Mahir',
+  'level.senior': 'Sales Senior',
+  'level.coach': 'Pelatih Sales',
+
+  // Lesson Descriptions
+  'lesson.opening.desc': 'Pelajari teknik pembukaan yang menarik perhatian pelanggan',
+  'lesson.discovery.desc': 'Pahami kebutuhan nyata pelanggan melalui pertanyaan efektif',
+  'lesson.presentation.desc': 'Sampaikan nilai dan keunggulan produk dengan jelas',
+  'lesson.objection.desc': 'Tanggapi kekhawatiran dan keberatan pelanggan secara efektif',
+  'lesson.negotiation.desc': 'Capai kesepakatan sambil melindungi margin keuntungan',
+  'lesson.closing.desc': 'Raih momen yang tepat untuk menutup kesepakatan',
+  'lesson.fullCycle.desc': 'Latihan lengkap dari kontak pertama hingga closing',
+  'lesson.renewal.desc': 'Jaga hubungan dan pastikan perpanjangan',
+  'lesson.enterprise.desc': 'Hadapi penjualan kompleks dengan banyak pengambil keputusan',
+  'lesson.hell.desc': 'Hadapi pelanggan yang paling menantang',
+  'lesson.complaint.desc': 'Pulihkan hubungan dengan pelanggan yang tidak puas',
+
+  // Practice Coaching
+  'coaching.feedback': 'Evaluasi Ronde {round}',
+  'coaching.hint': 'Tips Pelatih',
+  'coaching.emotion.warning': 'Peringatan Emosi',
+  'coaching.progress': 'Kemajuan',
+  'coaching.customer.greeting': 'Halo, saya pelanggan latihan {scenario} Anda. Silakan mulai presentasi penjualan Anda.',
+  'coaching.maxRounds': 'Percakapan sudah mencapai {round} ronde, Anda bisa mengakhiri',
+  'coaching.continue': 'Lanjutkan 5 Ronde Lagi',
+  'coaching.endAndView': 'Akhiri Latihan, Lihat Hasil',
+
+  // Dashboard Extra
+  'dashboard.empty.title': 'Mulai Perjalanan Pertumbuhan',
+  'dashboard.empty.desc': 'Selesaikan pelatihan dasar untuk menjadi sales terbaik',
+  'dashboard.empty.cta': 'Mulai Pelajaran Pertama',
+  'dashboard.viewAll': 'Lihat Semua',
+  'dashboard.noPractices': 'Belum ada catatan latihan',
+  'dashboard.level.progress': 'Latihan {count} kali lagi untuk mencapai level {level}',
+  'dashboard.totalPractices': 'Total Latihan',
+
+  // Practice Summary
+  'summary.excellent': 'Luar Biasa!',
+  'summary.good': 'Performa Bagus',
+  'summary.keepGoing': 'Terus Berusaha',
+  'summary.strengths': 'Kelebihan',
+  'summary.improvements': 'Perlu Diperbaiki',
+  'summary.retry': 'Coba Lagi',
+  'summary.viewDetails': 'Lihat Laporan Detail',
+  'summary.generating': 'AI sedang menganalisis performa Anda...',
+  'summary.generatingDesc': 'Mengevaluasi keterampilan Anda di 8 dimensi',
+
+  // Sidebar
+  'sidebar.home': 'Beranda',
+  'sidebar.scripts': 'Buat Skrip',
+  'sidebar.practice': 'Latihan AI',
+  'sidebar.knowledge': 'Basis Pengetahuan',
+  'sidebar.review': 'Review',
+  'sidebar.analytics': 'Analitik',
+  'sidebar.team': 'Tim',
+  'sidebar.plugins': 'Plugin Industri',
+  'sidebar.admin': 'Admin',
+  'sidebar.logout': 'Keluar',
+
+  // Plans
+  'plan.free': 'Gratis',
+  'plan.professional': 'Profesional',
+  'plan.team': 'Tim',
+  'plan.enterprise': 'Enterprise',
+  'plan.upgrade': 'Upgrade',
+  'plan.current': 'Paket Saat Ini',
+
+  // Multi-language
+  'i18n.selectLanguage': 'Pilih Bahasa',
+  'i18n.moreComing': 'Bahasa lainnya segera hadir...',
 };

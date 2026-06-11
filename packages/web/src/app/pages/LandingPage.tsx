@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Brain, Target, BarChart3, Users, ArrowRight,
+  Brain, Target, BarChart3, Users, ArrowRight, Globe,
   MessageSquare, ChevronDown, ChevronUp, Star, Check,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -48,6 +48,13 @@ const FEATURES = [
     titleEn: 'Team Collaboration',
     desc: '团队数据看板、任务分配，管理者实时掌握团队成长',
     descEn: 'Team dashboards, task assignment — managers track team growth in real-time',
+  },
+  {
+    icon: Globe,
+    title: '多语言支持',
+    titleEn: 'Multi-Language Support',
+    desc: '支持中文、English、ภาษาไทย、Tiếng Việt、Bahasa Melayu、Bahasa Indonesia，更多语言开发中',
+    descEn: 'Supports Chinese, English, Thai, Vietnamese, Malay, Indonesian — more languages coming soon',
   },
 ];
 
@@ -97,7 +104,7 @@ const STATS = [
   { value: '5min', label: '首次价值', labelEn: 'Time to Value' },
 ];
 
-export function LandingPage() {
+export default function LandingPage() {
   const navigate = useNavigate();
   const [lang, setLang] = useState<'zh' | 'en'>('zh');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -176,9 +183,14 @@ export function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-indigo-50" />
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:py-32">
           <div className="mx-auto max-w-3xl text-center">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700">
               <Target className="h-4 w-4" />
               {t('AI销售教练 · 结构化成长', 'AI Sales Coach · Structured Growth')}
+            </div>
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-green-100 px-4 py-1.5 text-sm font-medium text-green-700">
+              <Globe className="h-4 w-4" />
+              🇨🇳 🇺🇸 🇹🇭 🇻🇳 🇲🇾 🇮🇩
+              {t(' · 6种语言支持 · 更多开发中', ' · 6 Languages · More Coming Soon')}
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
               {t(

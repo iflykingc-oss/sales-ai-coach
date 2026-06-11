@@ -148,4 +148,79 @@ export default {
   'landing.stats.stages': 'Giai đoạn',
   'landing.stats.dimensions': 'Đánh giá',
   'landing.stats.timeToValue': 'Thời gian',
+
+  // User Levels
+  'level.beginner': 'Người mới bắt đầu',
+  'level.entry': 'Nhân viên mới',
+  'level.growing': 'Nhân viên đang phát triển',
+  'level.proficient': 'Nhân viên thành thạo',
+  'level.senior': 'Nhân viên cấp cao',
+  'level.coach': 'Huấn luyện viên bán hàng',
+
+  // Lesson Descriptions
+  'lesson.opening.desc': 'Học kỹ thuật mở đầu thu hút sự chú ý của khách hàng',
+  'lesson.discovery.desc': 'Hiểu nhu cầu thực sự của khách hàng thông qua câu hỏi hiệu quả',
+  'lesson.presentation.desc': 'Truyền đạt giá trị và ưu điểm sản phẩm một cách rõ ràng',
+  'lesson.objection.desc': 'Phản hồi hiệu quả mối quan tâm và phản đối của khách hàng',
+  'lesson.negotiation.desc': 'Đạt được thỏa thuận trong khi bảo vệ biên lợi nhuận',
+  'lesson.closing.desc': 'Nắm bắt thời điểm phù hợp để chốt giao dịch',
+  'lesson.fullCycle.desc': 'Luyện tập toàn bộ quy trình từ liên hệ đầu tiên đến chốt đơn',
+  'lesson.renewal.desc': 'Duy trì mối quan hệ và đảm bảo gia hạn',
+  'lesson.enterprise.desc': 'Xử lý bán hàng phức tạp với nhiều người ra quyết định',
+  'lesson.hell.desc': 'Đối phó với khách hàng thách thức nhất',
+  'lesson.complaint.desc': 'Khôi phục mối quan hệ với khách hàng không hài lòng',
+
+  // Practice Coaching
+  'coaching.feedback': 'Đánh giá vòng {round}',
+  'coaching.hint': 'Gợi ý từ huấn luyện viên',
+  'coaching.emotion.warning': 'Cảnh báo cảm xúc',
+  'coaching.progress': 'Tiến độ',
+  'coaching.customer.greeting': 'Xin chào, tôi là khách hàng luyện tập {scenario} của bạn. Hãy bắt đầu bài thuyết trình bán hàng.',
+  'coaching.maxRounds': 'Cuộc trò chuyện đã đạt {round} vòng, bạn có thể kết thúc',
+  'coaching.continue': 'Tiếp tục 5 vòng nữa',
+  'coaching.endAndView': 'Kết thúc, xem kết quả',
+
+  // Dashboard Extra
+  'dashboard.empty.title': 'Bắt đầu hành trình phát triển',
+  'dashboard.empty.desc': 'Hoàn thành đào tạo cơ bản để trở thành nhân viên bán hàng xuất sắc',
+  'dashboard.empty.cta': 'Bắt đầu bài học đầu tiên',
+  'dashboard.viewAll': 'Xem tất cả',
+  'dashboard.noPractices': 'Chưa có bản ghi luyện tập',
+  'dashboard.level.progress': 'Luyện tập thêm {count} lần để đạt cấp {level}',
+  'dashboard.totalPractices': 'Tổng số lần luyện tập',
+
+  // Practice Summary
+  'summary.excellent': 'Xuất sắc!',
+  'summary.good': 'Kết quả tốt',
+  'summary.keepGoing': 'Tiếp tục cố gắng',
+  'summary.strengths': 'Điểm mạnh',
+  'summary.improvements': 'Cần cải thiện',
+  'summary.retry': 'Thử lại',
+  'summary.viewDetails': 'Xem báo cáo chi tiết',
+  'summary.generating': 'AI đang phân tích kết quả của bạn...',
+  'summary.generatingDesc': 'Đánh giá kỹ năng của bạn trên 8 tiêu chí',
+
+  // Sidebar
+  'sidebar.home': 'Trang chủ',
+  'sidebar.scripts': 'Tạo kịch bản',
+  'sidebar.practice': 'Luyện tập AI',
+  'sidebar.knowledge': 'Kiến thức',
+  'sidebar.review': 'Đánh giá',
+  'sidebar.analytics': 'Phân tích',
+  'sidebar.team': 'Nhóm',
+  'sidebar.plugins': 'Plugin ngành',
+  'sidebar.admin': 'Quản trị',
+  'sidebar.logout': 'Đăng xuất',
+
+  // Plans
+  'plan.free': 'Miễn phí',
+  'plan.professional': 'Chuyên nghiệp',
+  'plan.team': 'Nhóm',
+  'plan.enterprise': 'Doanh nghiệp',
+  'plan.upgrade': 'Nâng cấp',
+  'plan.current': 'Gói hiện tại',
+
+  // Multi-language
+  'i18n.selectLanguage': 'Chọn ngôn ngữ',
+  'i18n.moreComing': 'Sớng hỗ trợ thêm ngôn ngữ...',
 };

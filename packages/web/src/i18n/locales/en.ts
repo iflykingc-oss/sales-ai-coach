@@ -148,4 +148,79 @@ export default {
   'landing.stats.stages': 'Growth Stages',
   'landing.stats.dimensions': 'Eval Dimensions',
   'landing.stats.timeToValue': 'Time to Value',
+
+  // User Levels
+  'level.beginner': 'Beginner',
+  'level.entry': 'Entry Sales',
+  'level.growing': 'Growing Sales',
+  'level.proficient': 'Proficient Sales',
+  'level.senior': 'Senior Sales',
+  'level.coach': 'Sales Coach',
+
+  // Lesson Descriptions
+  'lesson.opening.desc': 'Learn opening techniques that capture customer attention',
+  'lesson.discovery.desc': 'Understand real customer needs through effective questioning',
+  'lesson.presentation.desc': 'Clearly communicate product value and advantages',
+  'lesson.objection.desc': 'Effectively respond to customer concerns and objections',
+  'lesson.negotiation.desc': 'Reach consensus while protecting profit margins',
+  'lesson.closing.desc': 'Seize the right moment to close the deal',
+  'lesson.fullCycle.desc': 'Complete practice from first contact to closing',
+  'lesson.renewal.desc': 'Maintain relationships and secure renewals',
+  'lesson.enterprise.desc': 'Handle complex sales with multiple decision makers',
+  'lesson.hell.desc': 'Deal with the most challenging customers',
+  'lesson.complaint.desc': 'Recover relationships with dissatisfied customers',
+
+  // Practice Coaching
+  'coaching.feedback': 'Round {round} Evaluation',
+  'coaching.hint': 'Coach Tip',
+  'coaching.emotion.warning': 'Emotion Alert',
+  'coaching.progress': 'Progress',
+  'coaching.customer.greeting': 'Hello, I am your {scenario} practice customer. Please begin your sales pitch.',
+  'coaching.maxRounds': 'Conversation has reached {round} rounds, you can end now',
+  'coaching.continue': 'Continue 5 More Rounds',
+  'coaching.endAndView': 'End Practice, View Results',
+
+  // Dashboard Extra
+  'dashboard.empty.title': 'Start Your Growth Journey',
+  'dashboard.empty.desc': 'Complete fundamentals training to become a top sales performer',
+  'dashboard.empty.cta': 'Start First Lesson',
+  'dashboard.viewAll': 'View All',
+  'dashboard.noPractices': 'No practice records yet',
+  'dashboard.level.progress': 'Complete {count} more practices to reach {level}',
+  'dashboard.totalPractices': 'Total Practices',
+
+  // Practice Summary
+  'summary.excellent': 'Excellent!',
+  'summary.good': 'Good Performance',
+  'summary.keepGoing': 'Keep Going',
+  'summary.strengths': 'Strengths',
+  'summary.improvements': 'Areas to Improve',
+  'summary.retry': 'Try Again',
+  'summary.viewDetails': 'View Detailed Report',
+  'summary.generating': 'AI is analyzing your performance...',
+  'summary.generatingDesc': 'Evaluating your skills across 8 dimensions',
+
+  // Sidebar
+  'sidebar.home': 'Home',
+  'sidebar.scripts': 'Script Generator',
+  'sidebar.practice': 'AI Practice',
+  'sidebar.knowledge': 'Knowledge Base',
+  'sidebar.review': 'Review',
+  'sidebar.analytics': 'Analytics',
+  'sidebar.team': 'Team',
+  'sidebar.plugins': 'Industry Plugins',
+  'sidebar.admin': 'Admin',
+  'sidebar.logout': 'Logout',
+
+  // Plans
+  'plan.free': 'Free',
+  'plan.professional': 'Professional',
+  'plan.team': 'Team',
+  'plan.enterprise': 'Enterprise',
+  'plan.upgrade': 'Upgrade',
+  'plan.current': 'Current Plan',
+
+  // Multi-language
+  'i18n.selectLanguage': 'Select Language',
+  'i18n.moreComing': 'More languages coming soon...',
 };

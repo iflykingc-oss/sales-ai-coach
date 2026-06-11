@@ -1,0 +1,220 @@
+{
+  "version": "1.0",
+  "dimensions": {
+    "opening": {
+      "name": { "zh": "开场白", "en": "Opening", "th": "เปิดบทสนทนา", "vi": "Mở đầu", "ms": "Pembukaan", "id": "Pembukaan" },
+      "weight": 0.12,
+      "criteria": {
+        "90-100": {
+          "zh": "3秒内抓住注意力，个性化开场，引发好奇心",
+          "en": "Captures attention in 3 seconds, personalized opening, sparks curiosity",
+          "example": "王总，看到您上周在XX论坛的分享，关于降本的观点很有洞见..."
+        },
+        "70-89": {
+          "zh": "礼貌得体，有基本破冰，但缺乏个性化",
+          "en": "Polite and proper, basic ice-breaking, but lacks personalization",
+          "example": "您好，我是XX公司的，想跟您聊聊我们的产品..."
+        },
+        "50-69": {
+          "zh": "标准模板开场，客户能听出是推销",
+          "en": "Standard template opening, customer can tell it's a sales pitch",
+          "example": "您好，请问是XX先生吗？我是XX公司的销售..."
+        },
+        "0-49": {
+          "zh": "直接推销，没有破冰，客户反感",
+          "en": "Direct sales pitch, no ice-breaking, customer反感",
+          "example": "我们公司有个产品想推荐给您..."
+        }
+      }
+    },
+    "discovery": {
+      "name": { "zh": "需求挖掘", "en": "Need Discovery", "th": "ค้นหาความต้องการ", "vi": "Khám phá nhu cầu", "ms": "Penemuan Keperluan", "id": "Penemuan Kebutuhan" },
+      "weight": 0.15,
+      "criteria": {
+        "90-100": {
+          "zh": "用SPIN等框架精准挖到客户核心痛点和隐性需求",
+          "en": "Uses SPIN framework to precisely uncover core pain points and hidden needs",
+          "example": "您提到团队效率低，具体是哪个环节最耗时？这对您的业务指标有什么影响？"
+        },
+        "70-89": {
+          "zh": "能问出基本需求，但深度不够",
+          "en": "Can identify basic needs, but lacks depth",
+          "example": "您目前遇到什么问题吗？"
+        },
+        "50-69": {
+          "zh": "只问表面问题，没有深挖",
+          "en": "Only asks surface questions, no deep exploration",
+          "example": "您需要什么功能？"
+        },
+        "0-49": {
+          "zh": "不问需求，直接介绍产品",
+          "en": "Doesn't ask about needs, directly introduces product",
+          "example": "我们的产品有XX功能..."
+        }
+      }
+    },
+    "value": {
+      "name": { "zh": "价值传递", "en": "Value Presentation", "th": "การนำเสนอคุณค่า", "vi": "Truyền đạt giá trị", "ms": "Persembahan Nilai", "id": "Presentasi Nilai" },
+      "weight": 0.15,
+      "criteria": {
+        "90-100": {
+          "zh": "用FAB法则，将产品特性转化为客户利益，有数据支撑",
+          "en": "Uses FAB method, converts features to benefits with data support",
+          "example": "这个功能可以帮您减少30%的重复工作，相当于每月节省20个人天"
+        },
+        "70-89": {
+          "zh": "能说出产品优势，但与客户需求关联不强",
+          "en": "Can describe advantages, but weak connection to customer needs",
+          "example": "我们的产品功能很强大..."
+        },
+        "50-69": {
+          "zh": "只列功能清单，没有说明对客户的价值",
+          "en": "Only lists features, no value explanation",
+          "example": "我们有A功能、B功能、C功能..."
+        },
+        "0-49": {
+          "zh": "照本宣科念产品手册",
+          "en": "Reads product manual verbatim",
+          "example": "根据我们的产品文档..."
+        }
+      }
+    },
+    "objection": {
+      "name": { "zh": "异议处理", "en": "Objection Handling", "th": "การจัดการข้อโต้แย้ง", "vi": "Xử lý phản đối", "ms": "Pengurusan Bantahan", "id": "Penanganan Keberatan" },
+      "weight": 0.15,
+      "criteria": {
+        "90-100": {
+          "zh": "用LSCPA法，先共情再化解，将异议转化为成交机会",
+          "en": "Uses LSCPA method, empathizes first then resolves, turns objections into closing opportunities",
+          "example": "理解您的顾虑（共情），很多客户最初也这样想（示证），其实...（转化）"
+        },
+        "70-89": {
+          "zh": "能回应异议，但缺乏技巧",
+          "en": "Can respond to objections, but lacks technique",
+          "example": "这个价格其实不贵的..."
+        },
+        "50-69": {
+          "zh": "回避异议或强行反驳",
+          "en": "Avoids objections or forcefully反驳",
+          "example": "我们的产品质量很好，不会有问题的"
+        },
+        "0-49": {
+          "zh": "与客户争辩，激化矛盾",
+          "en": "Argues with customer, escalates conflict",
+          "example": "您这样说就不对了..."
+        }
+      }
+    },
+    "closing": {
+      "name": { "zh": "促成能力", "en": "Closing Ability", "th": "ความสามารถในการปิดการขาย", "vi": "Khả năng chốt đơn", "ms": "Keupayaan Penutupan", "id": "Kemampuan Closing" },
+      "weight": 0.13,
+      "criteria": {
+        "90-100": {
+          "zh": "精准识别购买信号，自然促成，不显生硬",
+          "en": "Precisely identifies buying signals, naturally closes without being pushy",
+          "example": "看您对这个方案比较满意，我们先安排个试用期如何？"
+        },
+        "70-89": {
+          "zh": "能尝试促成，但时机把握不够精准",
+          "en": "Can attempt closing, but timing is imprecise",
+          "example": "那我们就定下来吧？"
+        },
+        "50-69": {
+          "zh": "不敢促成或过于强硬",
+          "en": "Afraid to close or too aggressive",
+          "example": "今天必须定下来！"
+        },
+        "0-49": {
+          "zh": "完全没有促成意识",
+          "en": "No closing awareness at all",
+          "example": "那您再考虑考虑..."
+        }
+      }
+    },
+    "listening": {
+      "name": { "zh": "倾听技巧", "en": "Listening Skills", "th": "ทักษะการฟัง", "vi": "Kỹ năng lắng nghe", "ms": "Kemahiran Mendengar", "id": "Keterampilan Mendengarkan" },
+      "weight": 0.10,
+      "criteria": {
+        "90-100": {
+          "zh": "主动倾听，复述确认，抓住客户言外之意",
+          "en": "Active listening, paraphrases to confirm, catches implied meanings",
+          "example": "您刚才提到...，我的理解是...对吗？"
+        },
+        "70-89": {
+          "zh": "能听客户说话，但缺乏确认和总结",
+          "en": "Listens to customer, but lacks confirmation and summary",
+          "example": "嗯嗯，好的..."
+        },
+        "50-69": {
+          "zh": "经常打断客户，急于表达自己的观点",
+          "en": "Frequently interrupts customer,急于表达",
+          "example": "等一下，我先说..."
+        },
+        "0-49": {
+          "zh": "完全不听客户说什么，自说自话",
+          "en": "Doesn't listen at all, talks to self",
+          "example": "不管您怎么说，我们的产品就是好..."
+        }
+      }
+    },
+    "emotion": {
+      "name": { "zh": "情绪管理", "en": "Emotion Management", "th": "การจัดการอารมณ์", "vi": "Quản lý cảm xúc", "ms": "Pengurusan Emosi", "id": "Manajemen Emosi" },
+      "weight": 0.10,
+      "criteria": {
+        "90-100": {
+          "zh": "始终保持专业冷静，能引导客户情绪",
+          "en": "Always maintains professional calm, can guide customer emotions",
+          "example": "理解您的frustration，我们一起来解决这个问题"
+        },
+        "70-89": {
+          "zh": "基本保持冷静，但偶尔被客户影响",
+          "en": "Generally calm, but occasionally受影响",
+          "example": "我理解...但是..."
+        },
+        "50-69": {
+          "zh": "情绪波动明显，影响沟通效果",
+          "en": "Noticeable emotional波动, affects communication",
+          "example": "我已经说了很多遍了！"
+        },
+        "0-49": {
+          "zh": "与客户发生情绪对抗",
+          "en": "Emotional confrontation with customer",
+          "example": "您这是什么态度！"
+        }
+      }
+    },
+    "professionalism": {
+      "name": { "zh": "专业形象", "en": "Professional Image", "th": "ภาพลักษณ์มืออาชีพ", "vi": "Hình ảnh chuyên nghiệp", "ms": "Imej Profesional", "id": "Profesionalisme" },
+      "weight": 0.10,
+      "criteria": {
+        "90-100": {
+          "zh": "行业知识扎实，能提供专业见解和建议",
+          "en": "Solid industry knowledge, provides professional insights and advice",
+          "example": "根据我们服务的XX家同行业客户的经验..."
+        },
+        "70-89": {
+          "zh": "基本了解产品，但行业深度不够",
+          "en": "Basic product knowledge, but lacks industry depth",
+          "example": "我们的产品功能是..."
+        },
+        "50-69": {
+          "zh": "回答含糊，显得不专业",
+          "en": "Vague answers, appears unprofessional",
+          "example": "这个...我不太确定..."
+        },
+        "0-49": {
+          "zh": "明显不了解自己的产品或行业",
+          "en": "Clearly不了解 own product or industry",
+          "example": "这个问题我需要问问技术团队..."
+        }
+      }
+    }
+  },
+  "overall_grading": {
+    "S": { "min": 90, "label": { "zh": "销冠级", "en": "Top Performer" } },
+    "A": { "min": 80, "label": { "zh": "优秀", "en": "Excellent" } },
+    "B": { "min": 70, "label": { "zh": "良好", "en": "Good" } },
+    "C": { "min": 60, "label": { "zh": "合格", "en": "Pass" } },
+    "D": { "min": 0, "label": { "zh": "需提升", "en": "Needs Improvement" } }
+  }
+}

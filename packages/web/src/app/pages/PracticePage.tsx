@@ -135,6 +135,37 @@ const QUICK_SCENARIOS: Record<string, {
     objectives: ['平息情绪', '解决问题', '挽回关系'],
     industry: '通用',
   },
+  // Southeast Asia scenarios
+  'sea-lazada': {
+    id: 'sea-lazada',
+    title: 'Lazada卖家入驻',
+    desc: '向中国卖家推荐Lazada平台入驻服务',
+    difficulty: 'medium',
+    greeting: '我们确实想做东南亚市场，但对Lazada不太了解，你能介绍一下吗？',
+    customerProfile: '想拓展东南亚市场的中国电商卖家',
+    objectives: ['消除跨境顾虑', '展示平台优势'],
+    industry: '跨境电商',
+  },
+  'sea-saas-local': {
+    id: 'sea-saas-local',
+    title: '本地化SaaS销售',
+    desc: '向东南亚企业销售SaaS产品',
+    difficulty: 'hard',
+    greeting: '你们的数据中心在哪里？符合新加坡的PDPA合规要求吗？',
+    customerProfile: '新加坡企业IT负责人',
+    objectives: ['解决合规顾虑', '展示本地化能力'],
+    industry: 'SaaS',
+  },
+  'sea-payment': {
+    id: 'sea-payment',
+    title: '跨境支付方案',
+    desc: '向电商卖家推广东南亚本地支付',
+    difficulty: 'medium',
+    greeting: '现在用的支付方式在东南亚成功率很低，客户经常付不了款。',
+    customerProfile: '跨境电商卖家',
+    objectives: ['展示本地支付覆盖', '比较费率优势'],
+    industry: '金融',
+  },
 };
 
 export default function PracticePage() {

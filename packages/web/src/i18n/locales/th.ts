@@ -148,4 +148,79 @@ export default {
   'landing.stats.stages': 'ขั้นตอนการเติบโต',
   'landing.stats.dimensions': 'มิติประเมิน',
   'landing.stats.timeToValue': 'เวลาสู่คุณค่า',
+
+  // User Levels
+  'level.beginner': 'มือใหม่',
+  'level.entry': 'พนักงานขายเริ่มต้น',
+  'level.growing': 'พนักงานขายที่กำลังเติบโต',
+  'level.proficient': 'พนักงานขายชำนาญ',
+  'level.senior': 'พนักงานขายอาวุโส',
+  'level.coach': 'โค้ชขาย',
+
+  // Lesson Descriptions
+  'lesson.opening.desc': 'เรียนรู้เทคนิคเปิดบทสนทนาที่ดึงดูดความสนใจลูกค้า',
+  'lesson.discovery.desc': 'เข้าใจความต้องการที่แท้จริงของลูกค้าผ่านการถามที่มีประสิทธิภาพ',
+  'lesson.presentation.desc': 'สื่อสารคุณค่าและข้อได้เปรียบของผลิตภัณฑ์อย่างชัดเจน',
+  'lesson.objection.desc': 'ตอบสนองต่อข้อกังวลและข้อโต้แย้งของลูกค้าอย่างมีประสิทธิภาพ',
+  'lesson.negotiation.desc': 'บรรลุข้อตกลงในขณะที่ปกป้องอัตรากำไร',
+  'lesson.closing.desc': 'คว้าโอกาสที่เหมาะสมในการปิดดีล',
+  'lesson.fullCycle.desc': 'ฝึกซ้อมครบวงจรจากติดต่อแรกจนปิดการขาย',
+  'lesson.renewal.desc': 'รักษาความสัมพันธ์และรักษาการต่ออายุ',
+  'lesson.enterprise.desc': 'จัดการการขายที่ซับซ้อนกับผู้มีอำนาจตัดสินใจหลายคน',
+  'lesson.hell.desc': 'รับมือกับลูกค้าที่ท้าทายที่สุด',
+  'lesson.complaint.desc': 'กู้คืนความสัมพันธ์กับลูกค้าที่ไม่พอใจ',
+
+  // Practice Coaching
+  'coaching.feedback': 'ประเมินรอบที่ {round}',
+  'coaching.hint': 'คำแนะนำจากโค้ช',
+  'coaching.emotion.warning': 'เตือนอารมณ์',
+  'coaching.progress': 'ความคืบหน้า',
+  'coaching.customer.greeting': 'สวัสดีครับ/ค่ะ ฉันเป็นลูกค้าฝึกซ้อม{scenario}ของคุณ กรุณาเริ่มนำเสนอขายได้เลย',
+  'coaching.maxRounds': 'บทสนทนาดำเนินมา {round} รอบแล้ว สามารถจบได้เลย',
+  'coaching.continue': 'ฝึกต่ออีก 5 รอบ',
+  'coaching.endAndView': 'จบการฝึก ดูผลลัพธ์',
+
+  // Dashboard Extra
+  'dashboard.empty.title': 'เริ่มต้นเส้นทางการเติบโต',
+  'dashboard.empty.desc': 'ฝึกอบรมพื้นฐานให้สำเร็จเพื่อเป็นพนักงานขายชั้นนำ',
+  'dashboard.empty.cta': 'เริ่มบทเรียนแรก',
+  'dashboard.viewAll': 'ดูทั้งหมด',
+  'dashboard.noPractices': 'ยังไม่มีบันทึกการฝึกซ้อม',
+  'dashboard.level.progress': 'ฝึกซ้อมอีก {count} ครั้งเพื่อเลื่อนระดับเป็น {level}',
+  'dashboard.totalPractices': 'จำนวนการฝึกซ้อมทั้งหมด',
+
+  // Practice Summary
+  'summary.excellent': 'ยอดเยี่ยม!',
+  'summary.good': 'ผลการดำเนินงานดี',
+  'summary.keepGoing': 'ทำต่อไป',
+  'summary.strengths': 'จุดแข็ง',
+  'summary.improvements': 'สิ่งที่ควรปรับปรุง',
+  'summary.retry': 'ลองอีกครั้ง',
+  'summary.viewDetails': 'ดูรายงานละเอียด',
+  'summary.generating': 'AI กำลังวิเคราะห์ผลการดำเนินงานของคุณ...',
+  'summary.generatingDesc': 'กำลังประเมินทักษะของคุณใน 8 มิติ',
+
+  // Sidebar
+  'sidebar.home': 'หน้าแรก',
+  'sidebar.scripts': 'สร้างสคริปต์',
+  'sidebar.practice': 'ฝึกซ้อม AI',
+  'sidebar.knowledge': 'ฐานความรู้',
+  'sidebar.review': 'วิเคราะห์ผล',
+  'sidebar.analytics': 'วิเคราะห์ข้อมูล',
+  'sidebar.team': 'ทีม',
+  'sidebar.plugins': 'ปลั๊กอินอุตสาหกรรม',
+  'sidebar.admin': 'ผู้ดูแลระบบ',
+  'sidebar.logout': 'ออกจากระบบ',
+
+  // Plans
+  'plan.free': 'ฟรี',
+  'plan.professional': 'มืออาชีพ',
+  'plan.team': 'ทีม',
+  'plan.enterprise': 'องค์กร',
+  'plan.upgrade': 'อัปเกรด',
+  'plan.current': 'แพ็กเกจปัจจุบัน',
+
+  // Multi-language
+  'i18n.selectLanguage': 'เลือกภาษา',
+  'i18n.moreComing': 'รองรับภาษาเพิ่มเติมเร็วๆ นี้...',
 };

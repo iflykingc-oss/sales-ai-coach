@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Lightbulb, BookOpen, Brain, Clock, Target, Plus, Sparkles, FileUp } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -14,6 +14,7 @@ import {
   type PracticeMode,
 } from '@/stores/practiceStore';
 import { useCustomScenarioStore } from '@/stores/customScenarioStore';
+import { useI18n } from '@/i18n';
 import { cn } from '@/utils/cn';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
 import { getFrameworkById } from '@sales-ai-coach/shared/data';
@@ -317,8 +318,8 @@ export function PracticeModeSetup({ onStart }: PracticeModeSelectorProps) {
   );
 }
 
-// Chat message bubble component
-function MessageBubble({ message }: { message: ChatMessage }) {
+// Chat message bubble component - memoized for performance
+const MessageBubble = React.memo(function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
   // Detect coaching messages by content prefix
   const isCoachHint = !isUser && message.content.startsWith('💡');
@@ -394,7 +395,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       )}
     </div>
   );
-}
+});
 
 interface PracticeChatProps {
   onEnd: () => void;
@@ -402,6 +403,7 @@ interface PracticeChatProps {
 
 export function PracticeChat({ onEnd }: PracticeChatProps) {
   const { session, addMessage, incrementRound, setCustomerEmotion, completePractice, setDetectedStage } = usePracticeStore();
+  const { t } = useI18n();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPsychology, setShowPsychology] = useState(false);
@@ -623,28 +625,30 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
   return (
     <div className="flex h-[calc(100vh-12rem)] flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2 sm:px-4 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           <EmotionIndicator emotion={session.customerEmotion} />
-          <span className="text-sm text-gray-500">
-            第 {session.round}/{session.maxRounds} 轮
+          <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap">
+            {session.round}/{session.maxRounds}
           </span>
           {session.scenarioName && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 truncate max-w-[120px] sm:max-w-none">
               {session.scenarioName}
             </span>
           )}
           {currentFramework && (
-            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-600">
+            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-600 hidden sm:inline">
               {currentFramework.name}
             </span>
           )}
-          {/* Talk-time ratio */}
+          {/* Talk-time ratio - hidden on mobile */}
           {session.userCharCount !== undefined && session.userCharCount > 0 && (
-            <TalkTimeRatio
-              userCharCount={session.userCharCount}
-              assistantCharCount={session.assistantCharCount || 0}
-            />
+            <div className="hidden sm:block">
+              <TalkTimeRatio
+                userCharCount={session.userCharCount}
+                assistantCharCount={session.assistantCharCount || 0}
+              />
+            </div>
           )}
           {/* Session health indicator */}
           <SessionHealthIndicator
@@ -656,29 +660,30 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
               .map((m) => m.roundScore as number)}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <Button variant="secondary" size="sm" onClick={handleSuggestion} disabled={isLoading || hintLoading}>
-            <Lightbulb className="mr-1 h-3.5 w-3.5" />
-            {hintLoading ? '生成中...' : '教练提示'}
+            <Lightbulb className="h-3.5 w-3.5 sm:mr-1" />
+            <span className="hidden sm:inline">{hintLoading ? t('common.loading') : t('coaching.hint')}</span>
           </Button>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setShowBenchmark(!showBenchmark)}
           >
-            <BookOpen className="mr-1 h-3.5 w-3.5" />
-            查看最佳话术
+            <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+            <span className="hidden sm:inline">{t('practice.bestScript', 'Best Script')}</span>
           </Button>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setShowPsychology(!showPsychology)}
           >
-            <Brain className="mr-1 h-3.5 w-3.5" />
-            提示客户心理
+            <Brain className="h-3.5 w-3.5 sm:mr-1" />
+            <span className="hidden sm:inline">{t('practice.customerPsychology', 'Customer Psychology')}</span>
           </Button>
           <Button variant="danger" size="sm" onClick={handleEnd}>
-            结束陪练
+            <span className="hidden sm:inline">{t('practice.end')}</span>
+            <span className="sm:hidden">{t('common.close')}</span>
           </Button>
         </div>
       </div>
@@ -688,7 +693,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
         <div className="border-b border-gray-200 bg-gradient-to-r from-primary-50 to-blue-50 px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
             <Target className="h-3.5 w-3.5 text-primary-500" />
-            <span className="text-xs font-medium text-primary-700">销售逻辑框架</span>
+            <span className="text-xs font-medium text-primary-700">{t('practice.framework', 'Sales Framework')}</span>
             <span className="text-xs text-primary-600">{currentFramework.name}</span>
           </div>
           <div className="flex gap-2">
@@ -781,7 +786,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           <div className="flex h-full items-center justify-center text-gray-400">
             <div className="text-center">
               <div className="mb-2 text-4xl">💬</div>
-              <p>开始与AI客户对话吧</p>
+              <p>{t('practice.startChat', 'Start a conversation with AI customer')}</p>
             </div>
           </div>
         )}
@@ -811,11 +816,11 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
         {isMaxRounds ? (
           <div className="space-y-2">
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-center text-sm text-amber-700">
-              🎯 对话已进行 {session.round} 轮，可以结束了。你也可以继续对话加深练习。
+              🎯 {t('coaching.maxRounds', `对话已进行 ${session.round} 轮，可以结束了。`).replace('{round}', String(session.round))}
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" className="flex-1" onClick={handleEnd}>
-                结束陪练，查看结果
+                {t('coaching.endAndView')}
               </Button>
               <Button variant="primary" className="flex-1" onClick={() => {
                 usePracticeStore.setState((state) => {
@@ -823,7 +828,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                   return { session: { ...state.session, maxRounds: state.session.maxRounds + 5 } };
                 });
               }}>
-                继续练习 5 轮
+                {t('coaching.continue')}
               </Button>
             </div>
           </div>
@@ -838,7 +843,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="输入你的回复..."
+              placeholder={t('practice.inputPlaceholder')}
               disabled={isLoading}
               className="flex-1"
             />

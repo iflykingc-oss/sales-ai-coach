@@ -148,4 +148,79 @@ export default {
   'landing.stats.stages': '成长阶段',
   'landing.stats.dimensions': '评估维度',
   'landing.stats.timeToValue': '首次价值',
+
+  // User Levels
+  'level.beginner': '初学者',
+  'level.entry': '入门销售',
+  'level.growing': '成长销售',
+  'level.proficient': '熟练销售',
+  'level.senior': '资深销售',
+  'level.coach': '销售教练',
+
+  // Lesson Descriptions
+  'lesson.opening.desc': '学会吸引客户注意力的开场方式',
+  'lesson.discovery.desc': '通过提问了解客户真实需求',
+  'lesson.presentation.desc': '清晰传达产品价值和优势',
+  'lesson.objection.desc': '有效回应客户顾虑和异议',
+  'lesson.negotiation.desc': '在保护利润的同时达成共识',
+  'lesson.closing.desc': '把握时机促成交易',
+  'lesson.fullCycle.desc': '从首次接触到成交的完整演练',
+  'lesson.renewal.desc': '维护关系并促成续约',
+  'lesson.enterprise.desc': '应对多方决策者的复杂销售',
+  'lesson.hell.desc': '面对最挑剔的客户',
+  'lesson.complaint.desc': '挽回不满客户的关系',
+
+  // Practice Coaching
+  'coaching.feedback': '第{round}轮评估',
+  'coaching.hint': '教练提示',
+  'coaching.emotion.warning': '情绪预警',
+  'coaching.progress': '进度',
+  'coaching.customer.greeting': '您好，我是您的{scenario}练习客户。请开始您的销售话术。',
+  'coaching.maxRounds': '对话已进行 {round} 轮，可以结束了',
+  'coaching.continue': '继续练习 5 轮',
+  'coaching.endAndView': '结束陪练，查看结果',
+
+  // Dashboard Extra
+  'dashboard.empty.title': '开始你的成长之路',
+  'dashboard.empty.desc': '完成基础功训练，逐步成为金牌销售',
+  'dashboard.empty.cta': '开始第一课',
+  'dashboard.viewAll': '查看全部',
+  'dashboard.noPractices': '暂无练习记录',
+  'dashboard.level.progress': '再完成 {count} 次练习升级为 {level}',
+  'dashboard.totalPractices': '总练习次数',
+
+  // Practice Summary
+  'summary.excellent': '优秀！',
+  'summary.good': '表现良好',
+  'summary.keepGoing': '继续加油',
+  'summary.strengths': '优势',
+  'summary.improvements': '待改进',
+  'summary.retry': '再练一次',
+  'summary.viewDetails': '查看详细报告',
+  'summary.generating': 'AI 正在分析你的表现...',
+  'summary.generatingDesc': '正在从8个维度评估你的销售技巧',
+
+  // Sidebar
+  'sidebar.home': '首页',
+  'sidebar.scripts': '话术生成',
+  'sidebar.practice': 'AI陪练',
+  'sidebar.knowledge': '知识库',
+  'sidebar.review': '复盘',
+  'sidebar.analytics': '数据分析',
+  'sidebar.team': '团队',
+  'sidebar.plugins': '行业插件',
+  'sidebar.admin': '管理后台',
+  'sidebar.logout': '退出登录',
+
+  // Plans
+  'plan.free': '免费版',
+  'plan.professional': '专业版',
+  'plan.team': '团队版',
+  'plan.enterprise': '企业版',
+  'plan.upgrade': '升级',
+  'plan.current': '当前套餐',
+
+  // Multi-language
+  'i18n.selectLanguage': '选择语言',
+  'i18n.moreComing': '更多语言支持中...',
 };

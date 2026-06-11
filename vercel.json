@@ -3,6 +3,16 @@
   "installCommand": "corepack enable && pnpm install",
   "buildCommand": "cd packages/web && pnpm run build",
   "outputDirectory": "packages/web/dist",
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "3 0 * * *"
+    },
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "7 2 * * 0"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/health", "destination": "/api" },

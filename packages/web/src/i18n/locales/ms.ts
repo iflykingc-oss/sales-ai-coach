@@ -148,4 +148,79 @@ export default {
   'landing.stats.stages': 'Peringkat',
   'landing.stats.dimensions': 'Dimensi',
   'landing.stats.timeToValue': 'Masa',
+
+  // User Levels
+  'level.beginner': 'Pemula',
+  'level.entry': 'Jurujual Junior',
+  'level.growing': 'Jurujual Berkembang',
+  'level.proficient': 'Jurujual Mahir',
+  'level.senior': 'Jurujual Kanan',
+  'level.coach': 'Jurulatih Jualan',
+
+  // Lesson Descriptions
+  'lesson.opening.desc': 'Pelajari teknik pembukaan yang menarik perhatian pelanggan',
+  'lesson.discovery.desc': 'Fahami keperluan sebenar pelanggan melalui soalan berkesan',
+  'lesson.presentation.desc': 'Sampaikan nilai dan kelebihan produk dengan jelas',
+  'lesson.objection.desc': 'Balas kebimbangan dan bantahan pelanggan dengan berkesan',
+  'lesson.negotiation.desc': 'Capai persetujuan sambil melindungi margin keuntungan',
+  'lesson.closing.desc': 'Raih masa yang tepat untuk menutup urus niaga',
+  'lesson.fullCycle.desc': 'Latihan lengkap dari hubungan pertama hingga penutupan',
+  'lesson.renewal.desc': 'Kekalkan hubungan dan pastikan pembaharuan',
+  'lesson.enterprise.desc': 'Urus jualan kompleks dengan pelbagai pembuat keputusan',
+  'lesson.hell.desc': 'Hadapi pelanggan yang pencabar',
+  'lesson.complaint.desc': 'Pulihkan hubungan dengan pelanggan yang tidak puas hati',
+
+  // Practice Coaching
+  'coaching.feedback': 'Penilaian Pusingan {round}',
+  'coaching.hint': 'Petua Jurulatih',
+  'coaching.emotion.warning': 'Amaran Emosi',
+  'coaching.progress': 'Kemajuan',
+  'coaching.customer.greeting': 'Halo, saya pelanggan latihan {scenario} anda. Sila mulakan pembentangan jualan anda.',
+  'coaching.maxRounds': 'Perbualan telah mencapai {round} pusingan, anda boleh tamatkan',
+  'coaching.continue': 'Teruskan 5 Pusingan Lagi',
+  'coaching.endAndView': 'Tamat Latihan, Lihat Keputusan',
+
+  // Dashboard Extra
+  'dashboard.empty.title': 'Mulakan Perjalanan Pertumbuhan',
+  'dashboard.empty.desc': 'Selesaikan latihan asas untuk menjadi jurujual terbaik',
+  'dashboard.empty.cta': 'Mulakan Pelajaran Pertama',
+  'dashboard.viewAll': 'Lihat Semua',
+  'dashboard.noPractices': 'Tiada rekod latihan lagi',
+  'dashboard.level.progress': 'Latihan {count} kali lagi untuk capai tahap {level}',
+  'dashboard.totalPractices': 'Jumlah Latihan',
+
+  // Practice Summary
+  'summary.excellent': 'Cemerlang!',
+  'summary.good': 'Prestasi Baik',
+  'summary.keepGoing': 'Teruskan',
+  'summary.strengths': 'Kekuatan',
+  'summary.improvements': 'Perlu Diperbaiki',
+  'summary.retry': 'Cuba Lagi',
+  'summary.viewDetails': 'Lihat Laporan Terperinci',
+  'summary.generating': 'AI sedang menganalisis prestasi anda...',
+  'summary.generatingDesc': 'Menilai kemahiran anda merentas 8 dimensi',
+
+  // Sidebar
+  'sidebar.home': 'Utama',
+  'sidebar.scripts': 'Jana Skrip',
+  'sidebar.practice': 'Latihan AI',
+  'sidebar.knowledge': 'Pangkalan Pengetahuan',
+  'sidebar.review': 'Semakan',
+  'sidebar.analytics': 'Analitik',
+  'sidebar.team': 'Pasukan',
+  'sidebar.plugins': 'Plugin Industri',
+  'sidebar.admin': 'Admin',
+  'sidebar.logout': 'Log Keluar',
+
+  // Plans
+  'plan.free': 'Percuma',
+  'plan.professional': 'Profesional',
+  'plan.team': 'Pasukan',
+  'plan.enterprise': 'Enterprise',
+  'plan.upgrade': 'Naik Taraf',
+  'plan.current': 'Pakej Semasa',
+
+  // Multi-language
+  'i18n.selectLanguage': 'Pilih Bahasa',
+  'i18n.moreComing': 'Lebih banyak bahasa akan datang...',
 };

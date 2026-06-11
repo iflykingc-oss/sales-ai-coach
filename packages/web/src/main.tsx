@@ -6,6 +6,15 @@ import { I18nProvider } from './i18n';
 import App from './App';
 import './index.css';
 
+// Register Service Worker
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW registration failed, app continues normally
+    });
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

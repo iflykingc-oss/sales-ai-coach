@@ -1,10 +1,13 @@
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000;
 
 export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
+  timeout: 30000, // 30 second timeout
 });
 
 let isRefreshing = false;
@@ -17,11 +20,32 @@ const processQueue = (error: unknown) => {
   failedQueue = [];
 };
 
+// Retry logic for network errors
+async function retryRequest(error: AxiosError, retryCount: number): Promise<unknown> {
+  const config = error.config as AxiosRequestConfig & { _retryCount?: number };
+
+  if (retryCount >= MAX_RETRIES) {
+    return Promise.reject(error);
+  }
+
+  // Only retry on network errors or 5xx errors
+  if (error.response && error.response.status < 500) {
+    return Promise.reject(error);
+  }
+
+  // Wait before retrying
+  await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+
+  config._retryCount = retryCount + 1;
+  return api(config);
+}
+
 api.interceptors.response.use(
   (response) => response.data,
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean; _retryCount?: number };
 
+    // Handle 401 - try to refresh session
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -45,6 +69,27 @@ api.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error.response?.data || error.message);
+    // Handle rate limiting (429)
+    if (error.response?.status === 429) {
+      const retryAfter = error.response.headers['retry-after'];
+      const message = (error.response.data as any)?.error || 'Too many requests. Please try again later.';
+      return Promise.reject({
+        status: 429,
+        error: message,
+        retryAfter: retryAfter ? parseInt(retryAfter) : 60,
+      });
+    }
+
+    // Retry on network errors
+    if (!error.response && error.code === 'ERR_NETWORK') {
+      return retryRequest(error, originalRequest._retryCount || 0);
+    }
+
+    // Retry on 5xx errors
+    if (error.response?.status && error.response.status >= 500) {
+      return retryRequest(error, originalRequest._retryCount || 0);
+    }
+
+    return Promise.reject(error.response?.data || { error: error.message });
   },
 );

@@ -23,6 +23,18 @@ export function LanguageSelector({ variant = 'default', className }: LanguageSel
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Auto-detect language on first visit
+  useEffect(() => {
+    const saved = localStorage.getItem('locale');
+    if (!saved) {
+      const browserLang = navigator.language.split('-')[0];
+      const supportedLocales = Object.keys(LOCALES);
+      if (supportedLocales.includes(browserLang)) {
+        setLocale(browserLang as Locale);
+      }
+    }
+  }, [setLocale]);
+
   const currentLocale = LOCALES[locale];
 
   return (
@@ -32,9 +44,11 @@ export function LanguageSelector({ variant = 'default', className }: LanguageSel
         className={cn(
           'flex items-center gap-2 rounded-lg transition-colors',
           variant === 'default'
-            ? 'px-3 py-2 text-sm text-gray-600 hover:bg-gray-100'
+            ? 'px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 border border-gray-200'
             : 'px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-50'
         )}
+        aria-label="Select language"
+        aria-expanded={isOpen}
       >
         <Globe className={cn(variant === 'default' ? 'h-4 w-4' : 'h-3.5 w-3.5')} />
         <span>{currentLocale.flag}</span>
@@ -47,7 +61,10 @@ export function LanguageSelector({ variant = 'default', className }: LanguageSel
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          <div className="px-3 py-1.5 text-xs font-medium text-gray-400 border-b border-gray-100">
+            选择语言 / Select Language
+          </div>
           {Object.entries(LOCALES).map(([key, value]) => (
             <button
               key={key}
@@ -69,6 +86,9 @@ export function LanguageSelector({ variant = 'default', className }: LanguageSel
               )}
             </button>
           ))}
+          <div className="px-3 py-1.5 text-xs text-gray-400 border-t border-gray-100">
+            🌏 更多语言支持中...
+          </div>
         </div>
       )}
     </div>
