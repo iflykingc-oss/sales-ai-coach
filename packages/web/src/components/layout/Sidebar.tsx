@@ -12,7 +12,6 @@ import {
   Settings,
   LogOut,
   Crown,
-  Trophy,
 } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
 import { toast } from '@/hooks/useToast';
@@ -24,7 +23,6 @@ const navItems = [
   { path: '/app/knowledge', icon: BookOpen, label: '知识库', end: false },
   { path: '/app/review', icon: ClipboardList, label: '复盘', end: false },
   { path: '/app/analytics', icon: BarChart3, label: '数据分析', end: false },
-  { path: '/app/leaderboard', icon: Trophy, label: '排行榜', end: false },
   { path: '/app/team', icon: Users, label: '团队', end: false },
   { path: '/app/plugins', icon: Puzzle, label: '行业插件', end: false },
   { path: '/app/admin', icon: Settings, label: '管理后台', end: false },

@@ -6,6 +6,8 @@
     "build": "turbo run build",
     "type-check": "turbo run type-check",
     "lint": "turbo run lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "pnpm --filter api prisma generate",
     "db:push": "pnpm --filter api prisma db push",
     "db:studio": "pnpm --filter api prisma studio",
@@ -16,7 +18,8 @@
     "@playwright/test": "^1.60.0",
     "playwright": "^1.60.0",
     "turbo": "^2.4.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.6"
   },
   "packageManager": "pnpm@10.0.0",
   "pnpm": {

@@ -406,6 +406,8 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPsychology, setShowPsychology] = useState(false);
   const [showBenchmark, setShowBenchmark] = useState(false);
+  const [coachingTip, setCoachingTip] = useState<string | null>(null);
+  const [coachingTipType, setCoachingTipType] = useState<'feedback' | 'hint' | 'progress'>('feedback');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -506,7 +508,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                 evaluationFeedback: data.evaluation_feedback,
               });
 
-              // Show coaching feedback after each round (round 2+)
+              // Show coaching feedback as a side panel (not in chat)
               if (data.evaluation_feedback && data.round >= 2) {
                 const dimScores = data.dimension_scores || {};
                 const weakDims = Object.entries(dimScores)
@@ -514,57 +516,30 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                   .slice(0, 2)
                   .map(([k, v]) => `${k}(${Math.round((v as number) * 100)}分)`)
                   .join('、');
-
-                const coachMsg: ChatMessage = {
-                  id: `coach-${Date.now()}`,
-                  role: 'assistant',
-                  content: `📊 第${data.round}轮评估: ${data.evaluation_feedback}${weakDims ? `\n\n需加强: ${weakDims}` : ''}`,
-                  timestamp: Date.now(),
-                };
-                usePracticeStore.setState((state) => {
-                  if (!state.session) return state;
-                  return {
-                    session: {
-                      ...state.session,
-                      messages: [...state.session.messages, coachMsg],
-                    },
-                  };
-                });
-
-                // Proactive coaching: Auto-trigger hint when score is low
                 const avgScore = data.round_score || 0;
+
+                setCoachingTip(`第${data.round}轮: ${data.evaluation_feedback}${weakDims ? ` | 需加强: ${weakDims}` : ''}`);
+                setCoachingTipType('feedback');
+
+                // Auto-hint when score is low
                 if (avgScore < 0.5 && data.round >= 3) {
                   setTimeout(async () => {
                     try {
                       const hintRes = await fetch('/api/practices/hint', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId: session.id }),
+                        body: JSON.stringify({ sessionId: session.id, scenario: session.scenarioName, round: data.round }),
                         credentials: 'include',
                       });
                       const hintJson = await hintRes.json();
                       const hint = hintJson.data?.hint || '注意调整沟通策略，关注客户反应。';
-
-                      const autoHint: ChatMessage = {
-                        id: `auto-hint-${Date.now()}`,
-                        role: 'assistant',
-                        content: `💡 主动教练: ${hint}`,
-                        timestamp: Date.now(),
-                      };
-                      usePracticeStore.setState((state) => {
-                        if (!state.session) return state;
-                        return {
-                          session: {
-                            ...state.session,
-                            messages: [...state.session.messages, autoHint],
-                          },
-                        };
-                      });
+                      setCoachingTip(`💡 ${hint}`);
+                      setCoachingTipType('hint');
                     } catch { /* ignore */ }
-                  }, 1000);
+                  }, 1500);
                 }
 
-                // Proactive coaching: Alert when emotion is negative for 2+ rounds
+                // Emotion alert
                 const recentEmotions = usePracticeStore.getState().session?.messages
                   .filter(m => m.emotion)
                   .slice(-3)
@@ -572,42 +547,9 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                 const negativeCount = recentEmotions.filter(e =>
                   e === '抗拒' || e === '生气' || e === '犹豫'
                 ).length;
-
                 if (negativeCount >= 2 && data.round >= 3) {
-                  const emotionAlert: ChatMessage = {
-                    id: `emotion-alert-${Date.now()}`,
-                    role: 'assistant',
-                    content: `⚠️ 情绪预警: 客户已连续${negativeCount}轮消极情绪，建议先缓和气氛，使用共情话术，不要急于推进。`,
-                    timestamp: Date.now() + 1,
-                  };
-                  usePracticeStore.setState((state) => {
-                    if (!state.session) return state;
-                    return {
-                      session: {
-                        ...state.session,
-                        messages: [...state.session.messages, emotionAlert],
-                      },
-                    };
-                  });
-                }
-
-                // Progress indicator at 60%
-                if (data.round >= 6 && data.round <= 7) {
-                  const progressMsg: ChatMessage = {
-                    id: `progress-${Date.now()}`,
-                    role: 'assistant',
-                    content: `📈 进度: 已完成${data.round}/${session.maxRounds}轮。当前表现: ${avgScore >= 0.7 ? '优秀' : avgScore >= 0.5 ? '良好' : '需要加油'}。`,
-                    timestamp: Date.now() + 2,
-                  };
-                  usePracticeStore.setState((state) => {
-                    if (!state.session) return state;
-                    return {
-                      session: {
-                        ...state.session,
-                        messages: [...state.session.messages, progressMsg],
-                      },
-                    };
-                  });
+                  setCoachingTip(`⚠️ 客户连续${negativeCount}轮消极情绪，建议先缓和气氛，使用共情话术`);
+                  setCoachingTipType('hint');
                 }
               }
 
@@ -820,6 +762,19 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
         </div>
       )}
 
+      {/* Coaching tip panel */}
+      {coachingTip && (
+        <div className={cn(
+          'border-b px-4 py-2.5 text-sm animate-in fade-in slide-in-from-top-2 duration-300',
+          coachingTipType === 'hint' ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-blue-50 border-blue-200 text-blue-700',
+        )}>
+          <div className="flex items-center justify-between">
+            <span className="leading-relaxed">{coachingTip}</span>
+            <button onClick={() => setCoachingTip(null)} className="ml-2 text-gray-400 hover:text-gray-600 flex-shrink-0">✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-4">
         {session.messages.length === 0 && (
@@ -839,7 +794,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
         {isLoading && (
           <div className="mb-4 flex justify-start animate-in fade-in slide-in-from-bottom-1 duration-300">
             <div className="mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm">
-              AI客
+              {session?.archetypeName?.charAt(0) || '客'}
             </div>
             <div className="flex items-center gap-1 rounded-2xl border border-gray-200 bg-white px-4 py-3">
               <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
@@ -854,8 +809,23 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
       {/* Input */}
       <div className="border-t border-gray-200 bg-white px-4 py-3">
         {isMaxRounds ? (
-          <div className="rounded-lg bg-gray-100 px-4 py-3 text-center text-sm text-gray-500">
-            已达到最大轮数，点击「结束陪练」查看结果
+          <div className="space-y-2">
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-center text-sm text-amber-700">
+              🎯 对话已进行 {session.round} 轮，可以结束了。你也可以继续对话加深练习。
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={handleEnd}>
+                结束陪练，查看结果
+              </Button>
+              <Button variant="primary" className="flex-1" onClick={() => {
+                usePracticeStore.setState((state) => {
+                  if (!state.session) return state;
+                  return { session: { ...state.session, maxRounds: state.session.maxRounds + 5 } };
+                });
+              }}>
+                继续练习 5 轮
+              </Button>
+            </div>
           </div>
         ) : (
           <form

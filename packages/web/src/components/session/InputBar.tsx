@@ -5,62 +5,21 @@ import {
   Mic,
   FileText,
   Clipboard,
-  MessageSquare,
   Loader2,
   X,
-  Camera,
+  Paperclip,
   MicOff,
-  ChevronDown,
-  ChevronUp,
-  Network,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useScriptStore } from '@/stores/scriptStore';
 import { generateScript } from '@/services/scriptService';
-import { getAnalyticalFrameworks } from '@sales-ai-coach/shared';
 import type { InputType } from '@sales-ai-coach/shared';
 
-type InputMode = 'TEXT' | 'IMAGE' | 'VOICE' | 'FORM' | 'PASTE';
-
-interface QuickFormField {
-  label: string;
-  key: string;
-  placeholder: string;
-  type: 'input' | 'select';
-  options?: string[];
-}
-
-const QUICK_FORM_FIELDS: QuickFormField[] = [
-  { label: '客户名称', key: 'customerName', placeholder: '请输入客户名称', type: 'input' },
-  {
-    label: '行业',
-    key: 'industry',
-    placeholder: '选择行业',
-    type: 'select',
-    options: ['互联网', '制造业', '金融', '零售', '医疗', '教育', '其他'],
-  },
-  {
-    label: '预算',
-    key: 'budget',
-    placeholder: '选择预算范围',
-    type: 'select',
-    options: ['< 5万', '5-20万', '20-50万', '50-100万', '> 100万', '未确定'],
-  },
-  { label: '异议', key: 'objection', placeholder: '客户提出的异议/顾虑', type: 'input' },
-];
-
-const INPUT_MODES: { key: InputMode; icon: React.ReactNode; label: string }[] = [
-  { key: 'TEXT', icon: <MessageSquare className="h-4 w-4" />, label: '文本' },
-  { key: 'IMAGE', icon: <Camera className="h-4 w-4" />, label: '截图' },
-  { key: 'VOICE', icon: <Mic className="h-4 w-4" />, label: '语音' },
-  { key: 'FORM', icon: <FileText className="h-4 w-4" />, label: '快速填表' },
-  { key: 'PASTE', icon: <Clipboard className="h-4 w-4" />, label: '粘贴' },
-];
+type InputMode = 'TEXT' | 'IMAGE' | 'VOICE' | 'PASTE';
 
 interface InputBarProps {
   onSend?: (input: string, inputType: InputMode, formData?: Record<string, string>) => void;
@@ -69,11 +28,11 @@ interface InputBarProps {
 export default function InputBar({ onSend }: InputBarProps) {
   const { activeSessionId } = useSessionStore();
   const { isGenerating, error: scriptError, setCurrentScript } = useScriptStore();
-  const [mode, setMode] = useState<InputMode>('TEXT');
   const [textValue, setValue] = useState('');
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ type: InputMode; name: string; data: string }>>([]);
   const [pasteValue, setPasteValue] = useState('');
-  const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [showPasteArea, setShowPasteArea] = useState(false);
   const {
     isListening,
     isSupported,
@@ -84,14 +43,9 @@ export default function InputBar({ onSend }: InputBarProps) {
     stopListening,
     resetTranscript: resetVoiceTranscript,
   } = useVoiceInput();
-  const [pasteError, setPasteError] = useState<string | null>(null);
-  const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
-  const [showFrameworks, setShowFrameworks] = useState(false);
+  const [showVoiceArea, setShowVoiceArea] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pasteAreaRef = useRef<HTMLDivElement>(null);
-
-  const analyticalFrameworks = getAnalyticalFrameworks();
 
   const handleGenerateScript = useCallback(
     async (input: string, inputType: InputMode) => {
@@ -118,7 +72,7 @@ export default function InputBar({ onSend }: InputBarProps) {
           sessionId: activeSessionId,
           content: input,
           inputType,
-          frameworks: selectedFrameworks,
+          frameworks: [], // AI auto-selects frameworks
         });
 
         if (result?.success && result?.data) {
@@ -149,52 +103,46 @@ export default function InputBar({ onSend }: InputBarProps) {
   );
 
   const handleSubmit = useCallback(async () => {
-    let input = '';
-    let inputType: InputMode = mode;
-    let formData: Record<string, string> | undefined;
+    let input = textValue.trim();
 
-    switch (mode) {
-      case 'TEXT':
-        input = textValue.trim();
-        break;
-      case 'IMAGE':
-        if (!imageUrl) return;
-        input = `[图片]${imageUrl}`;
-        break;
-      case 'VOICE':
-        input = voiceTranscript.trim() || (interimTranscript ? interimTranscript.trim() : '');
-        if (!input) return;
-        break;
-      case 'FORM':
-        formData = { ...formValues };
-        input = Object.entries(formData)
-          .filter(([, v]) => v.trim())
-          .map(([k, v]) => `${k}: ${v}`)
-          .join('\n');
-        if (!input.trim()) return;
-        break;
-      case 'PASTE':
-        input = pasteValue.trim();
-        if (!input) return;
-        break;
+    // 附加文件信息
+    if (attachedFiles.length > 0) {
+      const fileInfo = attachedFiles.map(f => `[${f.type === 'IMAGE' ? '图片' : '附件'}]${f.name}`).join('\n');
+      input = input ? `${input}\n\n${fileInfo}` : fileInfo;
+    }
+
+    // 语音输入
+    if (showVoiceArea && voiceTranscript) {
+      input = voiceTranscript.trim();
+    }
+
+    // 粘贴内容
+    if (showPasteArea && pasteValue) {
+      input = pasteValue.trim();
     }
 
     if (!input) return;
 
-    // Optimistically clear input
-    if (mode === 'TEXT') setValue('');
-    if (mode === 'PASTE') setPasteValue('');
-    if (mode === 'FORM') setFormValues({});
-    if (mode === 'IMAGE') setImageUrl(null);
-    if (mode === 'VOICE') resetVoiceTranscript();
+    // Determine input type
+    let inputType: InputMode = 'TEXT';
+    if (attachedFiles.some(f => f.type === 'IMAGE')) inputType = 'IMAGE';
+    if (showVoiceArea && voiceTranscript) inputType = 'VOICE';
+    if (showPasteArea && pasteValue) inputType = 'PASTE';
+
+    // Clear inputs
+    setValue('');
+    setAttachedFiles([]);
+    setPasteValue('');
+    setShowPasteArea(false);
+    setShowVoiceArea(false);
+    resetVoiceTranscript();
 
     if (onSend) {
-      onSend(input, inputType, formData);
+      onSend(input, inputType);
     } else {
-      // Default: call the API directly
       await handleGenerateScript(input, inputType);
     }
-  }, [mode, textValue, imageUrl, formValues, pasteValue, onSend, handleGenerateScript]);
+  }, [textValue, attachedFiles, showVoiceArea, voiceTranscript, showPasteArea, pasteValue, onSend, handleGenerateScript, resetVoiceTranscript]);
 
   const handleImageUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -204,22 +152,36 @@ export default function InputBar({ onSend }: InputBarProps) {
 
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setImageUrl(ev.target?.result as string);
+        setAttachedFiles(prev => [...prev, { type: 'IMAGE', name: file.name, data: ev.target?.result as string }]);
+        setShowAttachments(false);
       };
       reader.readAsDataURL(file);
     },
     [],
   );
 
-  const handlePaste = useCallback(async () => {
+  const handlePasteFromClipboard = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText();
       setPasteValue(text);
-      setPasteError(null);
+      setShowPasteArea(true);
+      setShowAttachments(false);
     } catch {
-      setPasteError('无法读取剪贴板内容，请检查浏览器权限');
+      // Fallback: show paste area for manual paste
+      setShowPasteArea(true);
+      setShowAttachments(false);
     }
   }, []);
+
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+      setShowVoiceArea(true);
+      setShowAttachments(false);
+    }
+  }, [isListening, startListening, stopListening]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -231,13 +193,9 @@ export default function InputBar({ onSend }: InputBarProps) {
     [handleSubmit],
   );
 
-  const handleRecordingToggle = useCallback(() => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  }, [isListening, startListening, stopListening]);
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div className="border-t border-gray-200 bg-white">
@@ -254,264 +212,159 @@ export default function InputBar({ onSend }: InputBarProps) {
         </div>
       )}
 
-      {/* Framework selector toggle */}
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-1.5">
-        <button
-          onClick={() => setShowFrameworks(!showFrameworks)}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
-        >
-          <Network className="h-3.5 w-3.5" />
-          <span>分析框架{selectedFrameworks.length > 0 ? ` (${selectedFrameworks.length})` : ''}</span>
-          {showFrameworks ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        </button>
-        {selectedFrameworks.length > 0 && (
-          <button
-            onClick={() => setSelectedFrameworks([])}
-            className="text-[10px] text-gray-400 hover:text-gray-600"
-          >
-            清除
-          </button>
-        )}
-      </div>
-
-      {/* Framework chips (collapsible) */}
-      {showFrameworks && (
-        <div className="flex flex-wrap gap-1.5 border-b border-gray-100 px-3 py-2">
-          {analyticalFrameworks.map((fw) => (
-            <button
-              key={fw.id}
-              onClick={() => {
-                setSelectedFrameworks((prev) =>
-                  prev.includes(fw.id) ? prev.filter((id) => id !== fw.id) : [...prev, fw.id]
-                );
-              }}
-              className={cn(
-                'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
-                selectedFrameworks.includes(fw.id)
-                  ? 'bg-primary-100 text-primary-700 ring-1 ring-primary-300'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+      {/* Attached files preview */}
+      {attachedFiles.length > 0 && (
+        <div className="flex gap-2 px-4 pt-2">
+          {attachedFiles.map((file, index) => (
+            <div key={index} className="relative flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm">
+              {file.type === 'IMAGE' ? (
+                <Image className="h-4 w-4 text-blue-500" />
+              ) : (
+                <FileText className="h-4 w-4 text-green-500" />
               )}
-            >
-              {fw.name}
-            </button>
+              <span className="text-gray-700">{file.name}</span>
+              <button
+                onClick={() => removeAttachedFile(index)}
+                className="ml-1 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Mode tabs */}
-      <div className="flex border-b border-gray-100 px-2">
-        {INPUT_MODES.map(({ key, icon, label }) => (
-          <button
-            key={key}
-            onClick={() => setMode(key)}
-            className={cn(
-              'flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-              mode === key
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700',
-            )}
-          >
-            {icon}
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Voice input area */}
+      {showVoiceArea && (
+        <div className="mx-4 mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">语音输入</span>
+            <button
+              onClick={() => {
+                setShowVoiceArea(false);
+                resetVoiceTranscript();
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {!isSupported ? (
+            <p className="text-sm text-gray-500">当前浏览器不支持语音输入</p>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleVoiceToggle}
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-full transition-all',
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse'
+                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300',
+                )}
+              >
+                {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </button>
+              <div className="flex-1">
+                {voiceError ? (
+                  <p className="text-sm text-red-500">{voiceError}</p>
+                ) : isListening ? (
+                  <p className="text-sm text-gray-500">{interimTranscript || '录音中...'}</p>
+                ) : voiceTranscript ? (
+                  <p className="text-sm text-gray-700">{voiceTranscript}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">点击麦克风开始录音</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Input area */}
+      {/* Paste area */}
+      {showPasteArea && (
+        <div className="mx-4 mt-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium text-gray-700">粘贴内容</span>
+            <button
+              onClick={() => {
+                setShowPasteArea(false);
+                setPasteValue('');
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <Textarea
+            value={pasteValue}
+            onChange={(e) => setPasteValue(e.target.value)}
+            rows={3}
+            className="resize-none"
+            placeholder="粘贴对话内容..."
+          />
+        </div>
+      )}
+
+      {/* Main input area */}
       <div className="flex items-end gap-2 p-3">
-        {/* TEXT mode */}
-        {mode === 'TEXT' && (
-          <div className="flex-1">
-            <Textarea
-              ref={textareaRef}
-              value={textValue}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="输入客户对话场景、异议、或需要应对的情况... (Ctrl+Enter 发送)"
-              rows={2}
-              className="resize-none"
-            />
-          </div>
-        )}
+        {/* Text input */}
+        <div className="flex-1">
+          <Textarea
+            ref={textareaRef}
+            value={textValue}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="描述你的销售场景、客户异议、或需要应对的情况... (Ctrl+Enter 发送)"
+            rows={2}
+            className="resize-none"
+          />
+        </div>
 
-        {/* IMAGE mode */}
-        {mode === 'IMAGE' && (
-          <div className="flex-1">
-            <div
-              className={cn(
-                'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors',
-                imageUrl
-                  ? 'border-primary-300 bg-primary-50'
-                  : 'border-gray-300 hover:border-primary-300 hover:bg-gray-50',
-              )}
-            >
-              {imageUrl ? (
-                <div className="relative">
-                  <img
-                    src={imageUrl}
-                    alt="Uploaded screenshot"
-                    className="max-h-[120px] rounded-lg object-contain"
-                  />
-                  <button
-                    onClick={() => setImageUrl(null)}
-                    className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-gray-800 text-white hover:bg-gray-700"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Image className="mb-2 h-8 w-8 text-gray-400" />
-                  <p className="mb-1 text-sm text-gray-500">粘贴或上传截图</p>
-                  <p className="mb-2 text-xs text-gray-400">支持 PNG, JPG, WebP</p>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
-                  >
-                    选择文件
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Attachment button */}
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAttachments(!showAttachments)}
+            className="flex-shrink-0"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
 
-        {/* VOICE mode */}
-        {mode === 'VOICE' && (
-          <div className="flex-1">
-            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-6">
-              {!isSupported ? (
-                <>
-                  <MicOff className="mb-2 h-8 w-8 text-gray-400" />
-                  <p className="text-sm text-gray-500">当前浏览器不支持语音输入</p>
-                  <p className="mt-1 text-xs text-gray-400">请使用 Chrome 或 Edge 浏览器</p>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleRecordingToggle}
-                    className={cn(
-                      'flex h-16 w-16 items-center justify-center rounded-full transition-all',
-                      isListening
-                        ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200'
-                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300',
-                    )}
-                  >
-                    {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                  </button>
-                  {voiceError ? (
-                    <p className="mt-3 text-sm text-red-500">{voiceError}</p>
-                  ) : (
-                    <>
-                      <p className="mt-3 text-sm text-gray-500">
-                        {isListening ? '录音中...点击停止' : '点击开始录音'}
-                      </p>
-                      {interimTranscript && (
-                        <p className="mt-2 max-w-xs text-center text-xs italic text-gray-400">
-                          {interimTranscript}
-                        </p>
-                      )}
-                      {voiceTranscript && (
-                        <div className="mt-3 w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
-                          {voiceTranscript}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
+          {/* Attachment dropdown */}
+          {showAttachments && (
+            <div className="absolute bottom-full right-0 mb-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg">
+              <div className="py-1">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Image className="h-4 w-4 text-blue-500" />
+                  上传截图
+                </button>
+                <button
+                  onClick={handleVoiceToggle}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Mic className="h-4 w-4 text-green-500" />
+                  语音输入
+                </button>
+                <button
+                  onClick={handlePasteFromClipboard}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Clipboard className="h-4 w-4 text-purple-500" />
+                  粘贴内容
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* FORM mode */}
-        {mode === 'FORM' && (
-          <div className="flex-1">
-            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-              {QUICK_FORM_FIELDS.map((field) => (
-                <div key={field.key} className="flex items-center gap-2">
-                  <label className="w-16 flex-shrink-0 text-sm font-medium text-gray-600">
-                    {field.label}
-                  </label>
-                  {field.type === 'select' ? (
-                    <select
-                      value={formValues[field.key] || ''}
-                      onChange={(e) =>
-                        setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
-                      className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    >
-                      <option value="">请选择</option>
-                      {field.options?.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <Input
-                      value={formValues[field.key] || ''}
-                      onChange={(e) =>
-                        setFormValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
-                      placeholder={field.placeholder}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* PASTE mode */}
-        {mode === 'PASTE' && (
-          <div className="flex-1">
-            <div
-              ref={pasteAreaRef}
-              className="relative"
-            >
-              {pasteValue ? (
-                <div className="relative">
-                  <Textarea
-                    value={pasteValue}
-                    onChange={(e) => setPasteValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    rows={3}
-                    className="resize-none pr-8"
-                    placeholder="粘贴的内容..."
-                  />
-                  <button
-                    onClick={() => setPasteValue('')}
-                    className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-6">
-                  <Clipboard className="mb-2 h-8 w-8 text-gray-400" />
-                  <p className="mb-1 text-sm text-gray-500">粘贴剪贴板内容</p>
-                  <Button variant="secondary" size="sm" onClick={handlePaste}>
-                    读取剪贴板
-                  </Button>
-                </div>
-              )}
-              {pasteError && <p className="mt-1 text-xs text-red-500">{pasteError}</p>}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Send button */}
         <Button
           onClick={handleSubmit}
-          disabled={isGenerating || !activeSessionId}
+          disabled={isGenerating || !activeSessionId || (!textValue.trim() && attachedFiles.length === 0 && !voiceTranscript && !pasteValue)}
           className="flex-shrink-0"
           size="lg"
         >
@@ -528,6 +381,15 @@ export default function InputBar({ onSend }: InputBarProps) {
           )}
         </Button>
       </div>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageUpload}
+        className="hidden"
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useScriptStore } from '@/stores/scriptStore';
@@ -16,16 +16,6 @@ export default function SessionPage() {
   const { setSessions, activeSessionId, setActiveSessionId } = useSessionStore();
   const { setCurrentScript, setGeneratedScriptIds, reset: resetScript } = useScriptStore();
   const { addActivity } = useActivityStore();
-  const onSendRef = useRef<((input: string, inputType: InputType) => void) | null>(null);
-
-  // Register onSend handler for quick prompts in MessageList
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent('set-onsend', {
-      detail: (input: string, inputType: InputType) => {
-        onSendRef.current?.(input, inputType);
-      },
-    }));
-  }, []);
 
   // Fetch sessions on mount
   const { data: sessionsData } = useQuery({
@@ -57,11 +47,12 @@ export default function SessionPage() {
   const handleSend = useCallback(
     async (input: string, inputType: InputType, formData?: Record<string, string>) => {
       if (!activeSessionId) return;
+      if (useScriptStore.getState().isGenerating) return; // Prevent double-submit
 
       useScriptStore.setState({ isGenerating: true, error: null });
 
       try {
-        // Dispatch event to add user message to MessageList
+        // Add optimistic user message
         const userMsg = {
           id: `opt-${Date.now()}`,
           sessionId: activeSessionId,
@@ -70,7 +61,7 @@ export default function SessionPage() {
           inputType,
           createdAt: new Date().toISOString(),
         };
-        window.dispatchEvent(new CustomEvent('append-message', { detail: userMsg }));
+        (window as any).__messageListAppend?.(userMsg);
 
         // Use shared script service
         const result = await generateScript({
@@ -90,7 +81,7 @@ export default function SessionPage() {
             description: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
           });
 
-          // Add assistant message to chat
+          // Add assistant message
           const assistantMsg = {
             id: `assistant-${Date.now()}`,
             sessionId: activeSessionId,
@@ -99,9 +90,7 @@ export default function SessionPage() {
             inputType: 'TEXT' as InputType,
             createdAt: new Date().toISOString(),
           };
-          window.dispatchEvent(
-            new CustomEvent('append-message', { detail: assistantMsg }),
-          );
+          (window as any).__messageListAppend?.(assistantMsg);
         }
       } catch (err) {
         useScriptStore.setState({
@@ -114,13 +103,6 @@ export default function SessionPage() {
     [activeSessionId, setCurrentScript, setGeneratedScriptIds],
   );
 
-  // Keep ref in sync
-  useEffect(() => {
-    onSendRef.current = (input: string, inputType: InputType) => {
-      handleSend(input, inputType);
-    };
-  }, [handleSend]);
-
   return (
     <div className="flex h-full flex-col bg-gray-50">
       {/* Session Tab Bar */}
@@ -128,7 +110,7 @@ export default function SessionPage() {
 
       {/* Main content: Message list */}
       <div className="min-h-0 flex-1">
-        <MessageList />
+        <MessageList onSend={handleSend} />
       </div>
 
       {/* Script display (shown after generation) */}

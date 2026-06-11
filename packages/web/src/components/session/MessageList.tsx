@@ -46,7 +46,6 @@ function MessageBubble({ message }: { message: Message }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback
       const ta = document.createElement('textarea');
       ta.value = message.content;
       document.body.appendChild(ta);
@@ -111,13 +110,17 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
-export default function MessageList() {
+interface MessageListProps {
+  onSend?: (input: string, inputType: InputType) => void;
+  onAppendMessage?: (msg: Message) => void;
+}
+
+export default function MessageList({ onSend, onAppendMessage }: MessageListProps) {
   const { activeSessionId } = useSessionStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const onSendRef = useRef<((input: string, type: InputType) => void) | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -126,6 +129,25 @@ export default function MessageList() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // Expose appendMessage via callback
+  useEffect(() => {
+    if (onAppendMessage) {
+      // Store the callback so parent can call it
+      (window as any).__messageListAppend = (msg: Message) => {
+        setMessages((prev) => {
+          const updated = [...prev, msg];
+          if (activeSessionId) {
+            localDb.cacheSession(activeSessionId, { messages: updated });
+          }
+          return updated;
+        });
+      };
+    }
+    return () => {
+      delete (window as any).__messageListAppend;
+    };
+  }, [onAppendMessage, activeSessionId]);
 
   // Load messages when active session changes
   useEffect(() => {
@@ -138,7 +160,6 @@ export default function MessageList() {
     let cancelled = false;
 
     const loadMessages = async () => {
-      // Try cache first
       const cached = await localDb.getCachedSession(activeSessionId);
       if (cached?.messages && !cancelled) {
         setMessages(cached.messages);
@@ -153,10 +174,9 @@ export default function MessageList() {
         const json = await res.json();
         if (!cancelled && json.success && json.data?.messages) {
           const serverMessages = json.data.messages as Message[];
-          // Dedup: merge any optimistic messages not yet in server response
           setMessages((prev) => {
             const optimisticOnly = prev.filter(
-              (m) => m.id.startsWith('optimistic-') && !serverMessages.some(
+              (m) => m.id.startsWith('opt-') && !serverMessages.some(
                 (s) => s.role === m.role && s.content === m.content && Math.abs(new Date(s.createdAt).getTime() - new Date(m.createdAt).getTime()) < 5000,
               ),
             );
@@ -183,36 +203,11 @@ export default function MessageList() {
     };
   }, [activeSessionId]);
 
-  // Expose a method to append messages from outside
-  useEffect(() => {
-    const handleAppendMessage = (e: CustomEvent) => {
-      const msg = e.detail as Message;
-      setMessages((prev) => {
-        const updated = [...prev, msg];
-        if (activeSessionId) {
-          localDb.cacheSession(activeSessionId, { messages: updated });
-        }
-        return updated;
-      });
-    };
-    window.addEventListener('append-message', handleAppendMessage as EventListener);
-    return () => window.removeEventListener('append-message', handleAppendMessage as EventListener);
-  }, [activeSessionId]);
-
-  // Listen for onSend callback from parent (SessionPage)
-  useEffect(() => {
-    const handleSetOnSend = (e: CustomEvent) => {
-      onSendRef.current = e.detail;
-    };
-    window.addEventListener('set-onsend', handleSetOnSend as EventListener);
-    return () => window.removeEventListener('set-onsend', handleSetOnSend as EventListener);
-  }, []);
-
   const handleQuickPrompt = useCallback((prompt: string) => {
-    if (onSendRef.current) {
-      onSendRef.current(prompt, 'TEXT');
+    if (onSend) {
+      onSend(prompt, 'TEXT');
     }
-  }, []);
+  }, [onSend]);
 
   if (!activeSessionId) {
     return (

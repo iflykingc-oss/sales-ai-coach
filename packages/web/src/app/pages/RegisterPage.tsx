@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { z } from 'zod';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { useUserStore } from '@/stores/userStore';
 import { useActivityStore } from '@/stores/activityStore';
+import { useI18n } from '@/i18n';
 import { toast } from '@/hooks/useToast';
 import { useFormValidation } from '@/hooks/useFormValidation';
 
@@ -22,9 +24,32 @@ const registerSchema = z.object({
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [role, setRole] = useState('');
   const navigate = useNavigate();
   const { setUser } = useUserStore();
   const { addActivity } = useActivityStore();
+  const { t } = useI18n();
+
+  const INDUSTRIES = useMemo(() => [
+    { value: 'realestate', label: t('industry.realestate') },
+    { value: 'auto', label: t('industry.auto') },
+    { value: 'saas', label: t('industry.saas') },
+    { value: 'insurance', label: t('industry.insurance') },
+    { value: 'education', label: t('industry.education') },
+    { value: 'medical', label: t('industry.medical') },
+    { value: 'finance', label: t('industry.finance') },
+    { value: 'retail', label: t('industry.retail') },
+    { value: 'other', label: t('industry.other') },
+  ], [t]);
+
+  const ROLES = useMemo(() => [
+    { value: 'newbie', label: t('role.newbie') },
+    { value: 'rep', label: t('role.rep') },
+    { value: 'senior', label: t('role.senior') },
+    { value: 'manager', label: t('role.manager') },
+    { value: 'other', label: t('role.other') },
+  ], [t]);
 
   const { fields, setFieldValue, validateField, validateAll, getVariant, getErrorMessage } = useFormValidation(
     registerSchema,
@@ -36,7 +61,7 @@ export default function RegisterPage() {
     setError('');
 
     if (!validateAll()) {
-      toast.error('请检查表单', { description: '请修正错误后再提交' });
+      toast.error(t('common.error'), { description: '请修正错误后再提交' });
       return;
     }
 
@@ -44,6 +69,8 @@ export default function RegisterPage() {
       name: fields.name.value,
       email: fields.email.value,
       password: fields.password.value,
+      industry: industry || undefined,
+      role: role || undefined,
     };
 
     setLoading(true);
@@ -65,10 +92,10 @@ export default function RegisterPage() {
 
       setUser(json.data.user);
       addActivity({ type: 'login', title: '新用户注册', description: data.name });
-      toast.success('注册成功', { description: `欢迎，${data.name}！` });
+      toast.success(t('auth.registerSuccess'), { description: `欢迎，${data.name}！` });
       navigate('/app');
     } catch {
-      setError('网络错误，请稍后重试');
+      setError(t('msg.networkError'));
     } finally {
       setLoading(false);
     }
@@ -77,8 +104,11 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-sm animate-fade-in">
+        <div className="mb-4 flex justify-end">
+          <LanguageSelector variant="compact" />
+        </div>
         <h1 className="mb-2 text-center text-2xl font-bold text-primary-600">销冠AI教练</h1>
-        <p className="mb-6 text-center text-sm text-gray-500">注册新账号</p>
+        <p className="mb-6 text-center text-sm text-gray-500">{t('auth.register')}</p>
 
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
@@ -89,7 +119,7 @@ export default function RegisterPage() {
 
         <form onSubmit={handleRegister} className="space-y-4" noValidate>
           <div>
-            <label htmlFor="reg-name" className="mb-1 block text-sm font-medium text-gray-700">姓名</label>
+            <label htmlFor="reg-name" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.name')}</label>
             <Input
               id="reg-name"
               value={fields.name.value}
@@ -101,8 +131,38 @@ export default function RegisterPage() {
               errorMessage={getErrorMessage('name')}
             />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="reg-industry" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.industry')} <span className="text-gray-400">({t('common.optional') || '选填'})</span></label>
+              <select
+                id="reg-industry"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                <option value="">{t('auth.industry')}</option>
+                {INDUSTRIES.map((ind) => (
+                  <option key={ind.value} value={ind.value}>{ind.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="reg-role" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.role')} <span className="text-gray-400">({t('common.optional') || '选填'})</span></label>
+              <select
+                id="reg-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                <option value="">{t('auth.role')}</option>
+                {ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div>
-            <label htmlFor="reg-email" className="mb-1 block text-sm font-medium text-gray-700">邮箱</label>
+            <label htmlFor="reg-email" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.email')}</label>
             <Input
               id="reg-email"
               type="email"
@@ -116,7 +176,7 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label htmlFor="reg-password" className="mb-1 block text-sm font-medium text-gray-700">密码</label>
+            <label htmlFor="reg-password" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.password')}</label>
             <Input
               id="reg-password"
               type="password"
@@ -130,7 +190,7 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label htmlFor="reg-confirm" className="mb-1 block text-sm font-medium text-gray-700">确认密码</label>
+            <label htmlFor="reg-confirm" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.confirmPassword')}</label>
             <Input
               id="reg-confirm"
               type="password"
@@ -147,15 +207,15 @@ export default function RegisterPage() {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                注册中...
+                {t('common.loading')}
               </>
             ) : (
-              '注册'
+              t('auth.register')
             )}
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-gray-500">
-          已有账号？ <Link to="/login" className="text-primary-600 hover:underline">登录</Link>
+          {t('auth.hasAccount')} <Link to="/login" className="text-primary-600 hover:underline">{t('auth.login')}</Link>
         </p>
       </div>
     </div>

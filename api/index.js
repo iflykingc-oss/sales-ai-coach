@@ -2,10 +2,63 @@ const { URL } = require('url');
 const crypto = require('crypto');
 
 // ==================== CONFIG ====================
-const SUPABASE_URL = 'https://njpesoquwbhclttopfqc.supabase.co';
+const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.aisalecoach.work';
+
+// ==================== RATE LIMITING ====================
+const rateLimitStore = new Map(); // ip -> { count, resetTime }
+
+function getRateLimitKey(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+}
+
+function checkRateLimit(key, limit, windowMs) {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  if (!entry || now > entry.resetTime) {
+    rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
+    return { allowed: true, remaining: limit - 1 };
+  }
+
+  if (entry.count >= limit) {
+    return { allowed: false, remaining: 0, retryAfter: Math.ceil((entry.resetTime - now) / 1000) };
+  }
+
+  entry.count++;
+  return { allowed: true, remaining: limit - entry.count };
+}
+
+// Clean up old entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetTime) rateLimitStore.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+// Rate limit middleware
+function rateLimit(limit, windowMs) {
+  return (req, res) => {
+    const key = getRateLimitKey(req);
+    const result = checkRateLimit(key, limit, windowMs);
+    res.setHeader('X-RateLimit-Limit', limit);
+    res.setHeader('X-RateLimit-Remaining', result.remaining);
+    if (!result.allowed) {
+      res.setHeader('Retry-After', result.retryAfter);
+      sendJson(res, 429, { success: false, error: 'Too many requests. Please try again later.' });
+      return false;
+    }
+    return true;
+  };
+}
+
+// Specific rate limiters
+const authRateLimit = rateLimit(10, 60 * 1000); // 10 requests per minute for auth
+const aiRateLimit = rateLimit(30, 60 * 1000);   // 30 requests per minute for AI
+const generalRateLimit = rateLimit(100, 60 * 1000); // 100 requests per minute general
 
 // ==================== CORS ====================
 function setCorsHeaders(res, origin) {
@@ -19,7 +72,17 @@ function setCorsHeaders(res, origin) {
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    const maxSize = 1024 * 1024; // 1MB limit
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > maxSize) {
+        req.destroy();
+        reject(new Error('Request body too large'));
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
       try { resolve(body ? JSON.parse(body) : {}); }
       catch (e) { resolve({}); }
@@ -175,6 +238,141 @@ async function sbSafeUpdate(table, eq, data) {
   catch (e) { if (e.message && e.message.includes('PGRST205')) return [data]; throw e; }
 }
 
+// ==================== AI CALL ====================
+let _cachedModel = null;
+let _cacheTime = 0;
+const MODEL_CACHE_TTL = 60000; // 1 minute
+
+async function getActiveModel() {
+  const now = Date.now();
+  if (_cachedModel && (now - _cacheTime) < MODEL_CACHE_TTL) return _cachedModel;
+  try {
+    const models = await sbSafeQuery('model_configs', { select: '*', eq: { is_active: true }, order: 'is_primary.desc', limit: 1 });
+    if (models && models.length > 0) {
+      _cachedModel = models[0];
+      _cacheTime = now;
+      return _cachedModel;
+    }
+  } catch (e) { console.error('getActiveModel error:', e.message); }
+  return null;
+}
+
+async function callAI(messages, options = {}) {
+  const model = await getActiveModel();
+  if (!model) return null; // no model configured, caller should use fallback
+
+  const provider = (model.provider || '').toLowerCase();
+  const apiKey = model.api_key;
+  const baseUrl = (model.base_url || '').replace(/\/$/, '');
+  const modelId = model.model_id;
+  const temperature = options.temperature ?? model.temperature ?? 0.7;
+  const maxTokens = options.max_tokens ?? model.max_tokens ?? 2048;
+
+  if (!apiKey || !modelId) return null;
+
+  try {
+    let url, headers, body;
+
+    if (provider === 'anthropic') {
+      // Anthropic Claude API
+      url = baseUrl || 'https://api.anthropic.com';
+      url += '/v1/messages';
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      };
+      const systemMsg = messages.find(m => m.role === 'system');
+      const otherMsgs = messages.filter(m => m.role !== 'system');
+      body = JSON.stringify({
+        model: modelId,
+        max_tokens: maxTokens,
+        temperature,
+        system: systemMsg?.content || '',
+        messages: otherMsgs.map(m => ({ role: m.role, content: m.content }))
+      });
+    } else {
+      // OpenAI-compatible (works for OpenAI, Qwen, MiniMax, DeepSeek, etc.)
+      url = baseUrl || 'https://api.openai.com';
+      url += '/v1/chat/completions';
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+      body = JSON.stringify({
+        model: modelId,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        temperature,
+        max_tokens: maxTokens
+      });
+    }
+
+    const resp = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(30000) });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error(`AI API error (${provider} ${resp.status}):`, errText);
+      return null;
+    }
+
+    const data = await resp.json();
+
+    // Extract content from response
+    if (provider === 'anthropic') {
+      return data.content?.[0]?.text || null;
+    }
+    return data.choices?.[0]?.message?.content || null;
+  } catch (e) {
+    console.error('callAI error:', e.message);
+    return null;
+  }
+}
+
+async function callAIStream(messages, options = {}) {
+  const model = await getActiveModel();
+  if (!model) return null;
+
+  const provider = (model.provider || '').toLowerCase();
+  const apiKey = model.api_key;
+  const baseUrl = (model.base_url || '').replace(/\/$/, '');
+  const modelId = model.model_id;
+  const temperature = options.temperature ?? model.temperature ?? 0.7;
+  const maxTokens = options.max_tokens ?? model.max_tokens ?? 2048;
+
+  if (!apiKey || !modelId) return null;
+
+  let url, headers, body;
+
+  if (provider === 'anthropic') {
+    url = (baseUrl || 'https://api.anthropic.com') + '/v1/messages';
+    headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    };
+    const systemMsg = messages.find(m => m.role === 'system');
+    const otherMsgs = messages.filter(m => m.role !== 'system');
+    body = JSON.stringify({
+      model: modelId, max_tokens: maxTokens, temperature, stream: true,
+      system: systemMsg?.content || '',
+      messages: otherMsgs.map(m => ({ role: m.role, content: m.content }))
+    });
+  } else {
+    url = (baseUrl || 'https://api.openai.com') + '/v1/chat/completions';
+    headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
+    body = JSON.stringify({
+      model: modelId, temperature, max_tokens: maxTokens, stream: true,
+      messages: messages.map(m => ({ role: m.role, content: m.content }))
+    });
+  }
+
+  const resp = await fetch(url, { method: 'POST', headers, body });
+  if (!resp.ok) return null;
+  return resp; // caller reads the stream
+}
+
 // ==================== AI FALLBACK ====================
 function generateFallbackScript(style, scenario, industry) {
   return {
@@ -234,7 +432,7 @@ routes['GET /api/health'] = (req, res) => sendJson(res, 200, { status: 'ok', tim
 // --- Auth ---
 routes['POST /api/auth/register'] = async (req, res) => {
   try {
-    const { name, email, password } = await parseBody(req);
+    const { name, email, password, industry, role } = await parseBody(req);
     if (!name || !email || !password) return sendJson(res, 400, { success: false, error: 'Name, email and password are required' });
     if (password.length < 6) return sendJson(res, 400, { success: false, error: 'Password must be at least 6 characters' });
     const existing = await sbQuery('users', { select: 'id', eq: { email }, limit: 1 });
@@ -242,11 +440,12 @@ routes['POST /api/auth/register'] = async (req, res) => {
     const hashedPassword = await hashPassword(password);
     const user = await sbInsert('users', {
       id: crypto.randomUUID(), name, email, password: hashedPassword,
-      role: 'USER', plan: 'FREE', created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      role: 'USER', plan: 'FREE', industry: industry ? [industry] : [],
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString()
     });
     const token = createJWT({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET);
     res.setHeader('Set-Cookie', `token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7*24*60*60}`);
-    sendJson(res, 201, { success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } } });
+    sendJson(res, 201, { success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan, industry: user.industry } } });
   } catch (err) { console.error('Register error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' }); }
 };
 
@@ -260,7 +459,7 @@ routes['POST /api/auth/login'] = async (req, res) => {
     if (!await verifyPassword(password, user.password)) return sendJson(res, 401, { success: false, error: 'Invalid credentials' });
     const token = createJWT({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET);
     res.setHeader('Set-Cookie', `token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7*24*60*60}`);
-    sendJson(res, 200, { success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan } } });
+    sendJson(res, 200, { success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan, industry: user.industry } } });
   } catch (err) { console.error('Login error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' }); }
 };
 
@@ -285,10 +484,10 @@ routes['POST /api/auth/logout'] = (req, res) => {
 // --- Plans ---
 routes['GET /api/plans'] = (req, res) => {
   sendJson(res, 200, { data: [
-    { id: 'FREE', name: '免费版', price: 0, period: '月', features: ['每日5次话术生成','每日3次AI陪练','每日1次复盘分析','基础模板库'], limits: { scripts: 5, practices: 3, reviews: 1 } },
-    { id: 'PROFESSIONAL', name: '专业版', price: 99, period: '月', features: ['无限话术生成','无限AI陪练','无限复盘分析','高级模板库','知识库上传','数据统计'], limits: { scripts: -1, practices: -1, reviews: -1 } },
-    { id: 'TEAM', name: '团队版', price: 299, period: '月', features: ['专业版全部功能','团队协作','团队知识库','团队数据看板','优先支持'], limits: { scripts: -1, practices: -1, reviews: -1 } },
-    { id: 'ENTERPRISE', name: '企业版', price: -1, period: '定制', features: ['团队版全部功能','私有化部署','专属客服','定制开发','SLA保障'], limits: { scripts: -1, practices: -1, reviews: -1 } }
+    { id: 'FREE', name: 'Free', price: 0, period: 'mo', features: ['5 scripts/day','3 AI practices/day','1 review/day','Basic templates'], limits: { scripts: 5, practices: 3, reviews: 1 } },
+    { id: 'PROFESSIONAL', name: 'Professional', price: 99, period: 'mo', features: ['Unlimited scripts','Unlimited AI practice','Unlimited reviews','Advanced templates','Knowledge base','Analytics'], limits: { scripts: -1, practices: -1, reviews: -1 } },
+    { id: 'TEAM', name: 'Team', price: 299, period: 'user/mo', features: ['Everything in Pro','Team collaboration','Team knowledge base','Team dashboard','Priority support'], limits: { scripts: -1, practices: -1, reviews: -1 } },
+    { id: 'ENTERPRISE', name: 'Enterprise', price: -1, period: 'custom', features: ['Everything in Team','Private deployment','Dedicated support','Custom development','SLA guarantee'], limits: { scripts: -1, practices: -1, reviews: -1 } }
   ]});
 };
 
@@ -298,7 +497,7 @@ routes['GET /api/plans/current'] = async (req, res) => {
     const users = await sbQuery('users', { select: 'plan', eq: { id: jwt.userId }, limit: 1 });
     if (!users || users.length === 0) return sendJson(res, 404, { success: false, error: 'User not found' });
     const plan = users[0].plan || 'FREE';
-    const names = { FREE: '免费版', PROFESSIONAL: '专业版', TEAM: '团队版', ENTERPRISE: '企业版' };
+    const names = { FREE: 'Free', PROFESSIONAL: 'Professional', TEAM: 'Team', ENTERPRISE: 'Enterprise' };
     const limits = { FREE: { scripts: 5, practices: 3, reviews: 1 }, PROFESSIONAL: { scripts: -1, practices: -1, reviews: -1 }, TEAM: { scripts: -1, practices: -1, reviews: -1 }, ENTERPRISE: { scripts: -1, practices: -1, reviews: -1 } };
     let usage = [];
     try {
@@ -316,9 +515,24 @@ routes['GET /api/plans/current'] = async (req, res) => {
 routes['POST /api/plans/upgrade'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const { plan, targetPlan } = await parseBody(req);
+    const { plan, targetPlan, paymentId } = await parseBody(req);
     const newPlan = plan || targetPlan;
     if (!newPlan || !['FREE','PROFESSIONAL','TEAM','ENTERPRISE'].includes(newPlan)) return sendJson(res, 400, { success: false, error: 'Invalid plan' });
+
+    // Payment verification required for upgrades
+    if (newPlan !== 'FREE' && !paymentId) {
+      return sendJson(res, 402, { success: false, error: 'Payment required. Please complete payment before upgrading.' });
+    }
+
+    // Verify payment with payment provider (simplified - in production, verify with Stripe/etc.)
+    if (paymentId && newPlan !== 'FREE') {
+      // In production: verify paymentId with Stripe/PayPal/etc.
+      // For now, accept any non-empty paymentId as valid
+      if (typeof paymentId !== 'string' || paymentId.length < 10) {
+        return sendJson(res, 400, { success: false, error: 'Invalid payment ID' });
+      }
+    }
+
     await sbUpdate('users', { id: jwt.userId }, { plan: newPlan, updated_at: new Date().toISOString() });
     sendJson(res, 200, { success: true, data: { plan: newPlan } });
   } catch (err) {
@@ -480,18 +694,113 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
     const jwt = requireAuth(req);
     const { input, inputType, industry, sessionId, frameworks, style, scenario } = await parseBody(req);
 
-    // Generate script using template (AI integration happens when model is configured)
-    const scriptData = generateFallbackScript(style || '标准', scenario || input || '通用场景', industry);
+    const scenarioName = scenario || input || '通用场景';
+    const styleName = style || '标准';
+    let scriptData;
+
+    // Fetch user's knowledge base for context
+    let knowledgeContext = '';
+    try {
+      const knowledgeItems = await sbSafeQuery('knowledge_items', {
+        select: 'content,tags,industry,weight',
+        eq: { user_id: jwt.userId, status: 'ACTIVE' },
+        order: 'weight.desc',
+        limit: 10
+      });
+      if (knowledgeItems && knowledgeItems.length > 0) {
+        knowledgeContext = '\n\n用户知识库参考：\n' + knowledgeItems
+          .map((k, i) => `${i + 1}. ${k.content.slice(0, 200)}${k.content.length > 200 ? '...' : ''}`)
+          .join('\n');
+      }
+    } catch (e) { console.error('Knowledge fetch error:', e.message); }
+
+    // Try real AI first
+    const scriptPrompt = knowledgeContext
+      ? `你是一位拥有10年一线实战经验的顶级销售专家与话术架构师。你的任务是根据用户提供的场景、行业、框架及知识库，生成具备高转化率、真实口语化、直击客户痛点的专业销售话术。
+
+【核心生成准则】
+1. 真实口语化：切勿生成死板的、教科书式的文字。必须是销售在电话或面对面沟通中能"直接说出口"的话。拒绝"亲爱的"、"尊贵的客户"等空洞假高级词汇。
+2. 环节完整性：content 必须包含完整的销售链路，在内容中请用【开场破冰】、【需求探寻】、【价值呈现】、【异议处理】、【促成闭环】进行分段标出。
+3. 知识库强绑定：生成的话术必须深度结合"用户知识库参考"中的产品卖点、案例或参数，并在 knowledgeSource 中具体指出引用了哪一条知识。
+
+【返回格式要求】
+必须严格返回标准的 JSON 格式，不要包含任何 Markdown 的包裹标记（如 \`\`\`json），不要输出任何 JSON 之外的解释性文字。
+
+JSON 结构：
+{"speechStyles": [{"style": "话术风格名", "content": "【开场破冰】...\\n【需求探寻】...\\n【价值呈现】...\\n【异议处理】...\\n【促成闭环】..."}], "reasoning": ["结合场景的核心话术逻辑拆解1", "心理学或销售技巧层面的支撑理由2"], "pitfalls": [{"action": "在此场景下销售极易犯的错误行为", "reason": "为什么不能这样做及其负面后果"}], "knowledgeSource": "明确指出话术中哪些具体表达引用了知识库中的第X条内容", "confidenceScore": 0.95}`
+      : `你是一位精通各行各业转化路径的商业化销售话术大师。由于当前缺乏特定企业知识库，你必须充分调用你对【${industry || '通用'}】行业的深刻行业洞察、核心痛点模型、以及主流竞品的优劣势分析，来为用户生成一套极具杀伤力的通用高转化销售话术。
+
+【生成硬性约束】
+1. 行业特征极大化：话术必须充满【${industry || '通用'}】行业的专业术语、客户高频痛点（如金融业谈风控合规、软件业谈降本增效与实施周期），严禁生成放到任何行业都能用的万能话术模版。
+2. 拒绝AI腔调：使用大白话、销冠口语，杜绝任何机械的、过度礼貌的公文式或客服式表达。
+3. 结构完整：content 内部须包含：【开场破冰】、【需求探寻】、【价值呈现】、【异议处理】、【促成闭环】，并以此标签作为字符串内部的清晰换行分段。
+
+【返回格式要求】
+必须严格返回标准的 JSON 格式，不要包含任何 Markdown 的包裹标记，不要输出任何 JSON 之外的解释性文字。
+
+JSON 结构：
+{"speechStyles": [{"style": "话术风格名", "content": "【开场破冰】...\\n【需求探寻】...\\n【价值呈现】...\\n【异议处理】...\\n【促成闭环】..."}], "reasoning": ["结合场景的核心话术逻辑拆解1", "心理学或销售技巧层面的支撑理由2"], "pitfalls": [{"action": "避免的行为", "reason": "原因"}], "knowledgeSource": "知识来源", "confidenceScore": 0.8}`;
+
+    const aiResult = await callAI([
+      { role: 'system', content: scriptPrompt },
+      { role: 'user', content: `请为以下场景生成${styleName}风格的销售话术：
+场景：${scenarioName}
+行业：${industry || '通用'}
+${input ? `补充信息：${input}` : ''}
+${frameworks ? `使用框架：${frameworks.join(', ')}` : ''}${knowledgeContext}` }
+    ]);
+
+    if (aiResult) {
+      try {
+        const parsed = JSON.parse(aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+        scriptData = {
+          speechStyles: parsed.speechStyles || [{ style: styleName, content: aiResult }],
+          reasoning: parsed.reasoning || ['AI生成'],
+          pitfalls: parsed.pitfalls || [],
+          knowledgeSource: parsed.knowledgeSource || 'AI生成',
+          confidenceScore: parsed.confidenceScore || 0.8
+        };
+      } catch (e) {
+        // JSON parse failed, use raw AI response as script content
+        scriptData = {
+          speechStyles: [{ style: styleName, content: aiResult }],
+          reasoning: ['AI生成'],
+          pitfalls: [],
+          knowledgeSource: 'AI生成',
+          confidenceScore: 0.7
+        };
+      }
+    } else {
+      // Fallback to template
+      scriptData = generateFallbackScript(styleName, scenarioName, industry);
+    }
 
     // Save script to DB
     const scriptId = crypto.randomUUID();
     try {
       await sbInsert('scripts', {
         id: scriptId, user_id: jwt.userId, session_id: sessionId || null,
-        content: scriptData.speechStyles[0]?.content || '', style: style || '标准',
-        tags: [scenario || '通用'], industry: industry || null,
+        content: scriptData.speechStyles[0]?.content || '', style: styleName,
+        tags: [scenarioName], industry: industry || null,
         status: 'DRAFT', weight: 1.0, created_at: new Date().toISOString()
       });
+
+      // Auto-save to knowledge base if confidence score is high
+      if (scriptData.confidenceScore >= 0.8 && scriptData.speechStyles[0]?.content) {
+        try {
+          await sbInsert('knowledge_items', {
+            id: crypto.randomUUID(), user_id: jwt.userId,
+            source: 'AI自动生成',
+            content: `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`,
+            tags: [scenarioName, styleName, 'AI生成'],
+            industry: industry || null,
+            weight: scriptData.confidenceScore,
+            status: 'ACTIVE',
+            created_at: new Date().toISOString()
+          });
+          console.log('Auto-saved high-quality script to knowledge base');
+        } catch (e) { console.error('Knowledge auto-save error:', e.message); }
+      }
     } catch (e) { console.error('Script save error:', e.message); }
 
     sendJson(res, 200, { success: true, data: scriptData, scriptIds: [scriptId] });
@@ -543,47 +852,145 @@ routes['POST /api/practices/init'] = async (req, res) => {
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     console.error('Practice init error:', err);
-    sendJson(res, 500, { success: false, error: 'AI服务连接失败' });
+    sendJson(res, 500, { success: false, error: 'AI service connection failed' });
   }
 };
 
 routes['POST /api/practices/message/stream'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const { sessionId, message, logicFramework } = await parseBody(req);
+    const { sessionId, message, logicFramework, scenario, industry, round, history } = await parseBody(req);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Simulate streaming response
-    const roundNum = Math.floor(Math.random() * 5);
-    const practiceResp = generateFallbackPracticeResponse(message, roundNum);
-    const fullText = practiceResp.response;
+    const roundNum = round || 1;
 
-    // Stream tokens
+    // Build conversation context
+    const systemPrompt = `你现在不是一个配合测试的机器人，而是一个【极难被说服的真实潜在买家】。
+场景：${scenario || '通用销售'}。行业：${industry || '通用'}。
+
+【你的真实人类行为人格（铁律）】
+1. 语言碎片化与敷衍：现实中没有人会像写小作文一样回答销售。你的单次回复**严禁超过60字**。多用短句、叹词（"呃…"、"行吧…"、"算了…"）。当销售表现平庸、说官话套话时，你可以打断他、敷衍他（如："没时间，你发我微信吧"、"直接说重点"、"听不懂"）。
+2. 设定你的"隐藏动机"（请在心中默念并贯彻，不要直接在 response 中说破）：
+   - 你可能并不是嫌贵，而是担心买回去自己不会用，或者怕承担责任被老板骂。
+   - 你可能被同类产品坑过，对所有销售都抱有极高的防备心。
+   - 除非销售员真正做到了"同理心倾听"或"精准痛点刺探"，否则你绝不松口。
+3. 情绪流转：根据销售员上一句的表现，将你的情绪更新为以下之一：[neutral/cautious/interested/positive/resistant]。如果销售自嗨，情绪立刻转为 resistant。
+4. 决策机制：当前是第 ${roundNum} 轮对话（目标在5-8轮做出决定）。不到最后一刻不要轻易答应。在第5轮前，即使满意也只能表现出 interested；第5轮后，若销售员成功处理了你的核心隐藏顾虑并促成，方可将 is_complete 走向 true。
+
+【销售员行为评估】
+${logicFramework ? `当前销售员被要求使用【${logicFramework}】框架。请严厉审视其话术是否符合该框架的精髓，若只是流于表面，请在 round_score 中给予扣分。` : ''}
+
+【返回格式要求】
+必须严格返回标准的 JSON 格式，不要包含任何 Markdown 标记，不要输出任何 JSON 之外的解释性文字。
+
+JSON 结构：
+{"response": "你的回复内容", "emotion": "当前情绪", "round_score": 0.7, "stage": "当前销售阶段", "is_complete": false}`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...(history || []).map(h => ({ role: h.role === 'user' ? 'assistant' : 'user', content: h.content })),
+      { role: 'user', content: message }
+    ];
+
+    // Try streaming AI
+    const stream = await callAIStream(messages, { temperature: 0.8, max_tokens: 500 });
+
+    if (stream) {
+      // Real AI streaming
+      const reader = stream.body?.getReader?.();
+      if (reader) {
+        let fullText = '';
+        const decoder = new TextDecoder();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            // Parse SSE from upstream
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(data);
+                const token = parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
+                if (token) {
+                  fullText += token;
+                  res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+                }
+              } catch (e) { /* skip non-JSON lines */ }
+            }
+          }
+        } catch (e) { console.error('Stream read error:', e.message); }
+
+        // Try to parse AI response as JSON
+        let practiceResp;
+        try {
+          const cleaned = fullText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+          practiceResp = JSON.parse(cleaned);
+        } catch (e) {
+          practiceResp = { response: fullText, emotion: 'neutral', round_score: 0.6, stage: '对话中', is_complete: false };
+        }
+
+        res.write(`data: ${JSON.stringify({
+          type: 'done',
+          data: {
+            response: practiceResp.response,
+            emotion: practiceResp.emotion || 'neutral',
+            round_score: practiceResp.round_score || 0.6,
+            evaluation_feedback: practiceResp.evaluation_feedback || '继续加油',
+            dimension_scores: practiceResp.dimension_scores || { 开场白: 70, 需求探寻: 65, 异议处理: 55 },
+            round: roundNum,
+            is_complete: practiceResp.is_complete || roundNum >= 8,
+            detectedStage: practiceResp.stage || '对话中'
+          }
+        })}\n\n`);
+        res.end();
+        return;
+      }
+    }
+
+    // Fallback: non-streaming AI or template
+    const aiResult = await callAI(messages, { temperature: 0.8, max_tokens: 500 });
+    let practiceResp;
+
+    if (aiResult) {
+      try {
+        const cleaned = aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        practiceResp = JSON.parse(cleaned);
+      } catch (e) {
+        practiceResp = { response: aiResult, emotion: 'neutral', round_score: 0.6 };
+      }
+    } else {
+      practiceResp = generateFallbackPracticeResponse(message, roundNum);
+    }
+
+    const fullText = practiceResp.response;
     const chars = fullText.split('');
     for (let i = 0; i < chars.length; i++) {
       res.write(`data: ${JSON.stringify({ type: 'token', content: chars[i] })}\n\n`);
-      await new Promise(r => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 15));
     }
 
-    // Send done event
     res.write(`data: ${JSON.stringify({
       type: 'done',
       data: {
         response: fullText,
-        emotion: practiceResp.emotion,
-        round_score: practiceResp.round_score,
+        emotion: practiceResp.emotion || 'neutral',
+        round_score: practiceResp.round_score || 0.6,
         evaluation_feedback: '继续加油',
         dimension_scores: { 开场白: 70, 需求探寻: 65, 异议处理: 55 },
-        round: roundNum + 1,
-        is_complete: roundNum >= 4,
+        round: roundNum,
+        is_complete: roundNum >= 8,
         detectedStage: '需求探寻'
       }
     })}\n\n`);
     res.end();
   } catch (err) {
+    console.error('Practice stream error:', err);
     res.write(`data: ${JSON.stringify({ type: 'error', data: { error: 'AI service temporarily unavailable' } })}\n\n`);
     res.end();
   }
@@ -592,13 +999,41 @@ routes['POST /api/practices/message/stream'] = async (req, res) => {
 routes['POST /api/practices/hint'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
+    const { scenario, industry, lastMessage, round, emotion } = await parseBody(req);
+
+    // Try AI hint
+    const aiResult = await callAI([
+      { role: 'system', content: `你现在是坐在销售员身边的"场外全能军师"。在当前的生死博弈中，销售员快要接不住客户的话了，你必须给他最狠、最有效的"实时实操小抄"。
+
+【小抄生成指南】
+1. 拒绝废话：严禁提供"请保持耐心"、"多了解客户需求"、"安抚客户"等无价值的抽象建议。
+2. 话术武器化：hint 必须首先一句话点透客户刚才那句话背后的"真实心理防御机制"，然后**直接给出一句可以直接复制或念出来的'反问/破冰微话术'**。
+3. 战术意图明确：结合客户当前的微妙情绪，在 stageTip 中明确告诉他此时应该：主动进攻（要承诺）、战略防守（做共情）、还是以退为进。
+
+【返回格式要求】
+必须严格返回标准的 JSON 格式，不要包含任何 Markdown 标记，不要输出任何 JSON 之外的解释性文字。
+
+JSON 结构：
+{"hint": "提示内容", "stageTip": "阶段提示", "emotionTip": "情绪提示"}` },
+      { role: 'user', content: `场景：${scenario || '通用'}\n行业：${industry || '通用'}\n第${round || 1}轮\n客户情绪：${emotion || '中性'}\n客户最新消息：${lastMessage || '无'}\n\n请严格按照以下 JSON 格式输出提示：` }
+    ], { max_tokens: 300 });
+
+    if (aiResult) {
+      try {
+        const cleaned = aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        const hint = JSON.parse(cleaned);
+        sendJson(res, 200, { data: hint });
+        return;
+      } catch (e) { /* fall through to default */ }
+    }
+
+    // Fallback
     const hints = [
       { hint: '尝试用开放式问题了解客户的真实需求', stageTip: '当前处于需求探寻阶段', emotionTip: '客户情绪中性，可以继续深入' },
       { hint: '客户对价格有顾虑，可以用价值对比法处理', stageTip: '当前处于异议处理阶段', emotionTip: '客户有些犹豫，需要增强信心' },
       { hint: '客户已经表现出购买意向，可以尝试促成', stageTip: '当前处于促成阶段', emotionTip: '客户情绪积极，适合推进' },
     ];
-    const hint = hints[Math.floor(Math.random() * hints.length)];
-    sendJson(res, 200, { data: hint });
+    sendJson(res, 200, { data: hints[Math.floor(Math.random() * hints.length)] });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 200, { data: { hint: '保持耐心，积极倾听客户的需求' } });
@@ -608,7 +1043,43 @@ routes['POST /api/practices/hint'] = async (req, res) => {
 routes['POST /api/practices/report'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    sendJson(res, 200, { data: { data: generateFallbackReport() } });
+    const { sessionId, scenario, industry, transcript, rounds, score } = await parseBody(req);
+
+    // Try AI analysis
+    const transcriptText = (transcript || []).map(t => `${t.role === 'user' ? '销售员' : '客户'}：${t.content}`).join('\n');
+    const aiResult = await callAI([
+      { role: 'system', content: `你是一位极其严苛、眼里揉不得沙子的销售总监兼 AI 销售教练。你的任务是深度复盘这场陪练对话，狠狠揪出销售员在沟通中的"自嗨"、"机械应对"和"致命流失节点"，帮他真正提升开单能力。
+
+【总监审计铁律】
+1. 证据导向评分：严禁无端赞美，拒绝"整体表现不错"等废话。每一项"优势"和"不足"必须精准引用具体轮次的对话（例如：在第X轮中...）。
+2. 雷达图打分严苛性（0-100）：
+   - 90分以上：堪称销冠，完美化解异议并有极强的情绪引导。
+   - 75-89分：标准合格销售，走完了流程但缺乏亮点、过于被动。
+   - 75分以下：存在明显漏洞，如对抗客户、背诵产品参数、未探寻需求。
+3. 找出流失节点：在 round_analysis 中，必须明确指出哪一轮是"致命失误"（由于说错了什么导致客户情绪恶化或关闭沟通大门）。
+4. 刻意练习（improvement_plan）：给出的 exercises 必须是一套具体的"话术改写题"（例如：针对第3轮的错误回答，罚你进行3次针对性的实操改写）。
+
+【返回格式要求】
+必须严格返回标准的 JSON 格式，不要包含任何 Markdown 标记，不要输出任何 JSON 之外的解释性文字。
+
+JSON 结构：
+{"overall_score": 0.75, "strengths": ["优势1", "优势2"], "weaknesses": ["不足1", "不足2"], "recommendations": [{"dimension": "维度", "advice": "建议"}], "radarScores": {"开场白": 80, "需求探寻": 75, "价值传递": 70, "异议处理": 60, "促成能力": 55, "倾听技巧": 65, "情绪管理": 70, "专业形象": 75}, "round_analysis": [{"round": 1, "score": 0.7, "comment": "点评"}], "frameworkAnalysis": {"detectedFrameworks": ["SPIN"], "frameworkUsageQuality": 0.7}, "signalAnalysis": {"buying_signals": ["信号"], "objections": ["异议"], "decision_readiness": 0.6}, "improvement_plan": {"priority": "中", "exercises": [{"title": "练习", "description": "描述"}], "timeline": "2周"}}` },
+      { role: 'user', content: `场景：${scenario || '通用销售'}\n行业：${industry || '通用'}\n轮次：${rounds || 0}\n\n对话记录：\n${transcriptText || '（无对话记录）'}\n\n请输出最能刺痛销售员、逼其成长的深度复盘 JSON：` }
+    ]);
+
+    let report;
+    if (aiResult) {
+      try {
+        const cleaned = aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        report = JSON.parse(cleaned);
+      } catch (e) {
+        report = generateFallbackReport();
+      }
+    } else {
+      report = generateFallbackReport();
+    }
+
+    sendJson(res, 200, { data: { data: report } });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
@@ -627,6 +1098,28 @@ routes['POST /api/practices/save'] = async (req, res) => {
         rounds: rounds || 0, score: score || 0, feedback: feedback || {},
         transcript: transcript || [], created_at: new Date().toISOString()
       });
+
+      // Auto-save to knowledge base if score is high
+      if (score >= 80 && transcript && transcript.length > 0) {
+        try {
+          const transcriptSummary = transcript
+            .slice(0, 5)
+            .map(t => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`)
+            .join('\n');
+
+          await sbInsert('knowledge_items', {
+            id: crypto.randomUUID(), user_id: jwt.userId,
+            source: 'AI陪练自动生成',
+            content: `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`,
+            tags: [scenario || '通用', '高分练习', 'AI生成'],
+            industry: industry || null,
+            weight: score / 100,
+            status: 'ACTIVE',
+            created_at: new Date().toISOString()
+          });
+          console.log('Auto-saved high-scoring practice to knowledge base');
+        } catch (e) { console.error('Knowledge auto-save error:', e.message); }
+      }
     } catch (e) { console.error('Practice save DB error:', e.message); }
     sendJson(res, 200, { data: { data: { id: practiceId } } });
   } catch (err) {
@@ -652,22 +1145,54 @@ routes['GET /api/reviews'] = async (req, res) => {
 routes['POST /api/reviews/generate'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const { conversations } = await parseBody(req);
-    const report = generateFallbackReport();
+    const { conversations, scenario, industry } = await parseBody(req);
+
+    const transcriptText = (conversations || []).map(t => `${t.role === 'user' ? '销售员' : '客户'}：${t.content}`).join('\n');
+
+    // Try AI analysis
+    const aiResult = await callAI([
+      { role: 'system', content: `你是一位顶尖商业顾问兼销售诊断专家。请对以下真实的销售对话录音文本进行像素级的复盘分析，找出成单的关键转折点或丢单的致命伤。
+
+【诊断核心准则】
+1. 心理战术剖析：不要只看话术表面，要分析每一句对话背后，客户的心理防线是加强了还是减弱了，识别出真正的博弈节点。
+2. 优势/不足去同质化：禁止输出"态度热情"、"专业度高"等虚假诊断。必须精确指出：如"优势：成功通过第三方背书消除了客户对技术安全性的顾虑"；"不足：在客户抱怨预算不足时，直接进行价格退让，丧失了谈判筹码"。
+
+【返回格式要求】
+必须严格返回标准的 JSON 格式，不要包含任何 Markdown 标记，不要输出任何 JSON 之外的解释性文字。
+
+JSON 结构：
+{"overall_score": 0.75, "strengths": ["优势1", "优势2", "优势3"], "weaknesses": ["不足1", "不足2", "不足3"], "recommendations": ["建议1", "建议2", "建议3"], "radarScores": {"开场白": 80, "需求探寻": 75, "价值传递": 70, "异议处理": 60, "促成能力": 55, "倾听技巧": 65, "情绪管理": 70, "专业形象": 75}}` },
+      { role: 'user', content: `场景：${scenario || '通用销售'}\n行业：${industry || '通用'}\n\n对话记录：\n${transcriptText || '（无对话记录）'}\n\n请严格按照以下 JSON 格式输出复盘报告：` }
+    ]);
+
+    let report;
+    if (aiResult) {
+      try {
+        const cleaned = aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        report = JSON.parse(cleaned);
+      } catch (e) {
+        report = generateFallbackReport();
+      }
+    } else {
+      report = generateFallbackReport();
+    }
+
     const saved = await sbSafeInsert('review_reports', {
       id: crypto.randomUUID(), user_id: jwt.userId,
       summary: report.overall_score > 0.6 ? '整体表现良好，有提升空间' : '需要加强基础技能训练',
-      strengths: report.strengths, improvements: report.weaknesses,
-      recommendations: report.recommendations.map(r => typeof r === 'string' ? r : r.advice),
+      strengths: report.strengths || [], improvements: report.weaknesses || report.improvements || [],
+      recommendations: (report.recommendations || []).map(r => typeof r === 'string' ? r : r.advice || r),
       created_at: new Date().toISOString()
     });
+
     sendJson(res, 200, { data: {
-      id: saved.id, date: new Date().toISOString(), overallScore: report.overall_score,
-      summary: report.strengths[0] + '，但' + report.weaknesses[0],
-      strengths: report.strengths, improvements: report.weaknesses,
-      actionItems: report.recommendations.map(r => typeof r === 'string' ? r : r.advice),
-      recommendations: report.recommendations.map(r => typeof r === 'string' ? r : r.advice),
-      radarScores: report.radarScores, scenarioType: '通用'
+      id: saved.id, date: new Date().toISOString(), overallScore: report.overall_score || 0.65,
+      summary: (report.strengths?.[0] || '表现良好') + '，但' + (report.weaknesses?.[0] || report.improvements?.[0] || '有提升空间'),
+      strengths: report.strengths || [], improvements: report.weaknesses || report.improvements || [],
+      actionItems: (report.recommendations || []).map(r => typeof r === 'string' ? r : r.advice || r),
+      recommendations: (report.recommendations || []).map(r => typeof r === 'string' ? r : r.advice || r),
+      radarScores: report.radarScores || { 开场白: 70, 需求探寻: 65, 价值传递: 60, 异议处理: 55, 促成能力: 50, 倾听技巧: 60, 情绪管理: 65, 专业形象: 70 },
+      scenarioType: scenario || '通用'
     }});
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
@@ -1120,7 +1645,7 @@ routes['POST /api/admin/models'] = async (req, res) => {
     sendJson(res, 201, { success: true, data: result[0] || result });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 500, { success: false, error: '创建模型失败' });
+    sendJson(res, 500, { success: false, error: 'Failed to create model' });
   }
 };
 
@@ -1152,7 +1677,7 @@ routes['DELETE /api/admin/models/:id'] = async (req, res) => {
     sendJson(res, 200, { success: true });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 500, { success: false, error: '删除模型失败' });
+    sendJson(res, 500, { success: false, error: 'Failed to delete model' });
   }
 };
 
@@ -1164,7 +1689,7 @@ routes['POST /api/admin/models/test'] = async (req, res) => {
     const { baseUrl, apiKey, modelId } = data;
 
     if (!apiKey || !modelId) {
-      return sendJson(res, 400, { success: false, message: '缺少必要参数' });
+      return sendJson(res, 400, { success: false, error: 'Missing required parameters' });
     }
 
     // Build the test URL based on provider
@@ -1237,6 +1762,15 @@ module.exports = async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   const path = url.pathname;
+
+  // Apply rate limiting based on path
+  if (path.startsWith('/api/auth/')) {
+    if (!authRateLimit(req, res)) return;
+  } else if (path.startsWith('/api/scripts/generate') || path.startsWith('/api/practices/') || path.startsWith('/api/reviews/generate')) {
+    if (!aiRateLimit(req, res)) return;
+  } else if (path.startsWith('/api/')) {
+    if (!generalRateLimit(req, res)) return;
+  }
 
   // Exact match
   let handler = routes[`${req.method} ${path}`];

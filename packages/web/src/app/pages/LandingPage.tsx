@@ -1,53 +1,53 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Zap, Brain, Target, BarChart3, Users, Globe, ArrowRight,
+  Brain, Target, BarChart3, Users, ArrowRight,
   MessageSquare, ChevronDown, ChevronUp, Star, Check,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 const FEATURES = [
   {
+    icon: Target,
+    title: '结构化训练体系',
+    titleEn: 'Structured Training System',
+    desc: '基础功→进阶技能→实战模拟，循序渐进，每一步都有明确目标',
+    descEn: 'Fundamentals → Advanced Skills → Simulation — step by step, clear goals at every stage',
+  },
+  {
     icon: MessageSquare,
     title: 'AI 话术生成',
     titleEn: 'AI Script Generation',
-    desc: '输入客户场景，AI 即时生成共情版、直爽版、专业版三种风格话术，附带避坑提醒和引用来源',
-    descEn: 'Input any customer scenario — AI instantly generates 3 speech styles with pitfall alerts and source citations',
-  },
-  {
-    icon: Target,
-    title: 'AI 陪练系统',
-    titleEn: 'AI Practice System',
-    desc: '模拟真实客户对话，8维度实时评分，情绪追踪，自动生成复盘报告',
-    descEn: 'Simulate real customer conversations with 8-dimension scoring, emotion tracking, and auto-generated reviews',
+    desc: '描述客户场景，AI自动生成专业话术，高分话术自动归档知识库',
+    descEn: 'Describe any scenario — AI generates professional scripts, high-scoring scripts auto-archived',
   },
   {
     icon: Brain,
-    title: '自进化知识库',
-    titleEn: 'Self-Evolving Knowledge Base',
-    desc: '好评话术自动沉淀，智能检索去重，用户反馈驱动权重调整',
-    descEn: 'Top-rated scripts auto-archived, smart dedup, feedback-driven weight optimization',
+    title: 'AI 陪练对话',
+    titleEn: 'AI Practice Conversations',
+    desc: '与AI客户实时对话，模拟真实场景，8维度评分，自动出报告',
+    descEn: 'Real-time conversations with AI customers, 8-dimension scoring, auto-generated reports',
   },
   {
     icon: BarChart3,
-    title: '每日实战复盘',
-    titleEn: 'Daily Battle Review',
-    desc: '一键分析对话成败点，生成成长档案和8维度能力雷达图',
-    descEn: 'One-click analysis of wins and losses, growth profiles and 8-dimension radar charts',
+    title: '自动复盘分析',
+    titleEn: 'Auto Review Analysis',
+    desc: '对话结束自动分析优势和待改进，给出针对性提升建议',
+    descEn: 'Auto-analysis of strengths and improvements after each conversation',
+  },
+  {
+    icon: Brain,
+    title: '智能知识库',
+    titleEn: 'Smart Knowledge Base',
+    desc: '高分话术和练习自动归档，越练越精准',
+    descEn: 'High-scoring practices auto-archived, improves with every session',
   },
   {
     icon: Users,
-    title: '团队管理',
-    titleEn: 'Team Management',
-    desc: '团队数据看板、任务分配、优质话术共享、新人7天/30天培养计划',
-    descEn: 'Team dashboards, task assignment, script sharing, 7/30-day newcomer training plans',
-  },
-  {
-    icon: Globe,
-    title: '52个行业插件',
-    titleEn: '52 Industry Plugins',
-    desc: '覆盖国内外主流行业，每个插件预置200+话术和5-8个专属场景',
-    descEn: 'Covering global industries, each plugin ships with 200+ scripts and 5-8 dedicated scenarios',
+    title: '团队协作',
+    titleEn: 'Team Collaboration',
+    desc: '团队数据看板、任务分配，管理者实时掌握团队成长',
+    descEn: 'Team dashboards, task assignment — managers track team growth in real-time',
   },
 ];
 
@@ -91,10 +91,10 @@ const PRICING = [
 ];
 
 const STATS = [
-  { value: '52', label: '行业插件', labelEn: 'Industry Plugins' },
-  { value: '10,000+', label: '预置话术', labelEn: 'Pre-built Scripts' },
+  { value: '11', label: '训练课程', labelEn: 'Training Lessons' },
+  { value: '4', label: '成长阶段', labelEn: 'Growth Stages' },
   { value: '8', label: '评估维度', labelEn: 'Eval Dimensions' },
-  { value: '40%', label: '成单率提升', labelEn: 'Close Rate Boost' },
+  { value: '5min', label: '首次价值', labelEn: 'Time to Value' },
 ];
 
 export function LandingPage() {
@@ -177,19 +177,19 @@ export function LandingPage() {
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:py-32">
           <div className="mx-auto max-w-3xl text-center">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700">
-              <Zap className="h-4 w-4" />
-              {t('52个行业插件 · 10000+预置话术', '52 Industry Plugins · 10,000+ Pre-built Scripts')}
+              <Target className="h-4 w-4" />
+              {t('AI销售教练 · 结构化成长', 'AI Sales Coach · Structured Growth')}
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
               {t(
-                '让每个销售都能成为销冠',
-                'Turn Every Salesperson Into a Top Performer'
+                '你的AI销售教练，随时陪练',
+                'Your AI Sales Coach, Always Ready'
               )}
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-600 sm:text-xl">
               {t(
-                'AI 实时话术生成 · 模拟陪练 · 自动复盘 · 知识沉淀 — 覆盖从初次接触到关单的全流程',
-                'AI Real-time Script Generation · Practice Simulation · Auto Review · Knowledge Capture — covering the full sales cycle from first contact to close'
+                '从基础功到实战模拟，AI陪练+自动复盘，帮你一步步提升销售能力',
+                'From fundamentals to real-world simulation — AI practice + auto review, helping you improve step by step'
               )}
             </p>
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
@@ -197,7 +197,7 @@ export function LandingPage() {
                 onClick={() => navigate('/register')}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-primary-500/25 transition hover:bg-primary-700 hover:shadow-xl sm:w-auto"
               >
-                {t('免费开始使用', 'Get Started Free')}
+                {t('免费开始练习', 'Start Practicing Free')}
                 <ArrowRight className="h-5 w-5" />
               </button>
               <button
@@ -227,10 +227,10 @@ export function LandingPage() {
       <section id="features" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:py-24">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-            {t('核心功能', 'Core Features')}
+            {t('为什么选择销冠AI教练', 'Why Choose SalesCoach AI')}
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            {t('从话术生成到团队管理，一站式销售赋能平台', 'From script generation to team management — a one-stop sales enablement platform')}
+            {t('不是工具，是你的销售成长教练', 'Not just a tool — your sales growth coach')}
           </p>
         </div>
         <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3 stagger-children">

@@ -13,6 +13,7 @@ const SCENARIO_CATEGORIES = [
     id: 'prospecting',
     title: '客户开发',
     icon: '🎯',
+    industry: '通用',
     scenarios: [
       {
         id: 'cold-call',
@@ -38,6 +39,7 @@ const SCENARIO_CATEGORIES = [
     id: 'discovery',
     title: '需求挖掘',
     icon: '🔍',
+    industry: '通用',
     scenarios: [
       {
         id: 'needs-analysis',
@@ -63,6 +65,7 @@ const SCENARIO_CATEGORIES = [
     id: 'presentation',
     title: '方案展示',
     icon: '📊',
+    industry: '通用',
     scenarios: [
       {
         id: 'product-demo',
@@ -88,6 +91,7 @@ const SCENARIO_CATEGORIES = [
     id: 'negotiation',
     title: '商务谈判',
     icon: '💰',
+    industry: '通用',
     scenarios: [
       {
         id: 'price-negotiation',
@@ -113,6 +117,7 @@ const SCENARIO_CATEGORIES = [
     id: 'closing',
     title: '促单成交',
     icon: '🤝',
+    industry: '通用',
     scenarios: [
       {
         id: 'urgency-close',
@@ -139,6 +144,7 @@ const SCENARIO_CATEGORIES = [
     id: 'retention',
     title: '客户维护',
     icon: '📞',
+    industry: '通用',
     scenarios: [
       {
         id: 'follow-up',
@@ -178,6 +184,8 @@ interface PracticeSetupNewProps {
     greeting: string;
     customerProfile: string;
     objectives: string[];
+    industry?: string;
+    mode?: string;
     documentContext?: string;
   }) => void;
   isLoading?: boolean;
@@ -212,6 +220,8 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
   };
 
   const handleStart = () => {
+    const categoryData = SCENARIO_CATEGORIES.find(c => c.id === selectedCategory);
+
     // Custom scenario
     if (selectedCategory === 'custom') {
       if (!customTitle.trim() || !customDesc.trim()) return;
@@ -223,6 +233,8 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
         greeting: customGreeting.trim() || '你好，请问有什么可以帮您的？',
         customerProfile: customProfile.trim() || '普通客户',
         objectives: ['完成自定义场景练习'],
+        industry: '通用',
+        mode: 'scenario',
         documentContext: uploadedDocs.length > 0
           ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
           : undefined,
@@ -241,6 +253,8 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
       greeting: selectedScenario.greeting,
       customerProfile: selectedScenario.customerProfile,
       objectives: selectedScenario.objectives || [],
+      industry: categoryData?.industry || '通用',
+      mode: 'scenario',
       documentContext: uploadedDocs.length > 0
         ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
         : undefined,

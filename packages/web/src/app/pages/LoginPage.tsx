@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { useUserStore } from '@/stores/userStore';
 import { useActivityStore } from '@/stores/activityStore';
+import { useI18n } from '@/i18n';
 import { toast } from '@/hooks/useToast';
 import { useFormValidation } from '@/hooks/useFormValidation';
 
@@ -20,6 +22,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setUser } = useUserStore();
   const { addActivity } = useActivityStore();
+  const { t } = useI18n();
 
   const { fields, setFieldValue, validateField, validateAll, getVariant, getErrorMessage } = useFormValidation(
     loginSchema,
@@ -31,7 +34,7 @@ export default function LoginPage() {
     setError('');
 
     if (!validateAll()) {
-      toast.error('请检查表单', { description: '请修正错误后再提交' });
+      toast.error(t('common.error'), { description: '请修正错误后再提交' });
       return;
     }
 
@@ -59,10 +62,10 @@ export default function LoginPage() {
 
       setUser(json.data.user);
       addActivity({ type: 'login', title: '用户登录', description: json.data.user.name });
-      toast.success('登录成功', { description: `欢迎回来，${json.data.user.name}` });
+      toast.success(t('auth.loginSuccess'), { description: `欢迎回来，${json.data.user.name}` });
       navigate('/app');
     } catch {
-      setError('网络错误，请稍后重试');
+      setError(t('msg.networkError'));
     } finally {
       setLoading(false);
     }
@@ -71,8 +74,11 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-sm animate-fade-in">
+        <div className="mb-4 flex justify-end">
+          <LanguageSelector variant="compact" />
+        </div>
         <h1 className="mb-2 text-center text-2xl font-bold text-primary-600">销冠AI教练</h1>
-        <p className="mb-6 text-center text-sm text-gray-500">登录开始使用</p>
+        <p className="mb-6 text-center text-sm text-gray-500">{t('auth.login')}</p>
 
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
@@ -83,7 +89,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4" noValidate>
           <div>
-            <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-gray-700">邮箱</label>
+            <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.email')}</label>
             <Input
               id="login-email"
               type="email"
@@ -97,7 +103,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-gray-700">密码</label>
+            <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-gray-700">{t('auth.password')}</label>
             <Input
               id="login-password"
               type="password"
@@ -114,15 +120,15 @@ export default function LoginPage() {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                登录中...
+                {t('common.loading')}
               </>
             ) : (
-              '登录'
+              t('auth.login')
             )}
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-gray-500">
-          还没有账号？ <Link to="/register" className="text-primary-600 hover:underline">注册</Link>
+          {t('auth.noAccount')} <Link to="/register" className="text-primary-600 hover:underline">{t('auth.register')}</Link>
         </p>
       </div>
     </div>

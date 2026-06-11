@@ -1,5 +1,6 @@
 import { Menu, User } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -29,6 +30,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <LanguageSelector variant="compact" />
         <div
           className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700"
           role="img"

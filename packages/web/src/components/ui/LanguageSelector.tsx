@@ -1,0 +1,76 @@
+import { useState, useRef, useEffect } from 'react';
+import { Globe, ChevronDown } from 'lucide-react';
+import { useI18n, LOCALES, type Locale } from '@/i18n';
+import { cn } from '@/utils/cn';
+
+interface LanguageSelectorProps {
+  variant?: 'default' | 'compact';
+  className?: string;
+}
+
+export function LanguageSelector({ variant = 'default', className }: LanguageSelectorProps) {
+  const { locale, setLocale } = useI18n();
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const currentLocale = LOCALES[locale];
+
+  return (
+    <div ref={ref} className={cn('relative', className)}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          'flex items-center gap-2 rounded-lg transition-colors',
+          variant === 'default'
+            ? 'px-3 py-2 text-sm text-gray-600 hover:bg-gray-100'
+            : 'px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-50'
+        )}
+      >
+        <Globe className={cn(variant === 'default' ? 'h-4 w-4' : 'h-3.5 w-3.5')} />
+        <span>{currentLocale.flag}</span>
+        {variant === 'default' && (
+          <>
+            <span>{currentLocale.nativeName}</span>
+            <ChevronDown className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')} />
+          </>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {Object.entries(LOCALES).map(([key, value]) => (
+            <button
+              key={key}
+              onClick={() => {
+                setLocale(key as Locale);
+                setIsOpen(false);
+              }}
+              className={cn(
+                'flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors',
+                locale === key
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'text-gray-700 hover:bg-gray-50'
+              )}
+            >
+              <span className="text-lg">{value.flag}</span>
+              <span className="flex-1 text-left">{value.nativeName}</span>
+              {locale === key && (
+                <span className="text-primary-500">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

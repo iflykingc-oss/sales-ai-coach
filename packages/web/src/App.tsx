@@ -19,7 +19,6 @@ const AdminPage = lazy(() => import('./app/pages/AdminPage'));
 const AnalyticsPage = lazy(() => import('./app/pages/AnalyticsPage'));
 const DataRightsPage = lazy(() => import('./app/pages/DataRightsPage'));
 const PricingPage = lazy(() => import('./app/pages/PricingPage'));
-const LeaderboardPage = lazy(() => import('./app/pages/LeaderboardPage'));
 const PracticeHistoryPage = lazy(() => import('./app/pages/PracticeHistoryPage'));
 
 export default function App() {
@@ -43,7 +42,6 @@ export default function App() {
               <Route path="admin" element={<AdminPage />} />
               <Route path="data-rights" element={<DataRightsPage />} />
               <Route path="pricing" element={<PricingPage />} />
-              <Route path="leaderboard" element={<LeaderboardPage />} />
               <Route path="practice/history" element={<PracticeHistoryPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
