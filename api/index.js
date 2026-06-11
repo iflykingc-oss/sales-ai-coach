@@ -1700,6 +1700,7 @@ routes['POST /api/admin/models'] = async (req, res) => {
     }
 
     const newModel = {
+      id: crypto.randomUUID(),
       display_name: data.name,
       provider: data.provider || 'custom',
       model_id: data.modelId,
