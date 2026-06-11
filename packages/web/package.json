@@ -14,6 +14,7 @@
     "@radix-ui/react-select": "^2.1.4",
     "@radix-ui/react-tabs": "^1.1.2",
     "@sales-ai-coach/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.108.1",
     "@tanstack/react-query": "^5.62.0",
     "axios": "^1.7.0",
     "clsx": "^2.1.1",

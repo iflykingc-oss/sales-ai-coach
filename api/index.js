@@ -481,6 +481,78 @@ routes['POST /api/auth/logout'] = (req, res) => {
   sendJson(res, 200, { success: true, message: 'Logged out' });
 };
 
+// Social login (Google OAuth via Supabase)
+routes['POST /api/auth/social-login'] = async (req, res) => {
+  try {
+    const { access_token, provider } = await parseBody(req);
+    if (!access_token) return sendJson(res, 400, { success: false, error: 'Access token required' });
+
+    // Verify the Supabase token and get user info
+    const supabaseUrl = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+      }
+    });
+
+    if (!userRes.ok) {
+      return sendJson(res, 401, { success: false, error: 'Invalid token' });
+    }
+
+    const userData = await userRes.json();
+    const email = userData.email;
+    const name = userData.user_metadata?.full_name || userData.user_metadata?.name || email.split('@')[0];
+    const avatarUrl = userData.user_metadata?.avatar_url || null;
+
+    if (!email) return sendJson(res, 400, { success: false, error: 'Email not available from provider' });
+
+    // Check if user exists
+    const existingUsers = await sbQuery('users', { select: '*', eq: { email }, limit: 1 });
+
+    let user;
+    if (existingUsers && existingUsers.length > 0) {
+      // User exists, update last login
+      user = existingUsers[0];
+      await sbUpdate('users', { id: user.id }, { updated_at: new Date().toISOString() });
+    } else {
+      // Create new user
+      user = await sbInsert('users', {
+        id: crypto.randomUUID(),
+        name,
+        email,
+        password: '', // No password for social login
+        role: 'USER',
+        plan: 'FREE',
+        industry: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    // Create JWT
+    const token = createJWT({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET);
+    res.setHeader('Set-Cookie', `token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7*24*60*60}`);
+    sendJson(res, 200, {
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          plan: user.plan,
+          industry: user.industry,
+          avatarUrl
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Social login error:', err);
+    sendJson(res, 500, { success: false, error: 'Social login failed' });
+  }
+};
+
 // --- Plans ---
 routes['GET /api/plans'] = (req, res) => {
   sendJson(res, 200, { data: [
