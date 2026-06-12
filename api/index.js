@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Sentry = require('@sentry/node');
 const registry = require('./industry-context');
+const syncManager = require('./industry-sync');
 
 // 行业检测兼容函数（使用新的 L1 正则矩阵引擎）
 function detectIndustry(input, userIndustry) {
@@ -29,6 +30,11 @@ async function initDatabase() {
     ? { success: true, message: '所有表已存在' }
     : { success: false, reason: 'tables_missing', missingTables: missing, message: '请在 Supabase SQL Editor 中执行建表 SQL' };
 }
+
+// 启动时自动同步行业数据（延迟 3 秒，等待数据库连接就绪）
+setTimeout(() => {
+  syncManager.startAutoSync(5 * 60 * 1000); // 每 5 分钟同步一次
+}, 3000);
 
 // Initialize Sentry
 Sentry.init({
@@ -2925,6 +2931,80 @@ routes['POST /api/admin/industries/sync-from-db'] = async (req, res) => {
     }
 
     sendJson(res, 200, { success: true, data: { synced, total: plugins.length, registered: registry.getRegisteredIndustries().length } });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 同步管理 API - 获取同步状态
+routes['GET /api/admin/sync/status'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const status = syncManager.getStatus();
+    sendJson(res, 200, { success: true, data: status });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 同步管理 API - 手动触发同步
+routes['POST /api/admin/sync/trigger'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const status = await syncManager.manualSync();
+    sendJson(res, 200, { success: true, data: status });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 同步管理 API - 配置外部数据源
+routes['POST /api/admin/sync/sources'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { name, url, method, headers, enabled } = await parseBody(req);
+
+    if (!name || !url) {
+      return sendJson(res, 400, { success: false, error: '缺少 name 或 url 参数' });
+    }
+
+    syncManager.registerExternalApi(name, {
+      url,
+      method: method || 'GET',
+      headers: headers || {},
+      enabled: enabled !== false,
+      transform: (data) => {
+        // 默认转换函数：期望返回 [{name, config}] 格式
+        if (Array.isArray(data)) return data;
+        if (data.industries) return data.industries;
+        if (data.data) return data.data;
+        return [];
+      }
+    });
+
+    sendJson(res, 200, { success: true, message: `外部数据源 [${name}] 已注册` });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 同步管理 API - 启动/停止自动同步
+routes['POST /api/admin/sync/auto'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { enabled, intervalMs } = await parseBody(req);
+
+    if (enabled) {
+      syncManager.startAutoSync(intervalMs || 5 * 60 * 1000);
+      sendJson(res, 200, { success: true, message: '自动同步已启动' });
+    } else {
+      syncManager.stopAutoSync();
+      sendJson(res, 200, { success: true, message: '自动同步已停止' });
+    }
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
