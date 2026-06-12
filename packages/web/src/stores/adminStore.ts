@@ -59,7 +59,7 @@ export interface SystemUser {
   createdAt: string;
 }
 
-export type AdminTab = 'stats' | 'users' | 'knowledge' | 'models' | 'announcements' | 'plugins' | 'settings';
+export type AdminTab = 'stats' | 'users' | 'knowledge' | 'models' | 'announcements' | 'sync' | 'plugins' | 'settings';
 
 interface AdminState {
   // Active tab
