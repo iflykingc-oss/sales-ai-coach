@@ -363,26 +363,65 @@ async function getActiveModel() {
   return null;
 }
 
+// 构建 API URL - 智能处理不同的 provider 和 URL 格式
+function buildApiUrl(baseUrl, provider) {
+  const url = (baseUrl || '').replace(/\/+$/, '');
+  const p = (provider || '').toLowerCase();
+
+  // 1. 默认 URL
+  if (!url) {
+    return p === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/chat/completions';
+  }
+
+  // 2. URL 已经是完整 endpoint（包含具体路径），直接使用
+  //    适用于：MiniMax、豆包自定义 endpoint、自建代理等
+  if (url.includes('/chat/completions') || url.includes('/chatcompletion') || url.includes('/messages')) {
+    return url;
+  }
+
+  // 3. Anthropic 格式
+  if (p === 'anthropic') {
+    // https://api.anthropic.com → https://api.anthropic.com/v1/messages
+    return url.endsWith('/v1') ? url + '/messages' : url + '/v1/messages';
+  }
+
+  // 4. OpenAI 兼容格式（包括 doubao、qwen、deepseek、minimax 等）
+  //    https://api.openai.com → https://api.openai.com/v1/chat/completions
+  //    https://ark.cn-beijing.volces.com/api/v3 → https://ark.cn-beijing.volces.com/api/v3/chat/completions
+  if (url.endsWith('/v1') || url.endsWith('/v3')) {
+    return url + '/chat/completions';
+  }
+
+  return url + '/v1/chat/completions';
+}
+
 async function callAI(messages, options = {}) {
   const model = await getActiveModel();
-  if (!model) return null; // no model configured, caller should use fallback
+  if (!model) {
+    console.log('callAI: No active model configured, using fallback');
+    return null; // no model configured, caller should use fallback
+  }
 
   const provider = (model.provider || '').toLowerCase();
   const apiKey = model.api_key;
-  const baseUrl = (model.base_url || '').replace(/\/$/, '');
+  const baseUrl = model.base_url || '';
   const modelId = model.model_id;
   const temperature = options.temperature ?? model.temperature ?? 0.7;
   const maxTokens = options.max_tokens ?? model.max_tokens ?? 2048;
 
-  if (!apiKey || !modelId) return null;
+  if (!apiKey || !modelId) {
+    console.error('callAI: Model configured but missing apiKey or modelId', {
+      provider, modelId: modelId || '(empty)', hasApiKey: !!apiKey, baseUrl
+    });
+    return null;
+  }
 
   try {
     let url, headers, body;
 
     if (provider === 'anthropic') {
       // Anthropic Claude API
-      url = baseUrl || 'https://api.anthropic.com';
-      url += '/v1/messages';
+      url = buildApiUrl(baseUrl, provider);
       headers = {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -399,8 +438,7 @@ async function callAI(messages, options = {}) {
       });
     } else {
       // OpenAI-compatible (works for OpenAI, Qwen, MiniMax, DeepSeek, etc.)
-      url = baseUrl || 'https://api.openai.com';
-      url += '/v1/chat/completions';
+      url = buildApiUrl(baseUrl, provider);
       headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
@@ -413,20 +451,53 @@ async function callAI(messages, options = {}) {
       });
     }
 
-    const resp = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(30000) });
+    console.log(`callAI: Calling ${provider} API`, {
+      url: url.replace(apiKey, '***'), // 不打印完整 key
+      modelId,
+      temperature,
+      maxTokens,
+      messageCount: messages.length
+    });
+
+    const resp = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(60000) });
     if (!resp.ok) {
       const errText = await resp.text();
-      console.error(`AI API error (${provider} ${resp.status}):`, errText);
+      console.error(`callAI: API error (${provider} ${resp.status}):`, {
+        status: resp.status,
+        statusText: resp.statusText,
+        error: errText.slice(0, 500),
+        url: url.replace(apiKey, '***'),
+        modelId
+      });
       return null;
     }
 
     const data = await resp.json();
 
     // Extract content from response
+    let content = null;
     if (provider === 'anthropic') {
-      return data.content?.[0]?.text || null;
+      content = data.content?.[0]?.text || null;
+    } else {
+      content = data.choices?.[0]?.message?.content || null;
     }
-    return data.choices?.[0]?.message?.content || null;
+
+    if (!content) {
+      console.error('callAI: Empty response from API', {
+        provider,
+        modelId,
+        responseKeys: Object.keys(data),
+        responsePreview: JSON.stringify(data).slice(0, 300)
+      });
+    } else {
+      console.log(`callAI: Success (${provider})`, {
+        modelId,
+        contentLength: content.length,
+        contentPreview: content.slice(0, 100)
+      });
+    }
+
+    return content;
   } catch (e) {
     console.error('callAI error:', e.message);
     return null;
@@ -439,7 +510,7 @@ async function callAIStream(messages, options = {}) {
 
   const provider = (model.provider || '').toLowerCase();
   const apiKey = model.api_key;
-  const baseUrl = (model.base_url || '').replace(/\/$/, '');
+  const baseUrl = model.base_url || '';
   const modelId = model.model_id;
   const temperature = options.temperature ?? model.temperature ?? 0.7;
   const maxTokens = options.max_tokens ?? model.max_tokens ?? 2048;
@@ -449,7 +520,7 @@ async function callAIStream(messages, options = {}) {
   let url, headers, body;
 
   if (provider === 'anthropic') {
-    url = (baseUrl || 'https://api.anthropic.com') + '/v1/messages';
+    url = buildApiUrl(baseUrl, provider);
     headers = {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
@@ -463,7 +534,7 @@ async function callAIStream(messages, options = {}) {
       messages: otherMsgs.map(m => ({ role: m.role, content: m.content }))
     });
   } else {
-    url = (baseUrl || 'https://api.openai.com') + '/v1/chat/completions';
+    url = buildApiUrl(baseUrl, provider);
     headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
@@ -480,18 +551,234 @@ async function callAIStream(messages, options = {}) {
 }
 
 // ==================== AI FALLBACK ====================
+// 行业场景化 fallback 模板库
+const INDUSTRY_TEMPLATES = {
+  '房地产': {
+    '犹豫不决': `【开场白 - 共情】
+"买房确实是大事，多看看多对比是对的，说明您很慎重。"
+
+【异议处理】
+"您在犹豫什么呢？是户型、位置、还是价格？您跟我说说，我帮您分析分析。"
+"其实很多客户一开始也有顾虑，但看完现房后就踏实了。"
+
+【价值呈现】
+"我给您看几个真实业主的反馈..."（展示案例）
+
+【促成】
+"要不我带您去小区实地走走？看看环境、配套，感受一下住在这是什么体验。看完您再决定，不着急。"`,
+
+    '价格异议': `【开场白 - 共情破冰】
+"您说得对，买房确实是大事，多对比是应该的。我特别理解您想找个性价比高的房子。"
+
+【异议处理 - 价值拆解】
+"您说的那边我了解，单价确实看起来低一些。不过我帮您算笔账：
+- 我们的得房率是85%，那边只有72%，实际使用面积每平米反而便宜XXX元
+- 我们是现房，那边是期房，您还要多付2年房租，加上贷款利息，总成本其实更高
+- 我们的学区是XX小学，那边划片的是XX小学，教育资源差距很大"
+
+【价值呈现 - 场景化利益】
+"很多客户最后选了我们，主要是因为：
+1. 地铁站步行5分钟，每天省30分钟通勤
+2. 物业是XX品牌，小区环境和安全性有保障
+3. 周边配套已经成熟，不用等3-5年"
+
+【促成 - 低压力收尾】
+"您方便的话，我带您实地看看小区环境和样板间？眼见为实，看完您再做决定也不迟。"`,
+    '通用': `【开场白】
+"您好，欢迎来看房！我是您的置业顾问小X，今天想看什么样的房子？"
+
+【需求探寻】
+"您是首套房还是改善型？主要考虑哪个区域？对户型有什么要求？"
+
+【价值呈现】
+"我们项目最大的优势是..."（根据具体楼盘填写）
+
+【异议处理】
+"您的顾虑我理解，很多客户一开始也有同样的想法..."
+
+【促成】
+"要不我带您去看看样板间？实地感受一下。"`
+  },
+  '保险': {
+    '犹豫不决': `【开场白】
+"张姐，保险这个事确实需要慎重考虑，不着急。"
+
+【异议处理】
+"您主要是在犹豫什么呢？是觉得不需要，还是在考虑其他公司？"
+"其实保险这个东西，越早买越划算，因为保费跟年龄直接挂钩。"
+
+【价值呈现】
+"我给您看个真实理赔案例..."（用案例说明保障价值）
+
+【促成】
+"要不我先帮您做个保障缺口分析？算算您到底需要多少保额，不买也没关系，至少心里有个数。"`,
+
+    '价格异议': `【开场白】
+"张姐，我特别理解您的想法，保险确实要慎重考虑。"
+
+【异议处理】
+"您觉得贵，是因为还没真正算过这笔账：
+- 每天不到XX元，一年就是XX万的保障
+- 万一出险，这笔钱能帮您避免几十万的损失
+- 而且现在买比5年后买，保费便宜30%"
+
+【价值呈现】
+"我给您看个真实案例..."（用具体案例说明保障价值）
+
+【促成】
+"要不我先帮您做个保障测算？看看多少保额最合适，不买也没关系。"`,
+    '通用': `【开场白】
+"您好，我是XX保险的小X，今天想跟您聊聊家庭保障规划。"
+
+【需求探寻】
+"您家里几口人？有没有房贷车贷？最担心什么风险？"
+
+【价值呈现】
+"根据您的情况，我建议..."
+
+【异议处理】
+"您的顾虑很正常，让我详细解释一下..."
+
+【促成】
+"要不我先帮您做个保障方案？您参考一下。"`
+  },
+  '教育培训': {
+    '犹豫不决': `【开场白】
+"家长您好，给孩子选课程确实要慎重，我理解。"
+
+【异议处理】
+"您在犹豫什么呢？是担心效果，还是在对比其他机构？"
+"其实很多家长一开始也有顾虑，但孩子上完体验课后就放心了。"
+
+【价值呈现】
+"我给您看几个学员的进步案例..."（展示真实案例）
+
+【促成】
+"要不先带孩子来上节体验课？让孩子自己感受一下，您也能看看我们的教学环境和老师。"`,
+
+    '价格异议': `【开场白】
+"家长您好，我理解您的顾虑，给孩子选课程确实要货比三家。"
+
+【异议处理】
+"您觉得价格高，我特别理解。但您看：
+- 我们的老师都是985/211毕业，教学经验5年以上
+- 小班教学，每个孩子都能得到关注
+- 上个学期，我们学员平均提分XX分"
+
+【价值呈现】
+"教育投资和其他消费不一样，错过关键期就补不回来了。"
+
+【促成】
+"要不先带孩子来上节体验课？看看孩子喜不喜欢，效果说话。"`,
+    '通用': `【开场白】
+"家长您好，欢迎来XX教育！孩子几年级了？"
+
+【需求探寻】
+"孩子哪个科目比较薄弱？平时学习习惯怎么样？"
+
+【价值呈现】
+"我们针对这个年龄段的孩子有一套成熟的教学方法..."
+
+【异议处理】
+"您的想法我理解，让我给您详细介绍一下..."
+
+【促成】
+"要不先安排一节免费试听课？让孩子亲身体验一下。"`
+  },
+  '通用': {
+    '犹豫不决': `【开场白 - 共情】
+"没关系，买东西确实要多考虑考虑，说明您是个谨慎的人。"
+
+【异议处理】
+"您主要在犹豫什么呢？可以跟我说说，我帮您分析分析。"
+"其实很多客户一开始也有顾虑，但体验之后就放心了。"
+
+【价值呈现】
+"让我给您看看其他客户的反馈..."（展示案例）
+
+【促成】
+"要不您先体验一下？好的产品自己会说话。不满意也没关系，至少您亲自感受过了。"`,
+
+    '价格异议': `【开场白 - 共情】
+"我完全理解您的想法，买东西当然要货比三家，这说明您是个精明的消费者。"
+
+【异议处理 - 价值对比】
+"价格确实是一个重要因素，但咱们不能只看价格，还要看性价比：
+- 我们的产品/服务在XX方面有独特优势
+- 长期使用下来，综合成本其实更低
+- 而且我们提供XX售后服务，省心省力"
+
+【价值呈现】
+"让我给您算一笔账..."（具体说明价值）
+
+【促成】
+"要不您先体验一下？好的产品自己会说话。"`,
+    '通用': `【开场白】
+"您好，感谢您的信任！我是XX的小X。"
+
+【需求探寻】
+"您目前最关心的是什么？有什么具体需求？"
+
+【价值呈现】
+"根据您的需求，我建议..."
+
+【异议处理】
+"您的顾虑我理解，让我详细说明..."
+
+【促成】
+"要不我们先试一下？您看看效果再说。"`
+  }
+};
+
+// 从用户输入中提取场景类型
+function detectScenarioType(input, industry) {
+  const text = (input || '').toLowerCase();
+  if (text.includes('贵') || text.includes('价格') || text.includes('便宜') || text.includes('优惠') || text.includes('折扣')) {
+    return '价格异议';
+  }
+  if (text.includes('考虑') || text.includes('想想') || text.includes('再看看')) {
+    return '犹豫不决';
+  }
+  if (text.includes('不需要') || text.includes('没兴趣') || text.includes('不要')) {
+    return '需求异议';
+  }
+  return '通用';
+}
+
 function generateFallbackScript(style, scenario, industry) {
+  const industryKey = industry && INDUSTRY_TEMPLATES[industry] ? industry : '通用';
+  const scenarioType = detectScenarioType(scenario, industry);
+  const templates = INDUSTRY_TEMPLATES[industryKey];
+  const baseContent = templates[scenarioType] || templates['通用'] || INDUSTRY_TEMPLATES['通用']['通用'];
+
+  // 生成3种差异化风格
+  const empatheticVersion = baseContent
+    .replace(/【开场白[^】]*】/, '【开场白 - 温和共情】')
+    .concat('\n\n💡 共情要点：先认同客户的感受，用"我理解"、"确实"等词建立信任，不急于反驳。');
+
+  const directVersion = baseContent
+    .replace(/【开场白[^】]*】/, '【开场白 - 直接高效】')
+    .replace(/"您说得对[^"]*"/, '"直接说，"')
+    .concat('\n\n💡 直爽要点：用数据和事实说话，不绕弯子，给客户算清楚账。');
+
+  const professionalVersion = baseContent
+    .replace(/【开场白[^】]*】/, '【开场白 - 专业顾问】')
+    .concat('\n\n💡 专业要点：引用行业数据、市场趋势，用专业知识帮助客户做出理性决策。');
+
   return {
     speechStyles: [
-      { style: style || '标准话术', content: `【${scenario || '通用场景'}开场白】\n您好，感谢您抽出时间。我是${industry || '行业'}解决方案顾问。\n\n【需求探寻】\n请问您目前在${scenario || '这方面'}遇到的最大挑战是什么？\n\n【价值呈现】\n我们的方案可以帮助您提升效率、降低成本。\n\n【异议处理】\n我理解您的顾虑，让我详细说明。\n\n【促成】\n基于讨论，我建议我们先试用一个月。` }
+      { style: '共情版', content: empatheticVersion },
+      { style: '直爽版', content: directVersion },
+      { style: '专业版', content: professionalVersion }
     ],
-    reasoning: ['基于标准销售流程生成', '覆盖开场到成交全流程'],
+    reasoning: ['基于行业场景化模板生成', '针对具体异议类型定制', '输出3种差异化风格'],
     pitfalls: [
-      { action: '急于推销', reason: '应先了解客户需求' },
-      { action: '忽略异议', reason: '需正面回应客户顾虑' }
+      { action: '急于推销', reason: '应先建立信任和共情' },
+      { action: '空泛承诺', reason: '需用具体数据和案例支撑' },
+      { action: '风格雷同', reason: '不同风格要有实质性差异' }
     ],
-    knowledgeSource: '模板库',
-    confidenceScore: 0.6
+    knowledgeSource: '行业模板库',
+    confidenceScore: 0.7
   };
 }
 
@@ -1038,50 +1325,144 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
 
-    // Try real AI first
-    const scriptPrompt = knowledgeContext
-      ? `You are a top sales expert and script architect with 10 years of frontline experience. Generate high-converting, natural, professional sales scripts based on the user's scenario, industry, frameworks, and knowledge base.
+    // Try real AI first - 深度优化的专业 prompt
+    const scriptPrompt = `[EXECUTION MODE: STRICT JSON OUTPUT. ONLY RETURN A VALID JSON OBJECT.]
+
+# ROLE & MISSION
+你全球顶尖的销售战术总监与商业AI教练。你的终极任务是将抽象的商业场景（B2B/B2C）转化为具备绝对杀伤力的实战口语化话术武器。你精通组织博弈、心理杠杆、ROI对撞与人性防线。
 
 ${langInstructions[lang] || langInstructions.en}
 
-【Core Guidelines】
-1. Natural language: Use conversational language that salespeople actually speak. Avoid robotic or overly formal expressions.
-2. Complete flow: The content must include: [Opening] [Need Discovery] [Value Presentation] [Objection Handling] [Closing].
-3. Knowledge binding: Deeply integrate knowledge base content, and specify which knowledge items were referenced.
+---
+# CORE ENGINE 1: BUSINESS MODE ROUTER (底座路由)
+根据业务模式，强制采用完全不同的底层对抗逻辑：
 
-【Return Format】
-Return ONLY valid JSON, no markdown wrapping, no extra text.
+## [B2B 组织博弈矩阵] - 核心：组织决策安全、政治正确、ROI、规避背锅
+1. 共情版 (The Trust Ally): 绑定【内部推手/ Champion】的职场生存与政治痛点。帮他思考如何向老板汇报、如何规避项目失败的职场风险。
+2. 直爽版 (The ROI Catalyst): 降维打击。直接撕开企业"拖延不决"或"选择低价劣质方案"的每日资金失血量（Opportunity Cost），用财务逻辑逼迫其决策。
+3. 专业版 (The Risk Auditor): 专家听诊。展现完美的合规框架、全周期总拥有成本（TCO）拆解、技术架构收敛。
 
-JSON structure:
-{"speechStyles": [{"style": "style name", "content": "[Opening]...\\n[Need Discovery]...\\n[Value]...\\n[Objection]...\\n[Closing]..."}], "reasoning": ["reason 1", "reason 2"], "pitfalls": [{"action": "avoid this", "reason": "why"}], "knowledgeSource": "which knowledge items were used", "confidenceScore": 0.95}`
-      : `You are a master sales script creator. Generate high-converting sales scripts for the [${industry || 'general'}] industry.
+## [B2C 个人心理矩阵] - 核心：情感共鸣、焦虑显性化、即时损失、信任托付
+1. 共情版 (The Deep Mirror): 深度镜像。彻底说出客户不敢言说的疲惫、容貌/财富/教育焦虑。
+2. 直爽版 (The Wake-Up Razor): 降维棒喝。刺破自我催眠，直接指出不买此产品对当前生活品质、家庭、个人资产带来的即时恶化。
+3. 专业版 (The Trusted Authority): 消除决策客体风险。用行业硬指标、成分表、大牌对比数据，彻底抹杀"买错"的恐惧。
 
-${langInstructions[lang] || langInstructions.en}
+---
+# CORE ENGINE 2: FUNNEL STAGE ADAPTER (阶段锁)
+精准对齐阶段，严禁阶段错位：
+1. Prospecting (破冰触达) | 2. Discovery (需求深挖) | 3. Presentation (方案呈现) | 4. Objection (异议博弈 - 必须占话术总含量的70%以上) | 5. Closing (关单促成)
 
-【Requirements】
-1. Industry-specific: Use professional terminology and common pain points for the [${industry || 'general'}] industry.
-2. Natural language: Use conversational, authentic sales language. Avoid robotic or overly formal expressions.
-3. Complete flow: Content must include: [Opening] [Need Discovery] [Value Presentation] [Objection Handling] [Closing].
+---
+# OUTPUT FORMAT & TOKEN EFFICIENCY
+1. 必须输出标准的、可被解析的 JSON 对象。
+2. 内部文本中的换行、引号必须经过严格的 JSON 转义（使用 \\n, \\"），防止语法崩溃。
+3. 所有思考过程（Analytical Reasoning）每块严禁超过 60 字。
+4. 【铁律】话术（verbalScript）必须是高拟真、饱满、带呼吸感和语气词的纯正口语化中文（如："说白了"、"其实咱们看"、"明白您的意思，但咱们往深了想一步"），且字数必须饱满扎实。
 
-【Return Format】
-Return ONLY valid JSON, no markdown wrapping, no extra text.
+---
+# KNOWLEDGE BASE REFERENCE
+${knowledgeContext || '（无额外知识库）'}
 
-JSON structure:
-{"speechStyles": [{"style": "style name", "content": "[Opening]...\\n[Need Discovery]...\\n[Value]...\\n[Objection]...\\n[Closing]..."}], "reasoning": ["reason 1", "reason 2"], "pitfalls": [{"action": "avoid this", "reason": "why"}], "knowledgeSource": "source", "confidenceScore": 0.8}`;
+---
+# JSON STRUCTURE
+{
+  "detectedBusinessMode": "B2B or B2C",
+  "salesLifecycleStage": "Funnel Stage Name",
+  "buyerPersonaAnalysis": {
+    "targetStakeholder": "具体对话的角色与岗位/人群画像",
+    "hiddenDriver": "其内心最深处的利益边界或恐惧核心"
+  },
+  "tacticalExecutionPaths": [
+    {
+      "pathType": "共情版",
+      "strategicLever": "心理杠杆核心",
+      "verbalScript": "（饱满、口语化、包含语气词和停顿感的高杀伤力实战话术...）",
+      "coachingDirectives": {
+        "pacingAndTone": "语速、语调起伏、情感投射要求",
+        "microBehaviors": "肢体、眼神、战术性停顿或压低声音的具体指令"
+      }
+    },
+    {
+      "pathType": "直爽版",
+      "strategicLever": "利益博弈核心",
+      "verbalScript": "（高能量、直击要害、不留情面但极具说服力的现场话术...）",
+      "coachingDirectives": {
+        "pacingAndTone": "语调控制",
+        "microBehaviors": "战术性沉默留白技巧"
+      }
+    },
+    {
+      "pathType": "专业版",
+      "strategicLever": "理性解构核心",
+      "verbalScript": "（冷静、严谨、框架感极强、如同行业审计官一般的诊断式话术...）",
+      "coachingDirectives": {
+        "pacingAndTone": "客观、冷静、降温式的专家语调",
+        "microBehaviors": "配合图表数字进行重点强调的语言技巧"
+      }
+    }
+  ],
+  "multiStageSimulation": {
+    "expectedPushback": "客户最可能抛出的底层反弹异议",
+    "counterStrategy": "心理防御与二次反击路线",
+    "nextProgressiveMove": "下一步可落地的实质性推进动作"
+  },
+  "reasoning": ["生成思路1", "思路2"],
+  "pitfalls": [{"action": "要避免的行为", "reason": "原因"}],
+  "knowledgeSource": "参考了哪些知识",
+  "confidenceScore": 0.9
+}`;
 
     const userPrompts = {
-      zh: `请为以下场景生成${styleName}风格的销售话术：\n场景：${scenarioName}\n行业：${industry || '通用'}\n${input ? `补充信息：${input}` : ''}\n${frameworks ? `使用框架：${frameworks.join(', ')}` : ''}${knowledgeContext}`,
-      en: `Generate a ${styleName} style sales script for the following scenario:\nScenario: ${scenarioName}\nIndustry: ${industry || 'General'}\n${input ? `Additional info: ${input}` : ''}\n${frameworks ? `Frameworks: ${frameworks.join(', ')}` : ''}${knowledgeContext}`,
-      th: `สร้างสคริปต์ขายสไตล์${styleName}สำหรับสถานการณ์ต่อไปนี้:\nสถานการณ์: ${scenarioName}\nอุตสาหกรรม: ${industry || 'ทั่วไป'}\n${input ? `ข้อมูลเพิ่มเติม: ${input}` : ''}\n${frameworks ? `กรอบ: ${frameworks.join(', ')}` : ''}${knowledgeContext}`,
-      vi: `Tạo kịch bản bán hàng phong cách ${styleName} cho tình huống sau:\nTình huống: ${scenarioName}\nNgành: ${industry || 'Chung'}\n${input ? `Thông tin bổ sung: ${input}` : ''}\n${frameworks ? `Khung: ${frameworks.join(', ')}` : ''}${knowledgeContext}`,
-      ms: `Jana skrip jualan gaya ${styleName} untuk senario berikut:\nSenario: ${scenarioName}\nIndustri: ${industry || 'Am'}\n${input ? `Maklumat tambahan: ${input}` : ''}\n${frameworks ? `Rangka kerja: ${frameworks.join(', ')}` : ''}${knowledgeContext}`,
-      id: `Buat skrip penjualan gaya ${styleName} untuk skenario berikut:\nSkenario: ${scenarioName}\nIndustri: ${industry || 'Umum'}\n${input ? `Info tambahan: ${input}` : ''}\n${frameworks ? `Framework: ${frameworks.join(', ')}` : ''}${knowledgeContext}`,
+      zh: `请根据销售沙盘演练标准，深度拆解并生成以下实战场景的商业剧本与操练话术：
+
+【当前实战演练场景】
+${scenarioName}
+
+【行业背景与商业模式】
+${industry || '请根据场景精准判定属于：A. B2B大单采购组织博弈 还是 B. B2C高客单价个人消费。并在 detectedBusinessMode 中明确体现'}
+
+【项目所处全流程阶段】
+${input || '请从场景描述中深度推断当前精确处于：破冰触达、需求深挖、方案呈现、异议博弈、关单促成 中的哪一个阶段，并在 salesLifecycleStage 中体现'}
+
+【参考规范/既定商务框架】
+${frameworks ? frameworks.join(', ') : '遵循全球顶级销售博弈与心理学逻辑（如：SPIN、MEDDPICC、挑战型销售、SPB心理杠杆）'}
+
+【交付铁律】
+1. 话术定制性：严格切分B2B（打消背锅焦虑、算ROI）与B2C（击穿个人防线、制造即时痛感）的底层区别。
+2. 风格毁灭性差异：三种风格的话术严禁话术雷同，从博弈切入点到收尾话术必须进行结构性重组。
+3. JSON 合规性：直接输出标准 JSON 对象，确保内部引号已转义，严禁夹带任何多余的解释性文字。
+
+${knowledgeContext}`,
+      en: `Generate a battle-ready commercial script based on sales sandbox drill standards:
+
+【Scenario】
+${scenarioName}
+
+【Industry & Business Model】
+${industry || 'Determine: A. B2B organizational procurement or B. B2C high-ticket personal consumption'}
+
+【Funnel Stage】
+${input || 'Infer the exact stage: Prospecting, Discovery, Presentation, Objection, or Closing'}
+
+【Frameworks】
+${frameworks ? frameworks.join(', ') : 'SPIN, MEDDPICC, Challenger Sale, SPB Psychological Leverage'}
+
+【Delivery Rules】
+1. Strict B2B vs B2C differentiation in tactics
+2. Three styles must have STRUCTURALLY different approaches
+3. Output valid JSON only, no extra text
+
+${knowledgeContext}`,
+      th: `สร้างสคริปต์ขายสำหรับสถานการณ์ต่อไปนี้:\nสถานการณ์: ${scenarioName}\nอุตสาหกรรม: ${industry || 'ทั่วไป'}\n${input ? `ข้อมูลเพิ่มเติม: ${input}` : ''}\n${frameworks ? `กรอบ: ${frameworks.join(', ')}` : ''}\n⚠️ 3 สไตล์ต้องมีเนื้อหาที่แตกต่างกันอย่างชัดเจน!${knowledgeContext}`,
+      vi: `Tạo kịch bản bán hàng cho tình huống sau:\nTình huống: ${scenarioName}\nNgành: ${industry || 'Chung'}\n${input ? `Thông tin bổ sung: ${input}` : ''}\n${frameworks ? `Khung: ${frameworks.join(', ')}` : ''}\n⚠️ 3 phong cách phải có nội dung khác biệt rõ rệt!${knowledgeContext}`,
+      ms: `Jana skrip jualan untuk senario berikut:\nSenario: ${scenarioName}\nIndustri: ${industry || 'Am'}\n${input ? `Maklumat tambahan: ${input}` : ''}\n${frameworks ? `Rangka kerja: ${frameworks.join(', ')}` : ''}\n⚠️ 3 gaya mesti mempunyai kandungan yang berbeza!${knowledgeContext}`,
+      id: `Buat skrip penjualan untuk skenario berikut:\nSkenario: ${scenarioName}\nIndustri: ${industry || 'Umum'}\n${input ? `Info tambahan: ${input}` : ''}\n${frameworks ? `Framework: ${frameworks.join(', ')}` : ''}\n⚠️ 3 gaya harus memiliki konten yang berbeda secara substansial!${knowledgeContext}`,
     };
 
     const aiResult = await callAI([
       { role: 'system', content: scriptPrompt },
       { role: 'user', content: userPrompts[lang] || userPrompts.en }
-    ]);
+    ], { max_tokens: 4096, temperature: 0.8 });
 
     if (aiResult) {
       try {
@@ -1116,6 +1497,7 @@ JSON structure:
       }
     } else {
       // Fallback to template
+      console.log('Script generation: AI returned null, using fallback template for:', { scenarioName, industry, lang });
       scriptData = generateFallbackScript(styleName, scenarioName, industry);
     }
 
@@ -2247,40 +2629,184 @@ routes['POST /api/admin/models/test'] = async (req, res) => {
   try {
     requireAdmin(req);
     const data = await parseBody(req);
-    const { baseUrl, apiKey, modelId } = data;
+    const { baseUrl, apiKey, modelId, provider } = data;
 
     if (!apiKey || !modelId) {
       return sendJson(res, 400, { success: false, error: 'Missing required parameters' });
     }
 
-    // Build the test URL based on provider
-    let testUrl = baseUrl || 'https://api.openai.com/v1';
-    if (!testUrl.endsWith('/chat/completions')) {
-      testUrl = testUrl.replace(/\/$/, '') + '/chat/completions';
+    const providerLower = (provider || '').toLowerCase();
+
+    // 使用统一的 URL 构建函数
+    const testUrl = buildApiUrl(baseUrl, providerLower);
+    let headers = { 'Content-Type': 'application/json' };
+    let body;
+
+    if (providerLower === 'anthropic') {
+      headers['x-api-key'] = apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+      body = JSON.stringify({
+        model: modelId,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Say hi' }]
+      });
+    } else {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      body = JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'Say hi' }],
+        max_tokens: 10,
+      });
     }
 
-    // Make a simple API call to test the connection
+    console.log('Testing model connection:', { provider: providerLower, modelId, url: testUrl, originalBaseUrl: baseUrl });
+
     const response = await fetch(testUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: modelId,
-        messages: [{ role: 'user', content: 'Hi' }],
-        max_tokens: 5,
-      }),
+      headers,
+      body,
+      signal: AbortSignal.timeout(15000)
     });
 
     if (response.ok) {
-      sendJson(res, 200, { success: true, message: '连接成功' });
+      const responseData = await response.json();
+      let content = '';
+      if (providerLower === 'anthropic') {
+        content = responseData.content?.[0]?.text || '';
+      } else {
+        content = responseData.choices?.[0]?.message?.content || '';
+      }
+      sendJson(res, 200, { success: true, message: '连接成功', testResponse: content.slice(0, 100) });
     } else {
       const errorText = await response.text().catch(() => '');
-      sendJson(res, 200, { success: false, message: `连接失败: HTTP ${response.status}` });
+      sendJson(res, 200, {
+        success: false,
+        message: `连接失败: HTTP ${response.status}`,
+        error: errorText.slice(0, 300),
+        debug: { url: testUrl, provider: providerLower, modelId }
+      });
     }
   } catch (err) {
-    sendJson(res, 200, { success: false, message: `连接错误: ${err.message}` });
+    sendJson(res, 200, {
+      success: false,
+      message: `连接错误: ${err.message}`,
+      errorType: err.name,
+      debug: { url: testUrl, provider: providerLower, modelId }
+    });
+  }
+};
+
+// 诊断端点 - 检查当前激活模型的状态
+routes['GET /api/admin/diagnose'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+
+    const diagnosis = {
+      timestamp: new Date().toISOString(),
+      environment: {
+        hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        nodeEnv: process.env.NODE_ENV
+      },
+      model: null,
+      testResult: null
+    };
+
+    // 检查模型配置
+    try {
+      const models = await sbSafeQuery('model_configs', { select: '*', order: 'created_at.desc' });
+      diagnosis.model = {
+        total: models.length,
+        active: models.filter(m => m.is_active).length,
+        models: models.map(m => ({
+          id: m.id,
+          name: m.display_name || m.model_id,
+          provider: m.provider,
+          modelId: m.model_id,
+          baseUrl: m.base_url || '(默认)',
+          isActive: m.is_active,
+          isPrimary: m.is_primary,
+          hasApiKey: !!m.api_key,
+          apiKeyPreview: m.api_key ? `${m.api_key.slice(0, 8)}...` : '(空)',
+          temperature: m.temperature,
+          maxTokens: m.max_tokens
+        }))
+      };
+
+      // 测试激活的模型
+      const activeModel = models.find(m => m.is_active);
+      if (activeModel && activeModel.api_key) {
+        const provider = (activeModel.provider || '').toLowerCase();
+        let testUrl, headers, body;
+
+        // 自动移除末尾的 /v1
+        const cleanBaseUrl = (activeModel.base_url || '').replace(/\/+$/, '').replace(/\/v1\/?$/, '');
+
+        if (provider === 'anthropic') {
+          testUrl = (cleanBaseUrl || 'https://api.anthropic.com') + '/v1/messages';
+          headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': activeModel.api_key,
+            'anthropic-version': '2023-06-01'
+          };
+          body = JSON.stringify({
+            model: activeModel.model_id,
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'Say hi' }]
+          });
+        } else {
+          testUrl = (cleanBaseUrl || 'https://api.openai.com') + '/v1/chat/completions';
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${activeModel.api_key}`
+          };
+          body = JSON.stringify({
+            model: activeModel.model_id,
+            messages: [{ role: 'user', content: 'Say hi' }],
+            max_tokens: 10
+          });
+        }
+
+        try {
+          const resp = await fetch(testUrl, {
+            method: 'POST',
+            headers,
+            body,
+            signal: AbortSignal.timeout(15000)
+          });
+
+          if (resp.ok) {
+            const data = await resp.json();
+            let content = provider === 'anthropic'
+              ? (data.content?.[0]?.text || '')
+              : (data.choices?.[0]?.message?.content || '');
+            diagnosis.testResult = { success: true, response: content.slice(0, 100) };
+          } else {
+            const errText = await resp.text();
+            diagnosis.testResult = {
+              success: false,
+              status: resp.status,
+              error: errText.slice(0, 300)
+            };
+          }
+        } catch (e) {
+          diagnosis.testResult = {
+            success: false,
+            error: e.message,
+            errorType: e.name
+          };
+        }
+      } else {
+        diagnosis.testResult = { success: false, error: '没有激活的模型或 API Key 未配置' };
+      }
+    } catch (e) {
+      diagnosis.model = { error: e.message };
+    }
+
+    sendJson(res, 200, { success: true, data: diagnosis });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
   }
 };
 

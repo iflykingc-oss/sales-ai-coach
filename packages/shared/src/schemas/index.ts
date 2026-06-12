@@ -12,21 +12,48 @@ export const scriptSchema = z.object({
 });
 
 export const scriptResponseSchema = z.object({
+  // 新结构 - 战术执行路径
+  detectedBusinessMode: z.enum(['B2B', 'B2C']).optional(),
+  salesLifecycleStage: z.string().optional(),
+  buyerPersonaAnalysis: z.object({
+    targetStakeholder: z.string(),
+    hiddenDriver: z.string(),
+  }).optional(),
+  tacticalExecutionPaths: z.array(
+    z.object({
+      pathType: z.enum(['共情版', '直爽版', '专业版']),
+      strategicLever: z.string(),
+      verbalScript: z.string(),
+      coachingDirectives: z.object({
+        pacingAndTone: z.string(),
+        microBehaviors: z.string(),
+      }).optional(),
+    }),
+  ).optional(),
+  multiStageSimulation: z.object({
+    expectedPushback: z.string(),
+    counterStrategy: z.string(),
+    nextProgressiveMove: z.string(),
+  }).optional(),
+
+  // 兼容旧结构
   speechStyles: z.array(
     z.object({
       style: z.string(),
       content: z.string(),
     }),
-  ),
-  reasoning: z.array(z.string()),
+  ).optional(),
+
+  // 通用字段
+  reasoning: z.array(z.string()).default([]),
   pitfalls: z.array(
     z.object({
       action: z.string(),
       reason: z.string(),
     }),
-  ),
-  knowledgeSource: z.string(),
-  confidenceScore: z.number().min(0).max(1),
+  ).default([]),
+  knowledgeSource: z.string().default('AI生成'),
+  confidenceScore: z.number().min(0).max(1).default(0.8),
 });
 
 export const practiceSessionSchema = z.object({

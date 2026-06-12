@@ -133,6 +133,7 @@ export function ModelConfig() {
         baseUrl: model.baseUrl,
         apiKey: model.apiKey,
         modelId: model.modelId,
+        provider: model.provider,
       });
       const data = res.data || res;
       setTestResult({
@@ -268,7 +269,31 @@ export function ModelConfig() {
                 {/* Expanded Settings */}
                 {isExpanded && (
                   <div className="mt-4 border-t border-gray-100 pt-4">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">提供商</label>
+                        {['OpenAI', 'Anthropic', 'Qwen', 'DeepSeek', 'MiniMax', 'Doubao', 'Azure'].includes(model.provider) ? (
+                          <select
+                            value={model.provider}
+                            onChange={(e) => updateModel(model.id, { provider: e.target.value })}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          >
+                            <option value="OpenAI">OpenAI</option>
+                            <option value="Anthropic">Anthropic</option>
+                            <option value="Qwen">通义千问</option>
+                            <option value="DeepSeek">DeepSeek</option>
+                            <option value="MiniMax">MiniMax</option>
+                            <option value="Doubao">豆包</option>
+                            <option value="Azure">Azure</option>
+                          </select>
+                        ) : (
+                          <Input
+                            value={model.provider || ''}
+                            onChange={(e) => updateModel(model.id, { provider: e.target.value })}
+                            placeholder="自定义提供商"
+                          />
+                        )}
+                      </div>
                       <div>
                         <label className="mb-1 block text-sm font-medium text-gray-700">模型ID</label>
                         <Input
@@ -276,7 +301,7 @@ export function ModelConfig() {
                           onChange={(e) =>
                             updateModel(model.id, { modelId: e.target.value })
                           }
-                          placeholder="gpt-4, claude-3, etc."
+                          placeholder="gpt-4o, claude-sonnet-4-20250514"
                         />
                       </div>
                       <div>
@@ -286,7 +311,7 @@ export function ModelConfig() {
                           onChange={(e) =>
                             updateModel(model.id, { baseUrl: e.target.value })
                           }
-                          placeholder="https://api.openai.com/v1"
+                          placeholder="https://api.openai.com"
                         />
                       </div>
                     </div>
@@ -440,17 +465,48 @@ export function ModelConfig() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">提供商</label>
-                <select
-                  value={newModel.provider || 'OpenAI'}
-                  onChange={(e) => setNewModel({ ...newModel, provider: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="OpenAI">OpenAI</option>
-                  <option value="Anthropic">Anthropic</option>
-                  <option value="Google">Google</option>
-                  <option value="Azure">Azure</option>
-                  <option value="Custom">自定义</option>
-                </select>
+                <div className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <select
+                      value={['OpenAI', 'Anthropic', 'Qwen', 'DeepSeek', 'MiniMax', 'Doubao', 'Azure'].includes(newModel.provider || '') ? newModel.provider : 'Custom'}
+                      onChange={(e) => {
+                        const provider = e.target.value;
+                        if (provider === 'Custom') {
+                          setNewModel({ ...newModel, provider: '' });
+                        } else {
+                          const urlTemplates: Record<string, string> = {
+                            'OpenAI': 'https://api.openai.com',
+                            'Anthropic': 'https://api.anthropic.com',
+                            'Qwen': 'https://dashscope.aliyuncs.com/compatible-mode',
+                            'DeepSeek': 'https://api.deepseek.com',
+                            'MiniMax': 'https://api.minimax.chat/v1',
+                            'Doubao': 'https://ark.cn-beijing.volces.com/api/v3',
+                            'Azure': '',
+                          };
+                          setNewModel({ ...newModel, provider, baseUrl: urlTemplates[provider] || '' });
+                        }
+                      }}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      <option value="OpenAI">OpenAI (GPT-4o)</option>
+                      <option value="Anthropic">Anthropic (Claude)</option>
+                      <option value="Qwen">通义千问 (Qwen)</option>
+                      <option value="DeepSeek">DeepSeek</option>
+                      <option value="MiniMax">MiniMax</option>
+                      <option value="Doubao">豆包 (Doubao)</option>
+                      <option value="Azure">Azure OpenAI</option>
+                      <option value="Custom">✏️ 自定义...</option>
+                    </select>
+                  </div>
+                  {(!['OpenAI', 'Anthropic', 'Qwen', 'DeepSeek', 'MiniMax', 'Doubao', 'Azure'].includes(newModel.provider || '') || newModel.provider === '') && (
+                    <Input
+                      value={newModel.provider || ''}
+                      onChange={(e) => setNewModel({ ...newModel, provider: e.target.value })}
+                      placeholder="输入提供商名称，如：Kimi、GLM、百川、零一万物..."
+                      className="text-sm"
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -459,8 +515,11 @@ export function ModelConfig() {
               <Input
                 value={newModel.modelId || ''}
                 onChange={(e) => setNewModel({ ...newModel, modelId: e.target.value })}
-                placeholder="gpt-4, claude-3-opus, gemini-pro, etc."
+                placeholder="如: gpt-4o, claude-sonnet-4-20250514, qwen2.5-72b-instruct"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                常见模型：gpt-4o | claude-sonnet-4-20250514 | qwen2.5-72b-instruct | deepseek-chat | MiniMax-Text-01 | doubao-seed-2.0
+              </p>
             </div>
 
             <div>
@@ -468,8 +527,11 @@ export function ModelConfig() {
               <Input
                 value={newModel.baseUrl || ''}
                 onChange={(e) => setNewModel({ ...newModel, baseUrl: e.target.value })}
-                placeholder="https://api.openai.com/v1 (留空使用默认)"
+                placeholder="选择提供商后自动填充，也可自定义"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                💡 代码会自动拼接 API 路径，只需填写域名部分（如 https://api.openai.com）
+              </p>
             </div>
 
             <div>
@@ -513,7 +575,13 @@ export function ModelConfig() {
             </div>
 
             <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
-              添加后可在模型列表中点击"测试"按钮验证配置是否正确。
+              <p className="font-medium mb-1">💡 配置提示</p>
+              <ul className="space-y-1 text-xs">
+                <li>• 选择提供商后会自动填充 Base URL，一般无需修改</li>
+                <li>• 代码会自动拼接 API 路径（/v1/chat/completions 等）</li>
+                <li>• 如果你的 API 有自定义 endpoint，可以直接填写完整 URL</li>
+                <li>• 添加后点击"测试"按钮验证配置是否正确</li>
+              </ul>
             </div>
           </div>
           <DialogFooter>

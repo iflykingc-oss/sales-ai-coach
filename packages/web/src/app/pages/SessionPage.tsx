@@ -11,6 +11,7 @@ import ScriptDisplay from '@/components/script/ScriptDisplay';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import { useActivityStore } from '@/stores/activityStore';
 import { generateScript } from '@/services/scriptService';
+import { api } from '@/services/api';
 
 export default function SessionPage() {
   const { setSessions, activeSessionId, setActiveSessionId } = useSessionStore();
@@ -38,6 +39,20 @@ export default function SessionPage() {
       }
     }
   }, [sessionsData, setSessions, activeSessionId, setActiveSessionId]);
+
+  // Auto-create first session if none exists
+  useEffect(() => {
+    if (sessionsData && sessionsData.length === 0 && !activeSessionId) {
+      api.post('/sessions', { name: '新对话', industry: null, tags: [] })
+        .then((res: any) => {
+          if (res.data?.id) {
+            setSessions([res.data]);
+            setActiveSessionId(res.data.id);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [sessionsData, activeSessionId, setSessions, setActiveSessionId]);
 
   // Reset script state when switching sessions
   useEffect(() => {

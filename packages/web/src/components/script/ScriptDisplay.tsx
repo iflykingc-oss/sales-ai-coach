@@ -87,12 +87,23 @@ export default function ScriptDisplay() {
   // Find the content for the active style tab
   const getStyleContent = useCallback(
     (styleKey: string): string => {
+      // 支持新的 tacticalExecutionPaths 结构
+      const paths = currentScript?.tacticalExecutionPaths;
+      if (paths && paths.length > 0) {
+        const pathMap: Record<string, string> = {
+          'empathy': '共情版',
+          'straightforward': '直爽版',
+          'professional': '专业版'
+        };
+        const targetPath = paths.find(p => p.pathType === pathMap[styleKey]);
+        return targetPath?.verbalScript || paths[0]?.verbalScript || '';
+      }
+
+      // 兼容旧的 speechStyles 结构
       if (!currentScript?.speechStyles) return '';
-      // Try to find matching style
       for (const s of currentScript.speechStyles) {
         if (normalizeStyle(s.style) === styleKey) return s.content;
       }
-      // Fallback: use index-based mapping
       const styleIndex = STYLE_TABS.findIndex((t) => t.key === styleKey);
       if (styleIndex >= 0 && currentScript.speechStyles[styleIndex]) {
         return currentScript.speechStyles[styleIndex].content;
@@ -174,9 +185,11 @@ export default function ScriptDisplay() {
           {compareMode ? (
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
               {STYLE_TABS.map(({ key, label, icon }) => {
-                const variant = currentScript.speechStyles?.find(
-                  (s) => normalizeStyle(s.style) === key,
-                ) || currentScript.speechStyles?.[STYLE_TABS.findIndex((t) => t.key === key)];
+                // 支持新结构
+                const pathMap: Record<string, string> = { 'empathy': '共情版', 'straightforward': '直爽版', 'professional': '专业版' };
+                const tacticalPath = currentScript.tacticalExecutionPaths?.find(p => p.pathType === pathMap[key]);
+                const legacyVariant = currentScript.speechStyles?.find(s => normalizeStyle(s.style) === key)
+                  || currentScript.speechStyles?.[STYLE_TABS.findIndex((t) => t.key === key)];
                 return (
                   <div key={key} className="rounded-lg bg-gray-50 p-3">
                     <div className="mb-2 flex items-center justify-between">
@@ -188,10 +201,16 @@ export default function ScriptDisplay() {
                     <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-700 line-clamp-8">
                       {getStyleContent(key)}
                     </p>
-                    {variant?.logic && (
+                    {tacticalPath?.strategicLever && (
                       <p className="mt-2 border-t border-gray-200 pt-2 text-xs text-violet-600 italic">
                         <Lightbulb className="mr-1 inline h-3 w-3" />
-                        {variant.logic}
+                        {tacticalPath.strategicLever}
+                      </p>
+                    )}
+                    {legacyVariant?.logic && (
+                      <p className="mt-2 border-t border-gray-200 pt-2 text-xs text-violet-600 italic">
+                        <Lightbulb className="mr-1 inline h-3 w-3" />
+                        {legacyVariant.logic}
                       </p>
                     )}
                   </div>
@@ -212,6 +231,89 @@ export default function ScriptDisplay() {
               </p>
             </div>
           )}
+
+          {/* 买家画像分析 (新结构) */}
+          {currentScript.buyerPersonaAnalysis && (
+            <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-purple-700">
+                <Target className="h-4 w-4" />
+                买家画像分析
+              </h4>
+              <div className="space-y-2">
+                {currentScript.buyerPersonaAnalysis.targetStakeholder && (
+                  <div>
+                    <p className="text-xs font-medium text-purple-500">目标角色</p>
+                    <p className="text-sm text-purple-800">{currentScript.buyerPersonaAnalysis.targetStakeholder}</p>
+                  </div>
+                )}
+                {currentScript.buyerPersonaAnalysis.hiddenDriver && (
+                  <div>
+                    <p className="text-xs font-medium text-purple-500">隐藏动机</p>
+                    <p className="text-sm text-purple-800">{currentScript.buyerPersonaAnalysis.hiddenDriver}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 多阶段模拟 (新结构) */}
+          {currentScript.multiStageSimulation && (
+            <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-orange-700">
+                <Shield className="h-4 w-4" />
+                博弈推演
+              </h4>
+              <div className="space-y-3">
+                {currentScript.multiStageSimulation.expectedPushback && (
+                  <div className="rounded-lg bg-white/60 p-3">
+                    <p className="text-xs font-medium text-orange-500">客户可能反弹</p>
+                    <p className="text-sm text-orange-800">{currentScript.multiStageSimulation.expectedPushback}</p>
+                  </div>
+                )}
+                {currentScript.multiStageSimulation.counterStrategy && (
+                  <div className="rounded-lg bg-white/60 p-3">
+                    <p className="text-xs font-medium text-orange-500">二次反击策略</p>
+                    <p className="text-sm text-orange-800">{currentScript.multiStageSimulation.counterStrategy}</p>
+                  </div>
+                )}
+                {currentScript.multiStageSimulation.nextProgressiveMove && (
+                  <div className="rounded-lg bg-white/60 p-3">
+                    <p className="text-xs font-medium text-orange-500">下一步推进</p>
+                    <p className="text-sm text-orange-800">{currentScript.multiStageSimulation.nextProgressiveMove}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 教练指令 (新结构 - 单风格视图) */}
+          {!compareMode && (() => {
+            const pathMap: Record<string, string> = { 'empathy': '共情版', 'straightforward': '直爽版', 'professional': '专业版' };
+            const activePath = currentScript.tacticalExecutionPaths?.find(p => p.pathType === pathMap[activeStyle]);
+            if (!activePath?.coachingDirectives) return null;
+            return (
+              <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 p-4">
+                <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-teal-700">
+                  <Lightbulb className="h-4 w-4" />
+                  执行教练指令
+                </h4>
+                <div className="space-y-2">
+                  {activePath.coachingDirectives.pacingAndTone && (
+                    <div>
+                      <p className="text-xs font-medium text-teal-500">语速语调</p>
+                      <p className="text-sm text-teal-800">{activePath.coachingDirectives.pacingAndTone}</p>
+                    </div>
+                  )}
+                  {activePath.coachingDirectives.microBehaviors && (
+                    <div>
+                      <p className="text-xs font-medium text-teal-500">微行为</p>
+                      <p className="text-sm text-teal-800">{activePath.coachingDirectives.microBehaviors}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Pain Analysis */}
           {currentScript.painAnalysis && (

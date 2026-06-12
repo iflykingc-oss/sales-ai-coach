@@ -43,8 +43,42 @@ export interface FrameworkAnalysis {
   suggestedFrameworks?: string[];
 }
 
+// 新结构 - 战术执行路径
+export interface TacticalExecutionPath {
+  pathType: '共情版' | '直爽版' | '专业版';
+  strategicLever: string;
+  verbalScript: string;
+  coachingDirectives?: {
+    pacingAndTone: string;
+    microBehaviors: string;
+  };
+}
+
+// 新结构 - 买家画像分析
+export interface BuyerPersonaAnalysis {
+  targetStakeholder: string;
+  hiddenDriver: string;
+}
+
+// 新结构 - 多阶段模拟
+export interface MultiStageSimulation {
+  expectedPushback: string;
+  counterStrategy: string;
+  nextProgressiveMove: string;
+}
+
 export interface ScriptStateData {
-  speechStyles: ScriptVariant[];
+  // 新结构字段
+  detectedBusinessMode?: 'B2B' | 'B2C';
+  salesLifecycleStage?: string;
+  buyerPersonaAnalysis?: BuyerPersonaAnalysis;
+  tacticalExecutionPaths?: TacticalExecutionPath[];
+  multiStageSimulation?: MultiStageSimulation;
+
+  // 兼容旧结构
+  speechStyles?: ScriptVariant[];
+
+  // 通用字段
   reasoning: string[];
   pitfalls: Array<{ action: string; reason: string }>;
   knowledgeSource: string;

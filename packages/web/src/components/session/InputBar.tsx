@@ -367,11 +367,17 @@ export default function InputBar({ onSend }: InputBarProps) {
           disabled={isGenerating || !activeSessionId || (!textValue.trim() && attachedFiles.length === 0 && !voiceTranscript && !pasteValue)}
           className="flex-shrink-0"
           size="lg"
+          title={!activeSessionId ? '正在创建会话...' : undefined}
         >
           {isGenerating ? (
             <>
               <Loader2 className="mr-1 h-4 w-4 animate-spin" />
               生成中
+            </>
+          ) : !activeSessionId ? (
+            <>
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              准备中
             </>
           ) : (
             <>
