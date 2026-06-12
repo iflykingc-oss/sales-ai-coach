@@ -2,6 +2,7 @@ const { URL } = require('url');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Sentry = require('@sentry/node');
+const { detectIndustry, generateIndustryPrompt } = require('./industry-context');
 
 // Initialize Sentry
 Sentry.init({
@@ -1298,6 +1299,11 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
     const lang = locale || 'en';
     let scriptData;
 
+    // 自动检测行业并获取上下文
+    const detectedIndustry = detectIndustry(input, industry);
+    const industryContextPrompt = generateIndustryPrompt(detectedIndustry, scenarioName);
+    console.log('Auto-detected industry:', detectedIndustry);
+
     // Language instruction for AI
     const langInstructions = {
       zh: '请用中文回复。使用中国市场的销售场景和表达方式。',
@@ -1330,6 +1336,8 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
 You are the structured data engine for an enterprise-grade AI Sales Coach. Your sole purpose is to analyze input scenarios and output a single, syntactically flawless JSON object based on deep behavioral psychology.
 
 ${langInstructions[lang] || langInstructions.en}
+
+${industryContextPrompt}
 
 [OUTPUT CONSTRAINT - CRITICAL]
 1. Return ONLY a valid JSON object enclosed within markdown code blocks (\`\`\`json ... \`\`\`).
@@ -2248,6 +2256,345 @@ routes['PATCH /api/shared-scripts/:teamId/:scriptId/approve'] = async (req, res)
   try {
     sendJson(res, 200, { success: true, data: { approved: true } });
   } catch (err) { sendJson(res, 200, { success: true }); }
+};
+
+// --- Announcements ---
+// 获取已发布的公告（用户端）
+routes['GET /api/announcements'] = async (req, res) => {
+  try {
+    const jwt = requireAuth(req);
+    const locale = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'zh';
+
+    // 获取已发布的公告
+    const announcements = await sbSafeQuery('announcements', {
+      select: '*',
+      eq: { status: 'published' },
+      order: 'priority.desc,published_at.desc',
+      limit: 20
+    });
+
+    // 过滤未过期的公告
+    const now = new Date().toISOString();
+    const validAnnouncements = announcements.filter(a =>
+      !a.expires_at || a.expires_at > now
+    );
+
+    // 获取用户的已读记录
+    const userReads = await sbSafeQuery('announcement_reads', {
+      select: 'announcement_id,dismissed_at',
+      eq: { user_id: jwt.userId }
+    });
+    const readMap = new Map(userReads.map(r => [r.announcement_id, r]));
+
+    // 获取多语言内容
+    const result = [];
+    for (const announcement of validAnnouncements) {
+      const readInfo = readMap.get(announcement.id);
+
+      // 跳过已关闭的一次性公告
+      if (announcement.type === 'once' && readInfo?.dismissed_at) continue;
+
+      // 获取翻译
+      const translations = await sbSafeQuery('announcement_translations', {
+        select: 'locale,title,content',
+        eq: { announcement_id: announcement.id }
+      });
+
+      const translationMap = new Map(translations.map(t => [t.locale, t]));
+      const localized = translationMap.get(locale) || translationMap.get('zh') || translationMap.get('en') || announcement;
+
+      result.push({
+        id: announcement.id,
+        title: localized.title || announcement.title,
+        content: localized.content || announcement.content,
+        type: announcement.type,
+        priority: announcement.priority,
+        publishedAt: announcement.published_at,
+        expiresAt: announcement.expires_at,
+        isRead: !!readInfo,
+        isDismissed: !!readInfo?.dismissed_at,
+      });
+    }
+
+    sendJson(res, 200, { data: result });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 200, { data: [] });
+  }
+};
+
+// 标记公告已读
+routes['POST /api/announcements/:id/read'] = async (req, res) => {
+  try {
+    const jwt = requireAuth(req);
+    const { parts } = safeId(req);
+    const announcementId = parts[3];
+
+    // 插入或更新已读记录
+    const existing = await sbSafeQuery('announcement_reads', {
+      select: 'id',
+      eq: { announcement_id: announcementId, user_id: jwt.userId },
+      limit: 1
+    });
+
+    if (existing && existing.length > 0) {
+      await sbUpdate('announcement_reads', { id: existing[0].id }, { read_at: new Date().toISOString() });
+    } else {
+      await sbInsert('announcement_reads', {
+        id: crypto.randomUUID(),
+        announcement_id: announcementId,
+        user_id: jwt.userId,
+        read_at: new Date().toISOString()
+      });
+    }
+
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 关闭/忽略公告
+routes['POST /api/announcements/:id/dismiss'] = async (req, res) => {
+  try {
+    const jwt = requireAuth(req);
+    const { parts } = safeId(req);
+    const announcementId = parts[3];
+
+    const existing = await sbSafeQuery('announcement_reads', {
+      select: 'id',
+      eq: { announcement_id: announcementId, user_id: jwt.userId },
+      limit: 1
+    });
+
+    const now = new Date().toISOString();
+    if (existing && existing.length > 0) {
+      await sbUpdate('announcement_reads', { id: existing[0].id }, { dismissed_at: now });
+    } else {
+      await sbInsert('announcement_reads', {
+        id: crypto.randomUUID(),
+        announcement_id: announcementId,
+        user_id: jwt.userId,
+        read_at: now,
+        dismissed_at: now
+      });
+    }
+
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 管理员 - 获取所有公告
+routes['GET /api/admin/announcements'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+
+    const announcements = await sbSafeQuery('announcements', {
+      select: '*',
+      order: 'created_at.desc',
+      limit: 50
+    });
+
+    // 获取每个公告的阅读统计
+    const result = [];
+    for (const announcement of announcements) {
+      const reads = await sbSafeQuery('announcement_reads', {
+        select: 'id',
+        eq: { announcement_id: announcement.id }
+      });
+
+      const translations = await sbSafeQuery('announcement_translations', {
+        select: 'locale,title',
+        eq: { announcement_id: announcement.id }
+      });
+
+      result.push({
+        ...announcement,
+        readCount: reads.length,
+        translations: translations,
+      });
+    }
+
+    sendJson(res, 200, { data: result });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 管理员 - 创建公告
+routes['POST /api/admin/announcements'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const data = await parseBody(req);
+
+    if (!data.title || !data.content) {
+      return sendJson(res, 400, { success: false, error: '标题和内容不能为空' });
+    }
+
+    const announcementId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // 创建公告
+    const announcement = await sbInsert('announcements', {
+      id: announcementId,
+      title: data.title,
+      content: data.content,
+      type: data.type || 'once',
+      status: data.status || 'draft',
+      priority: data.priority || 0,
+      target_audience: data.targetAudience || 'all',
+      scheduled_at: data.scheduledAt || null,
+      expires_at: data.expiresAt || null,
+      published_at: data.status === 'published' ? now : null,
+      created_by: req.user?.userId,
+      created_at: now,
+      updated_at: now
+    });
+
+    // 保存多语言翻译
+    if (data.translations && Array.isArray(data.translations)) {
+      for (const translation of data.translations) {
+        if (translation.locale && translation.title && translation.content) {
+          await sbInsert('announcement_translations', {
+            id: crypto.randomUUID(),
+            announcement_id: announcementId,
+            locale: translation.locale,
+            title: translation.title,
+            content: translation.content,
+            created_at: now
+          });
+        }
+      }
+    }
+
+    sendJson(res, 201, { success: true, data: { id: announcementId, ...announcement } });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 管理员 - 更新公告
+routes['PUT /api/admin/announcements/:id'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { parts } = safeId(req);
+    const announcementId = parts[4];
+    const data = await parseBody(req);
+
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.content !== undefined) updateData.content = data.content;
+    if (data.type !== undefined) updateData.type = data.type;
+    if (data.priority !== undefined) updateData.priority = data.priority;
+    if (data.targetAudience !== undefined) updateData.target_audience = data.targetAudience;
+    if (data.scheduledAt !== undefined) updateData.scheduled_at = data.scheduledAt;
+    if (data.expiresAt !== undefined) updateData.expires_at = data.expiresAt;
+
+    // 状态变更
+    if (data.status !== undefined) {
+      updateData.status = data.status;
+      if (data.status === 'published' && !data.scheduledAt) {
+        updateData.published_at = new Date().toISOString();
+      }
+    }
+
+    await sbUpdate('announcements', { id: announcementId }, updateData);
+
+    // 更新翻译
+    if (data.translations && Array.isArray(data.translations)) {
+      // 删除旧翻译
+      const oldTranslations = await sbSafeQuery('announcement_translations', {
+        select: 'id',
+        eq: { announcement_id: announcementId }
+      });
+      for (const old of oldTranslations) {
+        await sbDelete('announcement_translations', { id: old.id });
+      }
+
+      // 插入新翻译
+      const now = new Date().toISOString();
+      for (const translation of data.translations) {
+        if (translation.locale && translation.title && translation.content) {
+          await sbInsert('announcement_translations', {
+            id: crypto.randomUUID(),
+            announcement_id: announcementId,
+            locale: translation.locale,
+            title: translation.title,
+            content: translation.content,
+            created_at: now
+          });
+        }
+      }
+    }
+
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 管理员 - 删除公告
+routes['DELETE /api/admin/announcements/:id'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { parts } = safeId(req);
+    const announcementId = parts[4];
+
+    // 删除翻译
+    await sbDelete('announcement_translations', { announcement_id: announcementId });
+    // 删除阅读记录
+    await sbDelete('announcement_reads', { announcement_id: announcementId });
+    // 删除公告
+    await sbDelete('announcements', { id: announcementId });
+
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 管理员 - 获取公告阅读详情
+routes['GET /api/admin/announcements/:id/reads'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { parts } = safeId(req);
+    const announcementId = parts[4];
+
+    const reads = await sbSafeQuery('announcement_reads', {
+      select: '*',
+      eq: { announcement_id: announcementId }
+    });
+
+    // 获取用户信息
+    const result = [];
+    for (const read of reads) {
+      const users = await sbSafeQuery('users', {
+        select: 'id,name,email',
+        eq: { id: read.user_id },
+        limit: 1
+      });
+      result.push({
+        ...read,
+        user: users[0] || { id: read.user_id, name: 'Unknown', email: '' }
+      });
+    }
+
+    sendJson(res, 200, { data: result });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
 };
 
 // --- Achievements ---

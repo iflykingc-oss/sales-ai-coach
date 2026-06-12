@@ -5,6 +5,7 @@ import { AdminStats } from '@/components/admin/AdminStats';
 import { KnowledgeAdmin } from '@/components/admin/KnowledgeAdmin';
 import { ModelConfig } from '@/components/admin/ModelConfig';
 import { PluginAdmin } from '@/components/admin/PluginAdmin';
+import { AnnouncementAdmin } from '@/components/admin/AnnouncementAdmin';
 import { SystemSettings } from '@/components/admin/SystemSettings';
 import { UserAdmin } from '@/components/admin/UserAdmin';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
@@ -151,6 +152,7 @@ export default function AdminPage() {
             <TabsTrigger value="users">用户管理</TabsTrigger>
             <TabsTrigger value="knowledge">知识库管理</TabsTrigger>
             <TabsTrigger value="models">模型配置</TabsTrigger>
+            <TabsTrigger value="announcements">公告管理</TabsTrigger>
             <TabsTrigger value="plugins">插件包管理</TabsTrigger>
             <TabsTrigger value="settings">系统设置</TabsTrigger>
           </TabsList>
@@ -169,6 +171,10 @@ export default function AdminPage() {
 
           <TabsContent value="models">
             <ModelConfig />
+          </TabsContent>
+
+          <TabsContent value="announcements">
+            <AnnouncementAdmin />
           </TabsContent>
 
           <TabsContent value="plugins">

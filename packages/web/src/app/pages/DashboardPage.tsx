@@ -10,6 +10,7 @@ import { api } from '@/services/api';
 import { cn } from '@/utils/cn';
 import { toast } from '@/hooks/useToast';
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
+import { AnnouncementBanner } from '@/components/announcement/AnnouncementBanner';
 
 interface DashboardData {
   stats: {
@@ -206,6 +207,9 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-8">
+      {/* 公告横幅 */}
+      <AnnouncementBanner />
+
       {/* 欢迎区域 + 用户等级 */}
       <Card className="bg-gradient-to-r from-primary-50 to-blue-50 border-primary-100">
         <div className="flex items-center justify-between">

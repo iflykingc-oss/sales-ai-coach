@@ -5,6 +5,8 @@ import {
   MessageSquare, ChevronDown, ChevronUp, Star, Check,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { useI18n } from '@/i18n';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 
 const FEATURES = [
   {
@@ -53,8 +55,8 @@ const FEATURES = [
     icon: Globe,
     title: '多语言支持',
     titleEn: 'Multi-Language Support',
-    desc: '支持中文、English、ภาษาไทย、Tiếng Việt、Bahasa Melayu、Bahasa Indonesia，更多语言开发中',
-    descEn: 'Supports Chinese, English, Thai, Vietnamese, Malay, Indonesian — more languages coming soon',
+    desc: '支持中文、English、ภาษาไทย、Tiếng Việt、Bahasa Melayu、Bahasa Indonesia，专为当地市场优化，最适合本地销售团队使用',
+    descEn: 'Supports Chinese, English, Thai, Vietnamese, Malay, Indonesian — optimized for local markets, perfect for regional sales teams',
   },
 ];
 
@@ -106,9 +108,11 @@ const STATS = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const [lang, setLang] = useState<'zh' | 'en'>('zh');
+  const { locale } = useI18n();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
+  // 同步 i18n locale 到本地 lang 状态
+  const lang = locale === 'zh' ? 'zh' : 'en';
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
 
   const FAQS = [
@@ -156,12 +160,7 @@ export default function LandingPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-              className="rounded-lg px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-100"
-            >
-              {lang === 'zh' ? 'EN' : '中文'}
-            </button>
+            <LanguageSwitcher mode="landing" />
             <button
               onClick={() => navigate('/login')}
               className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
