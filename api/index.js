@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Sentry = require('@sentry/node');
 const { detectIndustry, generateIndustryPrompt } = require('./industry-context');
+const { initDatabase } = require('./init-db');
 
 // Initialize Sentry
 Sentry.init({
@@ -2794,6 +2795,18 @@ routes['POST /api/plugins/:id/uninstall'] = async (req, res) => {
     const jwt = requireAuth(req);
     sendJson(res, 200, { success: true });
   } catch (err) { sendJson(res, 200, { success: true }); }
+};
+
+// --- Database Init ---
+routes['GET /api/admin/init-db'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const result = await initDatabase();
+    sendJson(res, 200, { success: true, data: result });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
 };
 
 // --- Admin ---

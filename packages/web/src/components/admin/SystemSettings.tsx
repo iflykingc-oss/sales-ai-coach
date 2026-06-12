@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, Save, Key, Shield, Database, Download, Users } from 'lucide-react';
+import { Upload, Save, Key, Shield, Database, Download, Users, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -7,6 +7,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { useAdminStore } from '@/stores/adminStore';
 import { cn } from '@/utils/cn';
+import { api } from '@/services/api';
+import { toast } from '@/hooks/useToast';
 
 const statusLabels: Record<string, string> = {
   active: '正常',
@@ -24,6 +26,8 @@ export function SystemSettings() {
   const [siteName, setSiteName] = useState(systemName);
   const [logoUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [initLoading, setInitLoading] = useState(false);
+  const [initResult, setInitResult] = useState<any>(null);
 
   const filteredUsers = searchQuery
     ? systemUsers.filter(
@@ -37,8 +41,115 @@ export function SystemSettings() {
     setSystemName(siteName);
   };
 
+  // 初始化数据库
+  const handleInitDb = async () => {
+    if (!confirm('确定要初始化数据库吗？这将创建公告系统所需的表。')) return;
+
+    setInitLoading(true);
+    setInitResult(null);
+
+    try {
+      const res = await api.get('/admin/init-db');
+      const data = (res as any)?.data;
+
+      if (data?.success) {
+        toast.success('数据库初始化成功');
+        setInitResult({ type: 'success', message: '所有表已创建' });
+      } else if (data?.reason === 'tables_missing') {
+        // 需要手动执行 SQL
+        setInitResult({
+          type: 'sql',
+          message: '需要在 Supabase SQL Editor 中执行以下 SQL',
+          sql: data.sql,
+          missingTables: data.missingTables
+        });
+        toast.warning('需要手动执行 SQL 创建表');
+      } else {
+        setInitResult({ type: 'error', message: '初始化失败' });
+        toast.error('初始化失败');
+      }
+    } catch (err) {
+      console.error('Init DB error:', err);
+      setInitResult({ type: 'error', message: '请求失败' });
+      toast.error('初始化请求失败');
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
+  // 复制 SQL 到剪贴板
+  const handleCopySql = () => {
+    if (initResult?.sql) {
+      navigator.clipboard.writeText(initResult.sql);
+      toast.success('SQL 已复制到剪贴板');
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Database Init */}
+      <Card>
+        <h3 className="text-base font-semibold text-gray-900">数据库初始化</h3>
+        <p className="mt-1 text-sm text-gray-500">初始化公告系统所需的数据库表</p>
+
+        <div className="mt-4">
+          <Button
+            onClick={handleInitDb}
+            disabled={initLoading}
+          >
+            {initLoading ? (
+              <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Database className="mr-1.5 h-4 w-4" />
+            )}
+            {initLoading ? '检查中...' : '初始化公告系统表'}
+          </Button>
+        </div>
+
+        {/* 初始化结果 */}
+        {initResult && (
+          <div className={cn(
+            'mt-4 rounded-lg p-4',
+            initResult.type === 'success' ? 'bg-green-50 border border-green-200' :
+            initResult.type === 'sql' ? 'bg-yellow-50 border border-yellow-200' :
+            'bg-red-50 border border-red-200'
+          )}>
+            <p className={cn(
+              'text-sm font-medium',
+              initResult.type === 'success' ? 'text-green-800' :
+              initResult.type === 'sql' ? 'text-yellow-800' :
+              'text-red-800'
+            )}>
+              {initResult.message}
+            </p>
+
+            {initResult.type === 'sql' && initResult.missingTables && (
+              <p className="mt-1 text-sm text-yellow-700">
+                缺失的表: {initResult.missingTables.join(', ')}
+              </p>
+            )}
+
+            {initResult.type === 'sql' && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-yellow-800">SQL 语句:</span>
+                  <Button variant="ghost" size="sm" onClick={handleCopySql}>
+                    <Download className="mr-1 h-3 w-3" />
+                    复制 SQL
+                  </Button>
+                </div>
+                <pre className="bg-white rounded border border-yellow-300 p-3 text-xs overflow-x-auto max-h-64">
+                  {initResult.sql}
+                </pre>
+                <p className="mt-2 text-xs text-yellow-700">
+                  请在 <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline">Supabase Dashboard</a> → SQL Editor 中执行上述 SQL
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
       {/* Site Settings */}
       <Card>
         <h3 className="text-base font-semibold text-gray-900">站点设置</h3>
