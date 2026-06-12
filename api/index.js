@@ -2,8 +2,33 @@ const { URL } = require('url');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Sentry = require('@sentry/node');
-const { detectIndustry, generateIndustryPrompt } = require('./industry-context');
-const { initDatabase } = require('./init-db');
+const registry = require('./industry-context');
+
+// 行业检测兼容函数（使用新的 L1 正则矩阵引擎）
+function detectIndustry(input, userIndustry) {
+  if (userIndustry && registry.getContext(userIndustry)) return userIndustry;
+  return registry.matchL1Rule(input || '');
+}
+
+function generateIndustryPrompt(industry, scenario) {
+  return registry.generateIndustryPrompt(industry, scenario);
+}
+
+// 数据库初始化函数（检查公告表是否存在）
+async function initDatabase() {
+  const tables = ['announcements', 'announcement_translations', 'announcement_reads'];
+  const missing = [];
+  for (const table of tables) {
+    try {
+      await sbSafeQuery(table, { select: 'id', limit: 1 });
+    } catch (e) {
+      missing.push(table);
+    }
+  }
+  return missing.length === 0
+    ? { success: true, message: '所有表已存在' }
+    : { success: false, reason: 'tables_missing', missingTables: missing, message: '请在 Supabase SQL Editor 中执行建表 SQL' };
+}
 
 // Initialize Sentry
 Sentry.init({
@@ -2803,6 +2828,103 @@ routes['GET /api/admin/init-db'] = async (req, res) => {
     requireAdmin(req);
     const result = await initDatabase();
     sendJson(res, 200, { success: true, data: result });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// --- 行业规则热更新 API（管理后台动态配置，零停机热加载）---
+// 获取所有已注册行业
+routes['GET /api/admin/industries'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const industries = registry.getRegisteredIndustries();
+    const details = industries.map(name => ({
+      name,
+      config: registry.getContext(name),
+      hasCompiledMatrix: !!registry.getCompiledMatrix().find(m => m.industry === name)
+    }));
+    sendJson(res, 200, { success: true, data: { count: industries.length, industries: details } });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// 热更新/注册行业规则（支持后台管理系统线上不重启、零停机动态热加载）
+routes['POST /api/admin/industries'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { action, name, config } = await parseBody(req);
+
+    if (!name) return sendJson(res, 400, { success: false, error: '缺少行业名称参数' });
+
+    if (action === 'unregister') {
+      registry.unregister(name);
+      console.log(`[ADMIN-SYNC] 行业规则动态注销成功: ${name}`);
+      return sendJson(res, 200, { success: true, message: `行业 [${name}] 已注销` });
+    }
+
+    if (!config || typeof config !== 'object') {
+      return sendJson(res, 400, { success: false, error: '配置格式错误，config 必须是有效对象' });
+    }
+
+    const success = registry.register(name, config);
+    if (success) {
+      console.log(`[ADMIN-SYNC] 后台配置热更新成功并完成矩阵重组. 行业: ${name}`);
+      sendJson(res, 200, { success: true, message: `行业 [${name}] 已注册/更新并重新编译` });
+    } else {
+      sendJson(res, 500, { success: false, error: '注册失败，请检查日志' });
+    }
+  } catch (err) {
+    console.error('[ADMIN-SYNC-FATAL]', err);
+    sendJson(res, 500, { success: false, error: err.message });
+  }
+};
+
+// 批量导入行业规则（从数据库加载到内存）
+routes['POST /api/admin/industries/sync-from-db'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    // 从 industry_plugins 表加载行业配置
+    const plugins = await sbSafeQuery('industry_plugins', { select: '*', order: 'created_at.desc', limit: 100 });
+    let synced = 0;
+
+    for (const plugin of plugins) {
+      try {
+        const config = {
+          role: plugin.description || '专业顾问',
+          keywords: Array.isArray(JSON.parse(plugin.scripts || '[]')) ?
+            JSON.parse(plugin.scripts || '[]').map(s => s.style || '') : [],
+          painPoints: Array.isArray(JSON.parse(plugin.knowledge || '[]')) ?
+            JSON.parse(plugin.knowledge || '[]') : [],
+          valueProps: Array.isArray(JSON.parse(plugin.best_practices || '[]')) ?
+            JSON.parse(plugin.best_practices || '[]') : [],
+          objectionHandling: {},
+          closingTechniques: Array.isArray(JSON.parse(plugin.customer_profiles || '[]')) ?
+            JSON.parse(plugin.customer_profiles || '[]') : [],
+          sampleData: {}
+        };
+
+        // 从 scripts 中提取关键词
+        const scripts = JSON.parse(plugin.scripts || '[]');
+        if (scripts.length > 0) {
+          config.keywords = scripts.flatMap(s => {
+            const content = s.content || '';
+            return content.match(/[一-龥]{2,}/g) || [];
+          }).slice(0, 20);
+        }
+
+        if (registry.register(plugin.name || plugin.industry, config)) {
+          synced++;
+        }
+      } catch (e) {
+        console.error(`Failed to sync plugin ${plugin.name}:`, e.message);
+      }
+    }
+
+    sendJson(res, 200, { success: true, data: { synced, total: plugins.length, registered: registry.getRegisteredIndustries().length } });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
