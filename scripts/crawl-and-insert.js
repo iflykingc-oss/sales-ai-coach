@@ -119,10 +119,10 @@ const COMPLIANCE = {
   requestDelay: 2000,
   // 每个域名最大请求数
   maxRequestsPerDomain: 10,
-  // 不爬取的域名（黑名单）
+  // 不爬取的域名（仅屏蔽与销售无关的站点）
   blockedDomains: [
-    'facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com',
-    'linkedin.com', 'reddit.com', 'youtube.com',
+    'facebook.com', 'instagram.com', 'tiktok.com',
+    'youtube.com', 'pornhub.com', 'gambling',
   ],
   // 内容归属：标记来源
   attribution: true,
@@ -156,7 +156,29 @@ const QUERIES = [
   '快消品 终端话术', '跨境电商 销售技巧',
   '金融理财 异议处理', '家居建材 销售话术',
 
+  // ========== 社交媒体平台（中文）==========
+  // 小红书 — 销售话术、异议处理、成交技巧
+  'site:xiaohongshu.com 销售话术 异议', 'site:xiaohongshu.com 保险销售 经验',
+  'site:xiaohongshu.com 房产销售 话术', 'site:xiaohongshu.com 销冠 成交技巧',
+  // 知乎 — 深度销售分析、方法论
+  'site:zhihu.com 销售异议处理 方法', 'site:zhihu.com 销冠经验 深度分析',
+  'site:zhihu.com SPIN销售 实战', 'site:zhihu.com B2B销售 技巧',
+  // 微博 — 销售日常、实战分享
+  'site:weibo.com 销售话术 异议处理', 'site:weibo.com 保险销冠 经验',
+  // B站 — 销售培训视频的文字内容
+  'site:bilibili.com 销售话术 教程', 'site:bilibili.com 异议处理 实战',
+  // 脉脉 — 职场销售经验
+  'site:maimai.cn 销售经验 成交', 'site:maimai.cn B2B销售 技巧',
+  // 抖音 — 销售短视频的文字内容
+  'site:douyin.com 销售话术 异议', 'site:douyin.com 销冠 经验分享',
+
   // ========== 海外市场（英文）==========
+  // LinkedIn — B2B sales insights
+  'site:linkedin.com sales objection handling', 'site:linkedin.com B2B sales techniques',
+  // Reddit — sales community discussions
+  'site:reddit.com r/sales objection handling', 'site:reddit.com r/sales closing techniques',
+  // Twitter/X — sales tips
+  'site:x.com sales objection tips', 'site:x.com sales closing techniques',
   // General sales
   'sales objection handling techniques', 'sales closing techniques 2025',
   'how to handle price objection sales', 'sales negotiation tactics',
