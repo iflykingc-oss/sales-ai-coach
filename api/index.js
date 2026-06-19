@@ -3291,17 +3291,28 @@ routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
       }
     }
 
-    // Webhook 通知
-    const webhookUrl = process.env.CRON_WEBHOOK_URL;
-    if (webhookUrl && inserted > 0) {
+    // 飞书通知
+    if (inserted > 0) {
+      const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL || 'https://open.feishu.cn/open-apis/bot/v2/hook/ddc4e243-5c8b-4fcb-a0db-d56c213cb1bb';
       try {
-        await fetch(webhookUrl, {
+        await fetch(FEISHU_WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            event: 'knowledge_batch_inserted',
-            timestamp: new Date().toISOString(),
-            data: { inserted, failed, total: items.length },
+            msg_type: 'interactive',
+            card: {
+              header: {
+                title: { tag: 'plain_text', content: '📥 销售知识入库通知' },
+                template: 'green',
+              },
+              elements: [{
+                tag: 'div',
+                text: {
+                  tag: 'lark_md',
+                  content: `**新增知识**：${inserted} 条\n**失败**：${failed} 条\n**时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`,
+                },
+              }],
+            },
           }),
           signal: AbortSignal.timeout(10000),
         });
@@ -3906,24 +3917,50 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
       results.knowledgeCrawl = { error: e.message };
     }
 
-    // 4. Webhook 通知（如果有配置）
-    const webhookUrl = process.env.CRON_WEBHOOK_URL;
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'weekly_cron_completed',
-            timestamp: new Date().toISOString(),
-            results,
-          }),
-          signal: AbortSignal.timeout(10000),
-        });
-        console.log('Weekly cron: Webhook notification sent');
-      } catch (e) {
-        console.error('Webhook notification failed:', e.message);
-      }
+    // 4. 飞书 Webhook 通知
+    const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL || 'https://open.feishu.cn/open-apis/bot/v2/hook/ddc4e243-5c8b-4fcb-a0db-d56c213cb1bb';
+    try {
+      const crawlCount = results.knowledgeCrawl?.added || 0;
+      const topScripts = results.topScripts || 0;
+      const topPractices = results.topPractices || 0;
+
+      await fetch(FEISHU_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          msg_type: 'interactive',
+          card: {
+            header: {
+              title: { tag: 'plain_text', content: '📊 销冠AI教练 - 每周知识更新报告' },
+              template: 'blue',
+            },
+            elements: [
+              {
+                tag: 'div',
+                text: {
+                  tag: 'lark_md',
+                  content: [
+                    `**🕐 时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`,
+                    ``,
+                    `**📥 知识爬取**`,
+                    `• 新增知识：**${crawlCount}** 条`,
+                    ``,
+                    `**📈 自动入库**`,
+                    `• 高分话术：**${topScripts}** 条`,
+                    `• 高分练习：**${topPractices}** 条`,
+                    ``,
+                    `**💡 提示**：新知识已自动融入话术生成和AI陪练`,
+                  ].join('\n'),
+                },
+              },
+            ],
+          },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      console.log('Weekly cron: Feishu notification sent');
+    } catch (e) {
+      console.error('Feishu notification failed:', e.message);
     }
 
     console.log('Weekly cron completed:', results);
