@@ -3250,6 +3250,54 @@ routes['POST /api/admin/knowledge/crawl-sales'] = async (req, res) => {
   }
 };
 
+// 批量插入知识（供爬虫调用）
+routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { items } = await parseBody(req);
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return sendJson(res, 400, { success: false, error: 'items array required' });
+    }
+
+    if (items.length > 100) {
+      return sendJson(res, 400, { success: false, error: 'max 100 items per batch' });
+    }
+
+    let inserted = 0;
+    let failed = 0;
+
+    for (const item of items) {
+      try {
+        await sbInsert('knowledge_items', {
+          id: item.id || crypto.randomUUID(),
+          user_id: null, // 公共知识
+          source: (item.source || '').slice(0, 200),
+          content: (item.content || '').slice(0, 500),
+          tags: Array.isArray(item.tags) ? item.tags.slice(0, 10) : [],
+          industry: item.industry || '通用',
+          weight: item.weight || 0.7,
+          status: item.status || 'ACTIVE',
+          knowledge_type: item.knowledge_type || 'general',
+          scenario: item.scenario || null,
+          customer_voice: item.customer_voice || null,
+          response_example: item.response_example || null,
+          psychology_tags: Array.isArray(item.psychology_tags) ? item.psychology_tags : [],
+          created_at: new Date().toISOString(),
+        });
+        inserted++;
+      } catch (e) {
+        failed++;
+      }
+    }
+
+    sendJson(res, 200, { success: true, data: { inserted, failed, total: items.length } });
+  } catch (err) {
+    console.error('Batch insert error:', err);
+    sendJson(res, 500, { success: false, error: 'Batch insert failed' });
+  }
+};
+
 // 同步管理 API - 配置外部数据源
 routes['POST /api/admin/sync/sources'] = async (req, res) => {
   try {
