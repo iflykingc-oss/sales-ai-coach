@@ -358,23 +358,36 @@ async function crawlSalesContent() {
         const googleItems = await crawlGoogle(page, query, 3);
         items.push(...googleItems);
       } else {
-        // fetch 模式：直接用 Google 搜索结果页面
-        const resp = await fetch(`https://www.google.com/search?q=${encodeURIComponent(query)}&hl=zh-CN&num=5`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
-          signal: AbortSignal.timeout(15000),
-        });
-        if (resp.ok) {
-          const html = await resp.text();
-          // 简单提取搜索结果
-          const titleMatches = html.match(/<h3[^>]*>([^<]+)<\/h3>/g) || [];
-          const descMatches = html.match(/<span class="[^"]*">([^<]{30,})<\/span>/g) || [];
-          for (let i = 0; i < Math.min(titleMatches.length, 3); i++) {
-            const title = titleMatches[i]?.replace(/<[^>]+>/g, '').trim();
-            const content = descMatches[i]?.replace(/<[^>]+>/g, '').trim() || '';
-            if (title && content) {
-              items.push({ title, content: content.slice(0, 800), url: '' });
+        // fetch 模式：用 DuckDuckGo HTML 版（比 Google 更容易解析）
+        try {
+          const resp = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+              'Accept': 'text/html',
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (resp.ok) {
+            const html = await resp.text();
+            // DuckDuckGo HTML 格式：结果在 <a class="result__a"> 和 <a class="result__snippet"> 中
+            const resultBlocks = html.split(/class="result /);
+            for (let i = 1; i < Math.min(resultBlocks.length, 4); i++) {
+              const block = resultBlocks[i];
+              const titleMatch = block.match(/class="result__a"[^>]*>([^<]+)</);
+              const snippetMatch = block.match(/class="result__snippet"[^>]*>([^<]+)/);
+              const linkMatch = block.match(/href="([^"]+)"/);
+              if (titleMatch) {
+                const title = titleMatch[1].trim();
+                const content = snippetMatch ? snippetMatch[1].trim() : '';
+                const url = linkMatch ? linkMatch[1] : '';
+                if (title && content.length > 20) {
+                  items.push({ title: title.slice(0, 200), content: content.slice(0, 800), url });
+                }
+              }
             }
           }
+        } catch (e) {
+          console.log(`[Crawler] Fetch search error: ${e.message.slice(0, 50)}`);
         }
       }
     } catch (e) {
