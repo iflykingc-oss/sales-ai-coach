@@ -1,0 +1,83 @@
+name: Crawl Sales Knowledge
+
+on:
+  # 每天凌晨 3:15 UTC（北京时间 11:15）
+  schedule:
+    - cron: '15 3 * * *'
+  # 手动触发
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run crawler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: node scripts/crawl-and-insert.js
+
+      - name: Notify success
+        if: success()
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "msg_type": "interactive",
+              "card": {
+                "header": {
+                  "title": {"tag": "plain_text", "content": "✅ 知识爬取完成"},
+                  "template": "green"
+                },
+                "elements": [{
+                  "tag": "div",
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "**时间**：'"$(date -u '+%Y-%m-%d %H:%M UTC')"'\n**状态**：成功"
+                  }
+                }]
+              }
+            }'
+
+      - name: Notify failure
+        if: failure()
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$FEISHU_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "msg_type": "interactive",
+              "card": {
+                "header": {
+                  "title": {"tag": "plain_text", "content": "❌ 知识爬取失败"},
+                  "template": "red"
+                },
+                "elements": [{
+                  "tag": "div",
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "**时间**：'"$(date -u '+%Y-%m-%d %H:%M UTC')"'\n**状态**：失败\n**详情**：请检查 GitHub Actions 日志"
+                  }
+                }]
+              }
+            }'
