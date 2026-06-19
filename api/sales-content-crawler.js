@@ -56,12 +56,18 @@ async function sbQuery(table, params) {
 // ============================================================
 
 // 预定义优质来源（搜索引擎不可用时的备选）
+// 这些是之前成功爬取过的、内容质量高的 URL
 const PREDEFINED_SOURCES = [
-  { url: 'https://www.close.com/blog/sales-objection-handling', industry: '通用', type: 'objection_handling', lang: 'en' },
-  { url: 'https://www.cpic.com.cn/c/2021-05-31/1820152.shtml', industry: '保险', type: 'case_study', lang: 'zh' },
-  { url: 'https://www.jiandaoyun.com/news/article/68beba81229b892d52226b61', industry: '房产', type: 'case_study', lang: 'zh' },
-  { url: 'https://www.hubspot.com/sales/sales-objections', industry: '通用', type: 'objection_handling', lang: 'en' },
-  { url: 'https://www.influenceatwork.com/principles-of-influence/', industry: '通用', type: 'psychology', lang: 'en' },
+  { url: 'https://www.cpic.com.cn/c/2021-05-31/1820152.shtml', industry: '保险', type: 'case_study' },
+  { url: 'https://www.jiandaoyun.com/news/article/68beba81229b892d52226b61', industry: '房产', type: 'case_study' },
+  { url: 'https://jingyan.baidu.com/article/425e69e69caffabe15fc16b7.html', industry: '保险', type: 'objection_handling' },
+  { url: 'https://ask.imiker.com/m/question/83741', industry: '通用', type: 'objection_handling' },
+  { url: 'https://www.xiazhi.co/overcoming-sales-objections-40-examples-strategies-and-rebuttals/', industry: '通用', type: 'objection_handling' },
+  { url: 'https://www.fxiaoke.com/crm/information-36210.html', industry: '通用', type: 'general' },
+  { url: 'https://www.woshipm.com/share/5919927.html', industry: '通用', type: 'case_study' },
+  { url: 'https://www.wescrm.com/siyuzhishiku/siyuyunying/4119', industry: '通用', type: 'follow_up' },
+  { url: 'https://club.xiaoshouyi.com/thread-9645-1-1.html', industry: '通用', type: 'case_study' },
+  { url: 'https://www.zkj.com/industry_news/9317.html', industry: 'SaaS', type: 'case_study' },
 ];
 
 const SEARCH_QUERIES = [
