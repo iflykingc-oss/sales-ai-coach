@@ -3971,6 +3971,71 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
   }
 };
 
+// 每日知识爬取 cron
+routes['GET /api/cron/knowledge'] = async (req, res) => {
+  try {
+    const startTime = Date.now();
+    console.log('Knowledge cron: Starting daily crawl...');
+
+    // 1. 爬取销售知识
+    let crawlResult = { added: 0, skipped: 0, failed: 0 };
+    try {
+      const { crawlSalesContent } = require('./sales-content-crawler');
+      crawlResult = await crawlSalesContent();
+      console.log('Knowledge cron: Crawl completed:', crawlResult);
+    } catch (e) {
+      console.error('Knowledge cron: Crawl error:', e.message);
+      crawlResult.error = e.message;
+    }
+
+    // 2. 飞书通知
+    const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL || 'https://open.feishu.cn/open-apis/bot/v2/hook/ddc4e243-5c8b-4fcb-a0db-d56c213cb1bb';
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+    try {
+      await fetch(FEISHU_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          msg_type: 'interactive',
+          card: {
+            header: {
+              title: { tag: 'plain_text', content: '📥 每日知识爬取完成' },
+              template: crawlResult.added > 0 ? 'green' : 'orange',
+            },
+            elements: [{
+              tag: 'div',
+              text: {
+                tag: 'lark_md',
+                content: [
+                  `**🕐 时间**：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`,
+                  `**📥 新增知识**：${crawlResult.added} 条`,
+                  `**⏭️ 跳过**：${crawlResult.skipped} 条`,
+                  `**❌ 失败**：${crawlResult.failed} 条`,
+                  `**⏱️ 耗时**：${elapsed} 秒`,
+                  crawlResult.added > 0 ? `\n**💡 提示**：新知识已自动融入话术生成和AI陪练` : '',
+                ].filter(Boolean).join('\n'),
+              },
+            }],
+          },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      console.log('Knowledge cron: Feishu notification sent');
+    } catch (e) {
+      console.error('Knowledge cron: Feishu notification failed:', e.message);
+    }
+
+    sendJson(res, 200, {
+      success: true,
+      data: { ...crawlResult, elapsed_seconds: elapsed, timestamp: new Date().toISOString() },
+    });
+  } catch (err) {
+    console.error('Knowledge cron error:', err);
+    sendJson(res, 500, { success: false, error: 'Knowledge cron failed' });
+  }
+};
+
 // Health check with dependency status
 routes['GET /api/health/detailed'] = async (req, res) => {
   const checks = { api: 'ok', database: 'unknown', timestamp: new Date().toISOString() };
