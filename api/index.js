@@ -408,8 +408,14 @@ async function getActiveModel() {
 
 // 构建 API URL - 智能处理不同的 provider 和 URL 格式
 function buildApiUrl(baseUrl, provider) {
-  const url = (baseUrl || '').replace(/\/+$/, '');
+  let url = (baseUrl || '').replace(/\/+$/, '');
   const p = (provider || '').toLowerCase();
+
+  // 自动升级 HTTP → HTTPS（Vercel 环境必须用 HTTPS）
+  if (url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
+    console.log('buildApiUrl: Auto-upgraded HTTP to HTTPS:', url);
+  }
 
   // 1. 默认 URL
   if (!url) {
@@ -505,13 +511,22 @@ async function callAI(messages, options = {}) {
     const resp = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(60000) });
     if (!resp.ok) {
       const errText = await resp.text();
+      const errPreview = errText.slice(0, 500);
       console.error(`callAI: API error (${provider} ${resp.status}):`, {
         status: resp.status,
         statusText: resp.statusText,
-        error: errText.slice(0, 500),
+        error: errPreview,
         url: url.replace(apiKey, '***'),
         modelId
       });
+      // 429 = 限流，记录但不抛异常
+      if (resp.status === 429) {
+        console.warn('callAI: Rate limited by provider, will use fallback');
+      }
+      // 400 = 请求格式错误，记录详细信息
+      if (resp.status === 400) {
+        console.error('callAI: Bad request - check model_id and base_url config:', errPreview);
+      }
       return null;
     }
 
@@ -3342,10 +3357,19 @@ routes['GET /api/admin/models'] = async (req, res) => {
     const jwt = requireAdmin(req);
     const models = await sbSafeQuery('model_configs', { select: '*', order: 'created_at.desc' });
     const mapped = models.map(m => ({
-      id: m.id, name: m.display_name || m.model_id, provider: m.provider,
-      status: m.is_active ? 'active' : 'inactive', temperature: m.temperature,
-      maxTokens: m.max_tokens, repetitionPenalty: 1.1, apiKey: m.api_key ? '****' : '',
-      usageQuota: 10000, usageCurrent: 0, alertThreshold: 80
+      id: m.id,
+      name: m.display_name || m.model_id,
+      provider: m.provider,
+      modelId: m.model_id,
+      baseUrl: m.base_url || '',
+      status: m.is_active ? 'active' : 'inactive',
+      temperature: m.temperature,
+      maxTokens: m.max_tokens,
+      repetitionPenalty: 1.1,
+      apiKey: m.api_key ? '****' : '',
+      usageQuota: 10000,
+      usageCurrent: 0,
+      alertThreshold: 80,
     }));
     // Return default models if table is empty
     if (mapped.length === 0) {
@@ -3373,12 +3397,19 @@ routes['POST /api/admin/models'] = async (req, res) => {
       return sendJson(res, 400, { success: false, error: '缺少必填字段' });
     }
 
+    // 自动升级 HTTP → HTTPS
+    let baseUrl = data.baseUrl || '';
+    if (baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+      console.log('Model config: Auto-upgraded HTTP to HTTPS:', baseUrl);
+    }
+
     const newModel = {
       id: crypto.randomUUID(),
       display_name: data.name,
       provider: data.provider || 'custom',
       model_id: data.modelId,
-      base_url: data.baseUrl || '',
+      base_url: baseUrl,
       api_key: data.apiKey,
       temperature: data.temperature || 0.7,
       max_tokens: data.maxTokens || 4096,
@@ -3402,11 +3433,24 @@ routes['PUT /api/admin/models/:id'] = async (req, res) => {
     const { last } = safeId(req);
     const data = await parseBody(req);
     const updateData = {};
+
+    // 只更新非空、非占位符的字段
     if (data.temperature !== undefined) updateData.temperature = data.temperature;
     if (data.maxTokens !== undefined) updateData.max_tokens = data.maxTokens;
-    if (data.apiKey !== undefined && data.apiKey !== '****') updateData.api_key = data.apiKey;
+    if (data.apiKey !== undefined && data.apiKey !== '' && data.apiKey !== '****') {
+      updateData.api_key = data.apiKey;
+    }
+    if (data.baseUrl !== undefined && data.baseUrl !== '') {
+      updateData.base_url = data.baseUrl.startsWith('http://')
+        ? data.baseUrl.replace('http://', 'https://')
+        : data.baseUrl;
+    }
+    if (data.modelId !== undefined && data.modelId !== '') updateData.model_id = data.modelId;
+    if (data.name !== undefined && data.name !== '') updateData.display_name = data.name;
+    if (data.provider !== undefined && data.provider !== '') updateData.provider = data.provider;
     if (data.status !== undefined) updateData.is_active = data.status === 'active';
     updateData.updated_at = new Date().toISOString();
+
     const updated = await sbSafeUpdate('model_configs', { id: last }, updateData);
     sendJson(res, 200, { success: true, data: updated[0] || updated });
   } catch (err) {

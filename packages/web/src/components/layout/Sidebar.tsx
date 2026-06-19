@@ -8,7 +8,6 @@ import {
   ClipboardList,
   BarChart3,
   Users,
-  Puzzle,
   Settings,
   LogOut,
   Crown,
@@ -17,14 +16,13 @@ import { useUserStore } from '@/stores/userStore';
 import { toast } from '@/hooks/useToast';
 
 const navItems = [
-  { path: '/app', icon: Home, label: '首页', end: true },
+  { path: '/app', icon: Home, label: '成单助手', end: true },
   { path: '/app/scripts', icon: MessageSquare, label: '话术生成', end: false },
   { path: '/app/practice', icon: Dumbbell, label: 'AI陪练', end: false },
   { path: '/app/knowledge', icon: BookOpen, label: '知识库', end: false },
   { path: '/app/review', icon: ClipboardList, label: '复盘', end: false },
   { path: '/app/analytics', icon: BarChart3, label: '数据分析', end: false },
   { path: '/app/team', icon: Users, label: '团队', end: false },
-  { path: '/app/plugins', icon: Puzzle, label: '行业插件', end: false },
   { path: '/app/admin', icon: Settings, label: '管理后台', end: false },
 ];
 
