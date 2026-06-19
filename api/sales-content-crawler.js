@@ -8,7 +8,16 @@
 
 // 尝试加载 Playwright，如果不可用则用 fetch
 let chromium = null;
-try { chromium = require('playwright').chromium; } catch (e) {}
+try {
+  const pw = require('playwright');
+  // 检查浏览器是否实际可用（不只是模块存在）
+  if (pw.chromium && typeof pw.chromium.launch === 'function') {
+    chromium = pw.chromium;
+  }
+} catch (e) {}
+
+// 如果环境变量禁用 Playwright，也用 fetch 模式
+if (process.env.DISABLE_PLAYWRIGHT === '1') chromium = null;
 const crypto = require('crypto');
 
 // Supabase helper
@@ -301,27 +310,36 @@ async function contentExists(sourceUrl) {
 async function crawlSalesContent() {
   console.log(`[Crawler] Starting at ${new Date().toISOString()}`);
 
-  const usePlaywright = !!chromium;
+  let usePlaywright = !!chromium;
   let browser, page;
 
   if (usePlaywright) {
-    // Playwright 模式（本地运行）
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
-    });
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      viewport: { width: 1366, height: 768 },
-      locale: 'zh-CN',
-    });
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    });
-    page = await context.newPage();
-    console.log('[Crawler] Using Playwright mode');
-  } else {
-    console.log('[Crawler] Using fetch mode (no Playwright)');
+    try {
+      // Playwright 模式（本地运行）
+      browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
+      });
+      const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        viewport: { width: 1366, height: 768 },
+        locale: 'zh-CN',
+      });
+      await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      });
+      page = await context.newPage();
+      console.log('[Crawler] Using Playwright mode');
+    } catch (e) {
+      console.log('[Crawler] Playwright launch failed, falling back to fetch:', e.message.slice(0, 80));
+      usePlaywright = false;
+      browser = null;
+      page = null;
+    }
+  }
+
+  if (!usePlaywright) {
+    console.log('[Crawler] Using fetch mode');
   }
 
   let totalAdded = 0;
