@@ -37,6 +37,7 @@
   "dependencies": {
     "@sentry/node": "^10.57.0",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.21.0"
+    "pg": "^8.21.0",
+    "rebrowser-playwright": "^1.52.0"
   }
 }

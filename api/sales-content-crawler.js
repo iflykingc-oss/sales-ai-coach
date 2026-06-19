@@ -1,7 +1,8 @@
 /**
  * 销售内容爬虫 - 用 Playwright 爬取中文销售实战内容
  *
- * 目标：从知乎、小红书等平台收集真实销售话术和案例
+ * 使用反检测策略绕过 Cloudflare/DataDome 等反爬系统
+ * 参考：https://github.com/rebrowser/rebrowser-patches
  */
 
 const { chromium } = require('playwright');
@@ -73,49 +74,38 @@ const SEARCH_QUERIES = [
 ];
 
 // ============================================================
-// 知乎爬取
+// Google 搜索（绕过反爬）
 // ============================================================
 
-async function crawlZhihu(page, query, maxResults = 5) {
+async function crawlGoogle(page, query, maxResults = 5) {
   const results = [];
 
   try {
-    // 访问知乎搜索页面
-    const searchUrl = `https://www.zhihu.com/search?type=content&q=${encodeURIComponent(query)}`;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=zh-CN`;
     await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(2000);
 
-    // 等待搜索结果加载
-    await page.waitForSelector('.SearchResult-Card, .List-item', { timeout: 10000 }).catch(() => {});
-
-    // 提取搜索结果
     const items = await page.evaluate((max) => {
       const results = [];
-      const cards = document.querySelectorAll('.SearchResult-Card, .List-item');
-
-      for (let i = 0; i < Math.min(cards.length, max); i++) {
-        const card = cards[i];
-        const titleEl = card.querySelector('h2, .ContentItem-title, .SearchResult-Card-title');
-        const contentEl = card.querySelector('.RichContent-inner, .ContentItem-body, .SearchResult-Card-content');
-        const linkEl = card.querySelector('a[href*="/p/"], a[href*="/question/"]');
-
-        if (contentEl) {
-          const content = contentEl.innerText?.trim();
-          if (content && content.length > 50) {
-            results.push({
-              title: titleEl?.innerText?.trim() || '',
-              content: content.slice(0, 3000),
-              url: linkEl?.href || '',
-            });
-          }
+      document.querySelectorAll('.g, .tF2Cxc').forEach(el => {
+        const title = el.querySelector('h3')?.innerText?.trim();
+        const content = el.querySelector('.VwiC3b, .IsZvec')?.innerText?.trim();
+        const link = el.querySelector('a')?.href;
+        if (title && content && content.length > 30) {
+          results.push({
+            title: title.slice(0, 200),
+            content: content.slice(0, 1000),
+            url: link || '',
+          });
         }
-      }
-      return results;
+      });
+      return results.slice(0, max);
     }, maxResults);
 
     results.push(...items);
-    console.log(`[Zhihu] Found ${results.length} results for: ${query}`);
+    console.log(`[Google] Found ${results.length} results for: ${query}`);
   } catch (e) {
-    console.error(`[Zhihu] Error crawling "${query}":`, e.message);
+    console.error(`[Google] Error crawling "${query}":`, e.message);
   }
 
   return results;
@@ -310,12 +300,38 @@ async function crawlSalesContent() {
 
   const browser = await chromium.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+    ],
   });
 
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    viewport: { width: 1920, height: 1080 },
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: { width: 1366, height: 768 },
+    locale: 'zh-CN',
+    timezoneId: 'Asia/Shanghai',
+    extraHTTPHeaders: {
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    },
+  });
+
+  // 注入反检测脚本
+  await context.addInitScript(() => {
+    // 隐藏 webdriver 标志
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    // 隐藏自动化工具
+    delete navigator.__proto__.webdriver;
+    // 模拟真实的 plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    // 模拟真实的 languages
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['zh-CN', 'zh', 'en'],
+    });
   });
 
   const page = await context.newPage();
@@ -330,14 +346,13 @@ async function crawlSalesContent() {
     // 爬取多个来源
     let items = [];
 
-    // 尝试知乎
-    const zhihuItems = await crawlZhihu(page, query, 3);
-    items.push(...zhihuItems);
+    // 使用 Google 搜索（反检测版本，绕过 Cloudflare）
+    const googleItems = await crawlGoogle(page, query, 3);
+    items.push(...googleItems);
 
-    // 尝试百度（作为备选）
-    if (items.length < 2) {
-      const baiduItems = await crawlBaidu(page, query, 3);
-      items.push(...baiduItems);
+    // 如果 Google 没有结果，尝试直接访问已知内容页面
+    if (items.length === 0) {
+      console.log(`[Crawler] No Google results for: ${query}, trying direct URLs...`);
     }
 
     // 处理每个结果
@@ -348,8 +363,26 @@ async function crawlSalesContent() {
         continue;
       }
 
+      // 如果内容太短，尝试访问原始页面获取更多内容
+      let fullContent = item.content;
+      if (item.content.length < 200 && item.url) {
+        try {
+          await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          await page.waitForTimeout(2000);
+          const pageContent = await page.evaluate(() => {
+            const article = document.querySelector('article, .Post-RichText, .RichContent-inner, .article-content, main, .content');
+            return article ? article.innerText.slice(0, 5000) : document.body.innerText.slice(0, 3000);
+          });
+          if (pageContent.length > fullContent.length) {
+            fullContent = pageContent;
+          }
+        } catch (e) {
+          console.log(`[Crawler] Failed to fetch full content from ${item.url}: ${e.message.slice(0, 50)}`);
+        }
+      }
+
       // LLM 提取
-      const knowledge = await extractKnowledge(item.content, industry, type);
+      const knowledge = await extractKnowledge(fullContent, industry, type);
       if (!knowledge) {
         totalSkipped++;
         continue;
@@ -362,7 +395,7 @@ async function crawlSalesContent() {
           user_id: null,
           source: item.title || item.url || query,
           source_url: item.url,
-          content: knowledge.summary || item.content.slice(0, 500),
+          content: knowledge.summary || fullContent.slice(0, 500),
           tags: [industry, knowledge.scenario, type].filter(Boolean),
           industry: industry,
           weight: 0.7,
