@@ -3291,6 +3291,23 @@ routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
       }
     }
 
+    // Webhook 通知
+    const webhookUrl = process.env.CRON_WEBHOOK_URL;
+    if (webhookUrl && inserted > 0) {
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'knowledge_batch_inserted',
+            timestamp: new Date().toISOString(),
+            data: { inserted, failed, total: items.length },
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+      } catch (e) {}
+    }
+
     sendJson(res, 200, { success: true, data: { inserted, failed, total: items.length } });
   } catch (err) {
     console.error('Batch insert error:', err);
@@ -3875,6 +3892,39 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
         }
       }
     } catch (e) { console.error('Top practices aggregation error:', e.message); }
+
+    // 3. 爬取外部销售知识
+    let crawlResult = null;
+    try {
+      console.log('Weekly cron: Starting knowledge crawl...');
+      const { crawlSalesContent } = require('./sales-content-crawler');
+      crawlResult = await crawlSalesContent();
+      results.knowledgeCrawl = crawlResult;
+      console.log('Weekly cron: Knowledge crawl completed:', crawlResult);
+    } catch (e) {
+      console.error('Knowledge crawl error:', e.message);
+      results.knowledgeCrawl = { error: e.message };
+    }
+
+    // 4. Webhook 通知（如果有配置）
+    const webhookUrl = process.env.CRON_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'weekly_cron_completed',
+            timestamp: new Date().toISOString(),
+            results,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        console.log('Weekly cron: Webhook notification sent');
+      } catch (e) {
+        console.error('Webhook notification failed:', e.message);
+      }
+    }
 
     console.log('Weekly cron completed:', results);
     sendJson(res, 200, { success: true, data: results });
