@@ -3273,6 +3273,7 @@ routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
           id: item.id || crypto.randomUUID(),
           user_id: null, // 公共知识
           source: (item.source || '').slice(0, 200),
+          source_url: (item.source_url || '').slice(0, 500),
           content: (item.content || '').slice(0, 500),
           tags: Array.isArray(item.tags) ? item.tags.slice(0, 10) : [],
           industry: item.industry || '通用',
@@ -3283,6 +3284,7 @@ routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
           customer_voice: item.customer_voice || null,
           response_example: item.response_example || null,
           psychology_tags: Array.isArray(item.psychology_tags) ? item.psychology_tags : [],
+          language: item.language || 'zh',
           created_at: new Date().toISOString(),
         });
         inserted++;

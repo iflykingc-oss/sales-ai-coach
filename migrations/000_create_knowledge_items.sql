@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS knowledge_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID,
   source TEXT,
+  source_url TEXT,
   content TEXT,
   tags JSONB DEFAULT '[]',
   industry TEXT,
@@ -13,6 +14,7 @@ CREATE TABLE IF NOT EXISTS knowledge_items (
   customer_voice TEXT,
   response_example TEXT,
   psychology_tags TEXT[],
+  language TEXT DEFAULT 'zh',
   success_count INT DEFAULT 0,
   use_count INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()

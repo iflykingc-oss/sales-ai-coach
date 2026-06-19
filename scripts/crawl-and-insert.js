@@ -28,6 +28,58 @@ async function apiInsertKnowledge(items) {
   return resp.json();
 }
 
+// ============================================================
+// 合规工具函数
+// ============================================================
+
+// 检查域名是否在黑名单
+function isDomainBlocked(url) {
+  try {
+    const domain = new URL(url).hostname;
+    return COMPLIANCE.blockedDomains.some(d => domain.includes(d));
+  } catch { return false; }
+}
+
+// 检查 robots.txt（简化版）
+async function canCrawl(page, url) {
+  if (!COMPLIANCE.respectRobotsTxt) return true;
+  try {
+    const domain = new URL(url).origin;
+    const robotsUrl = `${domain}/robots.txt`;
+    const resp = await fetch(robotsUrl, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return true; // 没有 robots.txt，默认允许
+    const text = await resp.text();
+    const path = new URL(url).pathname;
+    // 检查是否有 Disallow 规则匹配
+    const lines = text.split('\n');
+    let userAgentMatch = false;
+    for (const line of lines) {
+      if (line.startsWith('User-agent: *') || line.startsWith('User-agent: Googlebot')) {
+        userAgentMatch = true;
+      } else if (line.startsWith('User-agent:') && userAgentMatch) {
+        userAgentMatch = false;
+      }
+      if (userAgentMatch && line.startsWith('Disallow:')) {
+        const disallowed = line.split(':')[1]?.trim();
+        if (disallowed && path.startsWith(disallowed)) return false;
+      }
+    }
+    return true;
+  } catch { return true; }
+}
+
+// 请求频率控制
+const domainLastRequest = {};
+async function rateLimit(url) {
+  const domain = new URL(url).hostname;
+  const last = domainLastRequest[domain] || 0;
+  const elapsed = Date.now() - last;
+  if (elapsed < COMPLIANCE.requestDelay) {
+    await new Promise(r => setTimeout(r, COMPLIANCE.requestDelay - elapsed));
+  }
+  domainLastRequest[domain] = Date.now();
+}
+
 async function sbInsert(table, data) {
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: 'POST',
@@ -58,9 +110,29 @@ async function sbQuery(table, params) {
 }
 
 // ============================================================
-// 搜索关键词
+// 合规配置
+// ============================================================
+const COMPLIANCE = {
+  // 遵守 robots.txt
+  respectRobotsTxt: true,
+  // 请求间隔（毫秒）— 避免被封 IP
+  requestDelay: 2000,
+  // 每个域名最大请求数
+  maxRequestsPerDomain: 10,
+  // 不爬取的域名（黑名单）
+  blockedDomains: [
+    'facebook.com', 'twitter.com', 'instagram.com', 'tiktok.com',
+    'linkedin.com', 'reddit.com', 'youtube.com',
+  ],
+  // 内容归属：标记来源
+  attribution: true,
+};
+
+// ============================================================
+// 搜索关键词 — 国内 + 海外
 // ============================================================
 const QUERIES = [
+  // ========== 国内市场（中文）==========
   // 保险
   '保险销售话术 太贵了 实战', '保险异议处理 客户说不需要',
   '保险销冠 经验分享', '重疾险销售 客户犹豫',
@@ -83,6 +155,36 @@ const QUERIES = [
   // 行业
   '快消品 终端话术', '跨境电商 销售技巧',
   '金融理财 异议处理', '家居建材 销售话术',
+
+  // ========== 海外市场（英文）==========
+  // General sales
+  'sales objection handling techniques', 'sales closing techniques 2025',
+  'how to handle price objection sales', 'sales negotiation tactics',
+  'cold call opening lines that work', 'sales follow up best practices',
+  'SPIN selling examples', 'consultative selling techniques',
+  // B2B SaaS
+  'SaaS sales objection handling', 'B2B sales discovery questions',
+  'enterprise sales techniques', 'SaaS pricing objection response',
+  'demo to close conversion tips', 'B2B cold outreach templates',
+  // Real estate
+  'real estate sales objection handling', 'how to sell house when buyer says too expensive',
+  'real estate agent negotiation tips', 'open house sales techniques',
+  // Insurance
+  'insurance sales objection handling', 'how to sell insurance to millennials',
+  'insurance closing techniques', 'life insurance sales scripts',
+  // Automotive
+  'car sales objection handling', 'auto dealer negotiation tactics',
+  'how to close car sales', 'test drive follow up techniques',
+  // Sales psychology
+  'loss aversion in sales', 'anchoring effect pricing negotiation',
+  'social proof sales techniques', 'reciprocity principle in selling',
+  'Cialdini principles sales application',
+  // Phone/remote sales
+  'phone sales techniques objection handling', 'video call sales tips',
+  'WhatsApp sales conversation tips', 'email follow up after no response',
+  // Southeast Asia
+  'sales techniques Southeast Asia', 'insurance sales Thailand tips',
+  'real estate Vietnam sales', 'e-commerce Indonesia selling技巧',
 ];
 
 // ============================================================
@@ -153,22 +255,51 @@ async function main() {
   const unique = allResults.filter(r => { if (seen.has(r.url)) return false; seen.add(r.url); return true; });
   console.log(`\nUnique URLs: ${unique.length}`);
 
-  // Phase 2: 抓取内容
-  console.log(`\nPhase 2: Fetching (${unique.length} URLs)...`);
+  // Phase 2: 抓取内容（合规）
+  console.log(`\nPhase 2: Fetching (${unique.length} URLs, with compliance)...`);
   const articles = [];
+  const domainCounts = {};
+  let blockedCount = 0;
+  let robotsBlockedCount = 0;
+
   for (let i = 0; i < unique.length; i++) {
+    const url = unique[i].url;
     if (i % 20 === 0) console.log(`Progress: ${i}/${unique.length}`);
+
+    // 合规检查 1：域名黑名单
+    if (isDomainBlocked(url)) {
+      blockedCount++;
+      continue;
+    }
+
+    // 合规检查 2：每个域名最大请求数
+    const domain = new URL(url).hostname;
+    domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+    if (domainCounts[domain] > COMPLIANCE.maxRequestsPerDomain) continue;
+
+    // 合规检查 3：robots.txt
+    if (!await canCrawl(page, url)) {
+      robotsBlockedCount++;
+      continue;
+    }
+
+    // 合规检查 4：请求频率
+    await rateLimit(url);
+
     try {
-      await page.goto(unique[i].url, { waitUntil: 'domcontentloaded', timeout: 12000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
       await page.waitForTimeout(1200);
       const content = await page.evaluate(() => {
         const el = document.querySelector('article, .Post-RichText, .RichContent-inner, .article-content, main, .content, .article-body, .post-content');
         return el ? el.innerText.slice(0, 8000) : '';
       });
-      if (content && content.length > 200) articles.push({ ...unique[i], content });
+      if (content && content.length > 200) {
+        articles.push({ ...unique[i], content });
+      }
     } catch (e) {}
   }
   console.log(`Fetched: ${articles.length}`);
+  console.log(`Blocked: ${blockedCount} (domain blacklist), ${robotsBlockedCount} (robots.txt)`);
 
   // Phase 3: 提取知识
   console.log('\nPhase 3: Extracting...');
@@ -206,11 +337,17 @@ async function main() {
       else if (q.includes('家居') || q.includes('装修')) industry = '家居';
       else if (q.includes('医疗')) industry = '医疗';
 
+      // 检测语言
+      const isChinese = /[一-鿿]/.test(p);
+      const language = isChinese ? 'zh' : 'en';
+
       items.push({
         knowledge_type: type,
         industry,
         content: p.slice(0, 500),
         source: a.title.slice(0, 100),
+        source_url: a.url,
+        language,
         matchedKeywords: m,
       });
     }
@@ -233,12 +370,14 @@ async function main() {
   const knowledgeItems = items.map(item => ({
     id: crypto.randomUUID(),
     source: item.source,
+    source_url: item.source_url || '',
     content: item.content,
-    tags: [item.industry, item.knowledge_type, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
+    tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
     industry: item.industry,
     weight: 0.7,
     status: 'ACTIVE',
     knowledge_type: item.knowledge_type,
+    language: item.language || 'zh',
   }));
 
   // 分批插入（每批 50 条）
