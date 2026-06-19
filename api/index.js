@@ -1393,19 +1393,52 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       id: 'Silakan jawab dalam Bahasa Indonesia. Gunakan skenario penjualan dan ekspresi yang umum di pasar Asia Tenggara.',
     };
 
-    // Fetch user's knowledge base for context
+    // Fetch knowledge base (user's own + public crawled knowledge)
     let knowledgeContext = '';
     try {
-      const knowledgeItems = await sbSafeQuery('knowledge_items', {
-        select: 'content,tags,industry,weight',
+      // 获取用户的私有知识
+      const userKnowledge = await sbSafeQuery('knowledge_items', {
+        select: 'content,tags,industry,weight,knowledge_type,response_example',
         eq: { user_id: jwt.userId, status: 'ACTIVE' },
         order: 'weight.desc',
-        limit: 10
+        limit: 5
       });
-      if (knowledgeItems && knowledgeItems.length > 0) {
-        const knowledgeLabel = { zh: '用户知识库参考', en: 'User Knowledge Base', th: 'ฐานความรู้ผู้ใช้', vi: 'Kiến thức người dùng', ms: 'Pangkalan Pengetahuan Pengguna', id: 'Basis Pengetahuan Pengguna' };
-        knowledgeContext = `\n\n${knowledgeLabel[lang] || knowledgeLabel.en}:\n` + knowledgeItems
-          .map((k, i) => `${i + 1}. ${k.content.slice(0, 200)}${k.content.length > 200 ? '...' : ''}`)
+
+      // 获取公共知识（爬取的），按行业匹配
+      const detectedInd = detectedIndustry || '';
+      const publicKnowledge = await sbSafeQuery('knowledge_items', {
+        select: 'content,tags,industry,weight,knowledge_type,response_example',
+        eq: { status: 'ACTIVE' },
+        order: 'weight.desc',
+        limit: 50
+      });
+
+      // 过滤：优先匹配行业的知识
+      const industryMatch = publicKnowledge.filter(k =>
+        !k.user_id && (k.industry === detectedInd || k.industry === '通用')
+      );
+      const otherPublic = publicKnowledge.filter(k =>
+        !k.user_id && k.industry !== detectedInd && k.industry !== '通用'
+      );
+
+      // 合并：用户知识 + 行业匹配的公共知识 + 其他公共知识
+      const allKnowledge = [
+        ...(userKnowledge || []),
+        ...industryMatch.slice(0, 8),
+        ...otherPublic.slice(0, 3),
+      ].slice(0, 12);
+
+      if (allKnowledge.length > 0) {
+        const knowledgeLabel = {
+          zh: '销售知识库参考（行业经验+销冠案例）',
+          en: 'Sales Knowledge Base (Industry experience + Top performer cases)',
+        };
+        knowledgeContext = `\n\n${knowledgeLabel[lang] || knowledgeLabel.zh}:\n` + allKnowledge
+          .map((k, i) => {
+            let item = `${i + 1}. [${k.knowledge_type || '通用'}] ${k.content.slice(0, 200)}`;
+            if (k.response_example) item += `\n   参考话术：${k.response_example.slice(0, 150)}`;
+            return item;
+          })
           .join('\n');
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
