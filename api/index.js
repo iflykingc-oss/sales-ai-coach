@@ -1461,120 +1461,91 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       }
     } catch (e) { console.error('Weak dimension fetch error:', e.message); }
 
-    // Try real AI first - API 级别的工程化 prompt
-    const scriptPrompt = `[ROLE: ELITE SALES SYSTEM BACKEND]
-You are the structured data engine for an enterprise-grade AI Sales Coach. Your sole purpose is to analyze input scenarios and output a single, syntactically flawless JSON object based on deep behavioral psychology.
-
-${langInstructions[lang] || langInstructions.en}
+    // Deep prompt - example-driven, not instruction-driven
+    const scriptPrompt = `你是销冠话术生成器。用户给你一个销售场景，你输出3套可以直接复制使用的话术。
 
 ${industryContextPrompt}
 
-[OUTPUT CONSTRAINT - CRITICAL]
-1. Return ONLY a valid JSON object enclosed within markdown code blocks (\`\`\`json ... \`\`\`).
-2. Do NOT include any introductory or concluding text outside the JSON block.
-3. Every string inside the JSON must be fully escaped (e.g., use '\\n' for newlines, '\\"' for inner quotes).
+【优秀话术示范】（你的输出必须达到这个质量水平）
 
-[ANTI-LAZY & VALUE INJECTION LAWS]
-- LAW 1 (ZERO REPLICATION): The 'verbalScript' fields for "共情版", "直爽版", and "专业版" MUST be 100% structurally and textually distinct. Any copy-pasting of sentences or exact structures across the three paths will result in an execution failure.
-- LAW 2 (NO PLACEHOLDERS): Absolute ban on placeholders like "XX方面", "几个优势", or "(填入具体数据)". You must contextually invent realistic, industry-specific data, competitor names, ROI percentages, and product advantages based on the user's input scenario.
-- LAW 3 (NATURAL MANDARIN OCH): Scripts must use hyper-realistic, spoken business Chinese with breathing pauses and modal particles (e.g., "说白了", "其实咱们看", "不瞒您说", "哪怕多等一天"). Absolutely no rigid textbook or essay-like bullet points within the spoken text.
+场景：客户说"太贵了"
+共情版话术：
+"张姐，您说贵，我特别理解。我跟您说实话，我第一次听到这个价格的时候，也觉得不便宜。但是后来我自己算了一笔账——您现在每个月在XX上花多少钱？两千？三千？一年下来就是三四万。而我们这个方案，一年只要一万二，每天不到33块钱。您喝杯奶茶都要20块，这33块钱能解决您未来十年的XX问题。您觉得这笔账划不划算？"
 
-[THREE-PATH BEHAVIORAL MATRIX]
-- 共情版 (Empathy): Focus on individual alignment. B2B focuses on the internal champion's corporate survival/political risk (avoiding failure). B2C focuses on personal fatigue/deep identity anxieties.
-- 直爽版 (Direct ROI): Focus on mathematical asymmetry. B2B highlights the daily cash-bleed and opportunity cost of corporate procrastination. B2C punches through self-deception by showing the immediate decay of lifestyle/finances.
-- 专业版 (Expert Audit): Focus on structural authority. B2B leverages compliance, TCO deconstruction, or architecture. B2C leverages technical feature benchmarks and objective evidence to eliminate the buyer's fear of picking the wrong vendor.
+直爽版话术：
+"王总，我直接跟您说——贵不贵，不是看价格，是看回报。您现在用的方案，每个月隐性成本是多少？我帮您算过：人工成本XX，效率损失XX，加起来每月XXXX。我们的方案每月只要XXXX，但能帮您省掉那XXXX的隐性成本。这不是花钱，是省钱。您要不信，我给您看三个和您同行业的客户，他们用了之后的ROI数据。"
 
-[KNOWLEDGE BASE REFERENCE]
-${knowledgeContext || '(No additional knowledge base)'}
-${sessionContext}${weakDimensionContext}
+专业版话术：
+"李经理，从投资回报的角度来看，这个价格其实是非常合理的。我给您拆解一下：第一，我们的方案能帮您减少XX%的人工成本，按照您团队5个人、平均薪资8000来算，每月节省4000；第二，效率提升带来的产能增加，按照行业平均数据是30%；第三，风险降低带来的隐性收益。三项加起来，年化ROI超过300%。您要我做个详细的ROI分析报告吗？"
 
-[JSON STRUCTURE]
+【话术质量标准】（你的输出必须满足以下每一条）
+
+1. 必须有具体数字：不能写"很多客户"，要写"37个客户"；不能写"省很多钱"，要写"每月省4000"
+2. 必须有真实场景：不能写"假设您遇到一个问题"，要写"上个月一个客户，他也是做XX行业的，遇到了和您一模一样的情况"
+3. 必须有对话节奏：不是一段话从头说到尾，而是有来有回——你说了什么，客户可能怎么回应，你接着怎么说
+4. 必须有口语感：用"说白了""其实咱们看""不瞒您说""我跟您交个底"这种真实销售会说的话，不能用书面语
+5. 必须有心理学应用：不是提"损失厌恶"这个名字，而是用具体的话术体现——比如把年费拆成日费，让客户觉得"每天才XX块"
+6. 三版必须完全不同：不能只是换几个词，必须是从完全不同的角度切入
+
+【输出格式】
+返回JSON，verbalScript字段是完整的话术文本（300字以上），可以直接复制给销售使用。
+
 {
-  "detectedBusinessMode": "B2B or B2C",
-  "salesLifecycleStage": "Prospecting / Discovery / Presentation / Objection / Closing",
+  "detectedBusinessMode": "B2C",
+  "salesLifecycleStage": "异议博弈",
   "buyerPersonaAnalysis": {
-    "targetStakeholder": "The specific persona/role being addressed",
-    "hiddenDriver": "The core unspoken corporate or personal fear driving their current behavior"
+    "targetStakeholder": "客户是谁",
+    "hiddenDriver": "客户真正担心什么（不是表面说的）"
   },
   "tacticalExecutionPaths": [
     {
       "pathType": "共情版",
-      "strategicLever": "Detailed description of the psychological leverage point applied",
-      "verbalScript": "A full, ready-to-use, long-form spoken script in natural Chinese. Min 200 Chinese characters. Fully contextualized, NO placeholders.",
+      "strategicLever": "用什么打动客户（具体到哪句话用什么心理学）",
+      "verbalScript": "完整话术，300字以上，可直接使用",
       "coachingDirectives": {
-        "pacingAndTone": "Specific instructions on speech speed, volume control, and emotional projection",
-        "microBehaviors": "Tactical pauses, non-verbal cues, or physical presentation adjustments"
+        "pacingAndTone": "具体到：这句话用什么语气，哪里停顿，哪里加重",
+        "microBehaviors": "具体到：说什么的时候做什么动作"
       }
     },
-    {
-      "pathType": "直爽版",
-      "strategicLever": "Detailed description of the commercial/financial leverage applied",
-      "verbalScript": "A full, high-energy, assertive spoken script in natural Chinese. Min 200 Chinese characters. Fully contextualized with generated numbers/ROI metrics, NO placeholders.",
-      "coachingDirectives": {
-        "pacingAndTone": "Instructions on asserting authority without being overly aggressive",
-        "microBehaviors": "How to manage tactical silence and handle the pause after delivering the reality check"
-      }
-    },
-    {
-      "pathType": "专业版",
-      "strategicLever": "Detailed description of the framework, compliance, or benchmark applied",
-      "verbalScript": "A full, analytical, framework-driven diagnostic script in natural Chinese. Min 200 Chinese characters. Fully contextualized with structural jargon, NO placeholders.",
-      "coachingDirectives": {
-        "pacingAndTone": "Instructions on sounding like an objective, calm, third-party auditor",
-        "microBehaviors": "How to anchor data points using tone inflections to command maximum authority"
-      }
-    }
+    { "pathType": "直爽版", "strategicLever": "...", "verbalScript": "...", "coachingDirectives": {...} },
+    { "pathType": "专业版", "strategicLever": "...", "verbalScript": "...", "coachingDirectives": {...} }
   ],
   "multiStageSimulation": {
-    "expectedPushback": "The single most brutal counter-argument the buyer will logically throw next",
-    "counterStrategy": "The precise psychological pivot the salesperson must execute immediately to hold the line",
-    "nextProgressiveMove": "The exact macro-level next step to push the pipeline forward"
+    "expectedPushback": "客户会怎么反驳（原话）",
+    "counterStrategy": "怎么应对（完整话术）",
+    "nextProgressiveMove": "下一步推什么"
   },
-  "reasoning": ["Key insight 1", "Key insight 2"],
-  "pitfalls": [{"action": "What to avoid", "reason": "Why it fails"}],
-  "knowledgeSource": "Which knowledge items were referenced",
+  "reasoning": ["为什么这个话术有效"],
+  "pitfalls": [{"action": "不要做什么", "reason": "会导致什么后果"}],
+  "knowledgeSource": "引用了什么",
   "confidenceScore": 0.9
-}`;
+}
+
+${knowledgeContext || ''}
+${sessionContext}${weakDimensionContext}`;
 
     const userPrompts = {
-      zh: `请根据销售沙盘演练标准，深度拆解以下实战场景，并严格按照 System Prompt 中的 JSON 结构及【ANTI-LAZY & VALUE INJECTION LAWS】输出对应的商业剧本与操练话术。
+      zh: `销售场景：${scenarioName}
+${industry ? `行业：${industry}` : ''}
+${input ? `补充信息：${input}` : ''}
 
-【当前实战演练场景】
-${scenarioName}
-
-【行业背景与商业模式】
-${industry || '请根据演练场景自动进行高精度判定（B2B大单采购 或 B2C高客单价个人消费），并填入 detectedBusinessMode'}
-
-【项目所处全流程阶段】
-${input || '请从场景描述中深度推断项目当前处于：破冰触达、需求深挖、方案呈现、异议博弈、关单促成 中的哪一个精确阶段，并填入 salesLifecycleStage'}
-
-【参考规范/既定商务框架】
-${frameworks ? frameworks.join(', ') : 'SPIN、MEDDPICC、挑战型销售、SPB心理杠杆'}
-
-【演练生成要求】
-1. 严格遵守 [ANTI-LAZY & VALUE INJECTION LAWS]。
-2. 三个版本的 "verbalScript" 严禁出现行文相似性，必须彻底打碎并根据三种完全不同的底层人性逻辑独立编写。
-3. 话术中必须包含由当前场景推演出的具体业务痛点、具体财务损益或产品技术优势，禁止出现任何占位符。
-
+根据这个场景，生成3套可以直接复制使用的话术（共情版、直爽版、专业版）。
+要求：
+- 每套话术300字以上
+- 必须包含具体数字（不能用XX代替）
+- 必须是口语化的对话，不是书面文章
+- 三套话术必须从完全不同的角度切入
 ${knowledgeContext}${sessionContext}${weakDimensionContext}`,
-      en: `Analyze the following sales scenario and generate battle-ready scripts strictly following the JSON structure and [ANTI-LAZY & VALUE INJECTION LAWS]:
+      en: `Sales scenario: ${scenarioName}
+${industry ? `Industry: ${industry}` : ''}
+${input ? `Additional context: ${input}` : ''}
 
-【Scenario】
-${scenarioName}
-
-【Industry & Business Model】
-${industry || 'Auto-detect: B2B organizational procurement or B2C high-ticket personal consumption'}
-
-【Funnel Stage】
-${input || 'Auto-detect: Prospecting, Discovery, Presentation, Objection, or Closing'}
-
-【Frameworks】
-${frameworks ? frameworks.join(', ') : 'SPIN, MEDDPICC, Challenger Sale, SPB Psychological Leverage'}
-
-【Generation Requirements】
-1. Strictly follow [ANTI-LAZY & VALUE INJECTION LAWS]
-2. Three verbalScript must be 100% structurally distinct
-3. Include specific business pain points, financial metrics, or technical advantages - NO placeholders
+Generate 3 ready-to-use scripts (Empathy, Direct, Professional).
+Requirements:
+- Each script 300+ words
+- Must include specific numbers (no placeholders)
+- Must be conversational, not formal
+- Three scripts must approach from completely different angles
 
 ${knowledgeContext}`,
       th: `สร้างสคริปต์ขายสำหรับสถานการณ์ต่อไปนี้:\nสถานการณ์: ${scenarioName}\nอุตสาหกรรม: ${industry || 'ทั่วไป'}\n${input ? `ข้อมูลเพิ่มเติม: ${input}` : ''}\n${frameworks ? `กรอบ: ${frameworks.join(', ')}` : ''}\n⚠️ 3 สไตล์ต้องมีเนื้อหาที่แตกต่างกันอย่างชัดเจน!${knowledgeContext}`,
