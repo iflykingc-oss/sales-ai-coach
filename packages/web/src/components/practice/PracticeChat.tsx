@@ -384,6 +384,25 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
             )}
           </div>
         )}
+        {/* Coaching moments */}
+        {!isUser && message.coachingMoments && message.coachingMoments.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {message.coachingMoments.map((moment, idx) => (
+              <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50 p-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[10px] font-medium text-amber-700">💡 {moment.dimension}</span>
+                </div>
+                <p className="text-[11px] text-gray-600 mb-0.5">
+                  <span className="font-medium">你说：</span>"{moment.user_quote}"
+                </p>
+                {moment.issue && (
+                  <p className="text-[11px] text-red-600 mb-0.5">❌ {moment.issue}</p>
+                )}
+                <p className="text-[11px] text-amber-800">✅ {moment.improve}</p>
+              </div>
+            ))}
+          </div>
+        )}
         <div className={cn('mt-1 text-[10px]', isUser ? 'text-white/60' : 'text-gray-400')}>
           {new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
         </div>
@@ -410,6 +429,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
   const [showBenchmark, setShowBenchmark] = useState(false);
   const [coachingTip, setCoachingTip] = useState<string | null>(null);
   const [coachingTipType, setCoachingTipType] = useState<'feedback' | 'hint' | 'progress'>('feedback');
+  const [selectedObjectionType, setSelectedObjectionType] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -419,10 +439,17 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
   const handleSend = async () => {
     if (!input.trim() || !session || session.round >= session.maxRounds || isLoading) return;
 
+    // In objection training mode, prepend the selected objection type
+    let messageContent = input.trim();
+    if (session.mode === 'objection_training' && selectedObjectionType) {
+      messageContent = `[异议类型判断: ${selectedObjectionType}] ${messageContent}`;
+      setSelectedObjectionType(null);
+    }
+
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: messageContent,
       timestamp: Date.now(),
     };
 
@@ -508,6 +535,10 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
                 emotion: data.emotion,
                 roundScore: data.round_score,
                 evaluationFeedback: data.evaluation_feedback,
+                coachingMoments: data.coaching_moments || [],
+                objectionTraining: data.objection_training || false,
+                objectionText: data.objection_text || undefined,
+                objectionTypes: data.objection_types || undefined,
               });
 
               // Show coaching feedback as a side panel (not in chat)
@@ -833,24 +864,66 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
             </div>
           </div>
         ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend();
-            }}
-            className="flex gap-2"
-          >
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={t('practice.inputPlaceholder')}
-              disabled={isLoading}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={isLoading || !input.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
+          <>
+            {/* Objection training: show objection type selection */}
+            {session?.mode === 'objection_training' && (() => {
+              const lastAssistantMsg = [...(session?.messages || [])].reverse().find(m => m.role === 'assistant');
+              const isObjectionRound = lastAssistantMsg?.objectionTraining;
+              if (!isObjectionRound) return null;
+
+              const objectionTypes = [
+                { key: 'trust', label: '信任异议', desc: '客户不信你/你的产品', color: 'blue' },
+                { key: 'value', label: '价值异议', desc: '客户觉得不值/太贵', color: 'amber' },
+                { key: 'authority', label: '权力异议', desc: '客户没权决定', color: 'purple' },
+                { key: 'priority', label: '优先级异议', desc: '客户觉得不急', color: 'gray' },
+                { key: 'fear', label: '恐惧异议', desc: '客户怕选错/怕风险', color: 'red' },
+              ];
+
+              return (
+                <div className="mb-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
+                  <p className="mb-2 text-xs font-medium text-orange-700">🎯 这是什么类型的异议？</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {objectionTypes.map(({ key, label, desc }) => (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedObjectionType(key)}
+                        className={cn(
+                          'rounded-full px-2.5 py-1 text-xs font-medium transition-all',
+                          selectedObjectionType === key
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-white text-gray-600 border border-gray-300 hover:border-orange-300'
+                        )}
+                        title={desc}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend();
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={session?.mode === 'objection_training' && selectedObjectionType
+                  ? '输入你的应对话术...'
+                  : t('practice.inputPlaceholder')}
+                disabled={isLoading}
+                className="flex-1"
+              />
+              <Button type="submit" disabled={isLoading || !input.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </>
         )}
       </div>
     </div>

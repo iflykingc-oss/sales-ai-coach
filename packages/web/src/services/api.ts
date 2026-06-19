@@ -7,7 +7,7 @@ const RETRY_DELAY = 1000;
 export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
-  timeout: 30000, // 30 second timeout
+  timeout: 120000, // 120 second timeout (AI calls can take up to 60s)
 });
 
 let isRefreshing = false;

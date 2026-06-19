@@ -208,6 +208,8 @@ class PracticeHarness:
         self.difficulty = difficulty
         self.difficulty_config = get_difficulty_config(difficulty)
         self._knowledge_context = knowledge_context
+        self._mode = mode
+        self._industry = industry
 
         # Select buyer archetype based on difficulty
         archetype_key, archetype = select_archetype(difficulty)
@@ -488,6 +490,12 @@ class PracticeHarness:
         self.ctx.add_message("user", sales_message)
         persona = json.loads(self.customer_persona)
 
+        # Objection training mode: generate random objection and evaluate user's response
+        if self._mode == 'objection_training':
+            async for event in self._handle_objection_training_round(sales_message, persona):
+                yield event
+            return
+
         # Detect framework stage
         detected_stage = ""
         if logic_framework:
@@ -538,6 +546,7 @@ class PracticeHarness:
         round_score = None
         dimension_scores = None
         eval_feedback = None
+        coaching_moments = []
         if self.round_count >= 2:
             eval_result = await self._evaluate_round(
                 sales_message=sales_message,
@@ -548,10 +557,12 @@ class PracticeHarness:
             )
             dimension_scores = eval_result.get("scores")
             eval_feedback = eval_result.get("feedback")
+            coaching_moments = eval_result.get("coaching_moments", [])
             if dimension_scores is not None:
                 self.round_dimension_scores.append(dimension_scores)
                 avg = sum(dimension_scores.values()) / len(dimension_scores)
                 self.round_scores.append(avg)
+                round_score = round(avg * 100)  # Normalize to 0-100 integer
 
         if self.round_count >= self.COMPACT_AFTER_ROUNDS:
             self.ctx._compact()
@@ -573,6 +584,7 @@ class PracticeHarness:
                 "round_score": round_score,
                 "dimension_scores": dimension_scores,
                 "evaluation_feedback": eval_feedback,
+                "coaching_moments": coaching_moments,
                 "emotion_history": list(self.emotion_history),
                 "logicFramework": logic_framework,
                 "detectedStage": self.detected_stage,
@@ -624,6 +636,9 @@ class PracticeHarness:
 3. 根据销售的话和你的情绪做出真实反应
 4. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/感兴趣/犹豫/抗拒/敷衍/满意/生气
 5. 体现你的异议风格「{persona.get('objection_style', '一般')}」
+6. 使用行业特有的表达方式和异议，不要说通用的套话
+
+{self._get_industry_objection_context()}
 
 对话阶段规则（必须严格遵守）:
 - 当销售打招呼（"你好"、"您好"、"嗨"等），你必须礼貌回应，简单问候或询问来意，绝对不能提出异议、价格问题或拒绝
@@ -635,6 +650,193 @@ class PracticeHarness:
 - 销售说"你好" → 你回复"你好，请问有什么事吗？"或"您好，您是？"
 - 销售说"我是XX公司的" → 你回复"哦，XX公司啊，有什么可以帮您的？"
 - 销售开始介绍产品 → 此时可以根据角色提出疑问或异议"""
+
+    def _get_industry_objection_context(self) -> str:
+        """Get industry-specific objection patterns from knowledge base or industry context."""
+        industry = self._industry or ''
+        if not industry:
+            return ''
+
+        # Industry-specific objection patterns
+        industry_objections = {
+            '保险': ['我老公不同意', '我觉得现在身体很好不需要', '你们和平安比有什么优势', '理赔太麻烦了'],
+            '房地产': ['房价还会跌', '这个地段太偏了', '户型不太满意', '首付不够'],
+            '教育培训': ['没时间上课', '学费太贵', '怕学不会', '证书有用吗'],
+            'SaaS软件': ['我们现在用的还行', '数据迁移太麻烦', '怕员工不会用', '价格能不能便宜'],
+            '汽车销售': ['油耗太高', '保养太贵', '再看看其他品牌', '能不能再优惠'],
+            '金融理财': ['风险太大', '收益不确定', '看不懂产品', '怕亏本'],
+            '医疗健康': ['价格太贵', '效果不确定', '有没有副作用', '需要多长时间'],
+            '跨境电商': ['物流太慢', '售后怎么办', '汇率风险', '关税问题'],
+            '医疗器械': ['价格太贵', '已有供应商', '审批流程长', '售后响应慢'],
+            '法律服务': ['太贵了', '不需要', '自己能处理', '之前合作过不好的律师'],
+            '快消品': ['卖不动', '利润太低', '品牌不知名', '竞品更便宜'],
+            '3C数码': ['太贵了', '不如XX品牌', '等新款', '配置不够'],
+            '咨询服务': ['太贵了', '落不了地', '之前失败过', '内部推不动'],
+        }
+
+        objections = industry_objections.get(industry, [])
+        if not objections:
+            return ''
+
+        return f"""行业特有异议（在适当时机使用，不要一次性全部提出）:
+{chr(10).join(f'- "{obj}"' for obj in objections)}
+这些是该行业客户最常说的真实异议，请在对话中自然地使用。"""
+
+    async def _handle_objection_training_round(self, sales_message: str, persona: dict) -> AsyncIterator[dict]:
+        """Handle a round in objection training mode."""
+        import random
+
+        # Objection types with examples
+        objection_types = {
+            'trust': {
+                'name': '信任异议',
+                'examples': [
+                    '你们这个产品效果怎么样？我之前被坑过。',
+                    '怎么知道你们不是在忽悠我？',
+                    '有没有真实的客户案例可以看看？',
+                    '你们公司成立多久了？靠谱吗？',
+                ],
+            },
+            'value': {
+                'name': '价值异议',
+                'examples': [
+                    '太贵了，超出我们预算了。',
+                    '这个价格我觉得不太值。',
+                    '有没有更便宜的方案？',
+                    '我看看能不能找到更划算的。',
+                ],
+            },
+            'authority': {
+                'name': '权力异议',
+                'examples': [
+                    '这个我做不了主，需要和领导商量。',
+                    '我们采购需要走流程，我先问问。',
+                    '这个得我们老板点头才行。',
+                    '我需要和团队讨论一下。',
+                ],
+            },
+            'priority': {
+                'name': '优先级异议',
+                'examples': [
+                    '我们现在有更紧急的事情要处理。',
+                    '这个事情不着急，下个季度再说吧。',
+                    '我们目前没有这个预算。',
+                    '时机不太对，改天再聊。',
+                ],
+            },
+            'fear': {
+                'name': '恐惧异议',
+                'examples': [
+                    '万一效果不好怎么办？',
+                    '我们之前换过一次供应商，结果很糟糕。',
+                    '我怕实施起来太麻烦。',
+                    '如果不行能退款吗？',
+                ],
+            },
+        }
+
+        # If this is the first round, generate a random objection
+        if self.round_count == 1 or 'current_objection' not in self.__dict__:
+            obj_type = random.choice(list(objection_types.keys()))
+            obj_example = random.choice(objection_types[obj_type]['examples'])
+            self.current_objection = {
+                'type': obj_type,
+                'name': objection_types[obj_type]['name'],
+                'text': obj_example,
+            }
+            # Yield the objection as customer response
+            self.ctx.add_message("assistant", obj_example)
+            self.emotion_history.append('犹豫')
+            yield {
+                "type": "done",
+                "data": {
+                    "response": obj_example,
+                    "emotion": "犹豫",
+                    "round": self.round_count,
+                    "is_complete": False,
+                    "round_score": None,
+                    "dimension_scores": None,
+                    "evaluation_feedback": f"客户提出了一个异议。请判断这是哪种类型的异议（信任/价值/权力/优先级/恐惧），然后给出你的应对。",
+                    "coaching_moments": [],
+                    "objection_training": True,
+                    "objection_text": obj_example,
+                    "objection_types": ['信任异议', '价值异议', '权力异议', '优先级异议', '恐惧异议'],
+                },
+            }
+            return
+
+        # Subsequent rounds: evaluate user's response and generate next objection
+        # Evaluate the user's response
+        eval_prompt = f"""你是一位销售教练，正在评估学员在异议训练中的表现。
+
+客户提出的异议: "{self.current_objection['text']}"
+异议的真实类型: {self.current_objection['name']}
+学员的回应: "{sales_message}"
+
+注意：学员的回应开头可能包含 [异议类型判断: xxx] 标签，其中 xxx 是学员判断的异议类型（trust/value/authority/priority/fear）。
+请评估:
+1. 学员是否正确识别了异议类型？（对比学员判断的类型和真实类型）
+2. 学员的应对策略是否有效？
+3. 有什么改进建议？
+
+输出JSON:
+{{"scores": {{"异议识别": 0.8, "应对策略": 0.7, "沟通表达": 0.8}}, "feedback": "反馈", "coaching_moments": [{{"user_quote": "学员原话的关键片段", "issue": "具体问题", "improve": "改进建议（可包含话术示例）", "dimension": "异议识别或应对策略"}}], "objection_type_correct": true}}"""
+
+        try:
+            result = await model_router.chat_with_fallback(
+                [{"role": "user", "content": eval_prompt}],
+                temperature=0.2, max_tokens=300
+            )
+            eval_data = extract_json(result["content"]) or {}
+        except Exception:
+            eval_data = {"scores": {}, "feedback": "评估失败", "coaching_moments": []}
+
+        dimension_scores = eval_data.get("scores", {})
+        if dimension_scores:
+            self.round_dimension_scores.append(dimension_scores)
+            avg = sum(dimension_scores.values()) / len(dimension_scores)
+            self.round_scores.append(avg)
+            round_score = round(avg * 100)
+        else:
+            round_score = None
+
+        # Save previous objection type before generating next
+        previous_objection_type = self.current_objection.get('name', '')
+
+        # Generate next objection
+        obj_type = random.choice(list(objection_types.keys()))
+        obj_example = random.choice(objection_types[obj_type]['examples'])
+        self.current_objection = {
+            'type': obj_type,
+            'name': objection_types[obj_type]['name'],
+            'text': obj_example,
+        }
+
+        is_complete = self.round_count >= self.max_rounds
+
+        self.ctx.add_message("assistant", obj_example)
+        self.emotion_history.append('犹豫')
+
+        yield {
+            "type": "done",
+            "data": {
+                "response": obj_example,
+                "emotion": "犹豫",
+                "round": self.round_count,
+                "is_complete": is_complete,
+                "round_score": round_score,
+                "dimension_scores": dimension_scores,
+                "evaluation_feedback": eval_data.get("feedback", ""),
+                "coaching_moments": eval_data.get("coaching_moments", []),
+                "objection_training": True,
+                "objection_text": obj_example,
+                "objection_types": ['信任异议', '价值异议', '权力异议', '优先级异议', '恐惧异议'],
+                "previous_objection_type": previous_objection_type,
+            },
+        }
+
+        if is_complete:
+            self.is_active = False
 
     async def generate_coaching_hint(self) -> dict:
         """Generate a contextual coaching hint based on current conversation state."""
@@ -672,7 +874,7 @@ class PracticeHarness:
 
         persona = json.loads(self.customer_persona) if self.customer_persona else {}
 
-        hint_prompt = f"""作为销售教练，根据以下对话给出一句具体的下一步建议（30字以内）。
+        hint_prompt = f"""作为销售教练，根据以下对话给出具体的下一步建议（100字以内）。
 
 客户画像: {persona.get('name', '')}({persona.get('personality', '')})
 对话轮数: {self.round_count}/{self.max_rounds}
@@ -684,10 +886,12 @@ class PracticeHarness:
 {conversation}
 
 要求:
-1. 给出具体的下一步行动建议，不要泛泛而谈
-2. 30字以内，简洁有力
+1. 一句话指出问题
+2. 给出一个具体的改写示例（用引号标注）
 3. 如果客户情绪消极，建议先修复关系
 4. 如果有明确的阶段，建议符合该阶段的操作
+
+示例格式：'你问的"价格合适吗"太直接了，试试"如果投入产出比能达到3倍，您觉得值得考虑吗？"这样的价值锚定提问。'
 
 只输出建议内容，不要输出其他。"""
 
@@ -1250,8 +1454,9 @@ class PracticeHarness:
 - SPIN提问质量: 评估销售人员在对话中使用SPIN四类提问的质量和适当性（情境问题了解现状、问题问题发现痛点、暗示问题放大影响、需求-效益问题引导客户说出价值）
 
 请输出JSON:
-{{"scores": {{"需求挖掘": 0.7, "异议处理": 0.6, "促单能力": 0.7, "沟通表达": 0.8, "情绪管理": 0.8, "产品知识": 0.6, "信任建立": 0.7, "价值传递": 0.6, "SPIN提问质量": 0.7}}, "feedback": "一句话总体反馈"}}
-每个维度score范围0-1，0.7以上为合格。"""
+{{"scores": {{"需求挖掘": 0.7, "异议处理": 0.6, "促单能力": 0.7, "沟通表达": 0.8, "情绪管理": 0.8, "产品知识": 0.6, "信任建立": 0.7, "价值传递": 0.6, "SPIN提问质量": 0.7}}, "feedback": "一句话总体反馈", "coaching_moments": [{{"user_quote": "销售原话的关键片段（10字以内）", "issue": "具体问题", "improve": "改进建议（可包含话术示例）", "dimension": "对应维度"}}]}}
+每个维度score范围0-1，0.7以上为合格。
+coaching_moments: 最多2个，只在有明显可改进行为时输出。如果没有值得指出的问题，输出空数组[]。"""
 
         messages = [
             {"role": "user", "content": eval_prompt},
@@ -1273,6 +1478,7 @@ class PracticeHarness:
             return {
                 "scores": validated_scores,
                 "feedback": data.get("feedback", ""),
+                "coaching_moments": data.get("coaching_moments", []),
             }
         except (json.JSONDecodeError, ValueError):
             # Use local engine for evaluation

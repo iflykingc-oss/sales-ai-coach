@@ -43,7 +43,20 @@ export interface GenerateScriptInput {
 }
 
 export interface GenerateScriptOutput {
-  speechStyles: ScriptStyle[];
+  // New format fields
+  tacticalExecutionPaths?: Array<{
+    pathType: string;
+    strategicLever: string;
+    verbalScript: string;
+    coachingDirectives?: { pacingAndTone: string; microBehaviors: string };
+  }>;
+  detectedBusinessMode?: 'B2B' | 'B2C';
+  salesLifecycleStage?: string;
+  buyerPersonaAnalysis?: { targetStakeholder: string; hiddenDriver: string };
+  multiStageSimulation?: { expectedPushback: string; counterStrategy: string; nextProgressiveMove: string };
+  // Legacy format
+  speechStyles?: ScriptStyle[];
+  // Common fields
   reasoning: string[];
   pitfalls: { action: string; reason: string }[];
   knowledgeSource: string;

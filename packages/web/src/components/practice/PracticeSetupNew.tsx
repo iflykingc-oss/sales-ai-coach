@@ -291,6 +291,7 @@ interface PracticeSetupNewProps {
     objectives: string[];
     industry?: string;
     mode?: string;
+    salesChannel?: string;
     documentContext?: string;
   }) => void;
   isLoading?: boolean;
@@ -301,6 +302,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedScenario, setSelectedScenario] = useState<any>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
+  const [selectedChannel, setSelectedChannel] = useState('wechat');
   const [showDocUpload, setShowDocUpload] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   // Custom scenario state
@@ -311,7 +313,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
 
   const handleCategorySelect = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    if (categoryId === 'custom') {
+    if (categoryId === 'custom' || categoryId === 'objection_training') {
       setStep('config');
     } else {
       setStep('scenario');
@@ -327,6 +329,23 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
   const handleStart = () => {
     const categoryData = SCENARIO_CATEGORIES.find(c => c.id === selectedCategory);
 
+    // Objection training mode
+    if (selectedCategory === 'objection_training') {
+      onStart({
+        scenarioId: 'objection_training',
+        scenarioTitle: '异议专项训练',
+        scenarioDesc: '客户会提出各种异议，你需要先判断异议类型（信任/价值/权力/优先级/恐惧），然后选择合适的应对策略。',
+        difficulty: selectedDifficulty,
+        greeting: '你们这个产品/服务，我不太确定适不适合我们。',
+        customerProfile: '会提出各种类型异议的客户',
+        objectives: ['识别异议类型', '运用正确的应对策略'],
+        industry: '通用',
+        mode: 'objection_training',
+        salesChannel: selectedChannel,
+      });
+      return;
+    }
+
     // Custom scenario
     if (selectedCategory === 'custom') {
       if (!customTitle.trim() || !customDesc.trim()) return;
@@ -340,6 +359,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
         objectives: ['完成自定义场景练习'],
         industry: '通用',
         mode: 'scenario',
+        salesChannel: selectedChannel,
         documentContext: uploadedDocs.length > 0
           ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
           : undefined,
@@ -360,6 +380,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
       objectives: selectedScenario.objectives || [],
       industry: categoryData?.industry || '通用',
       mode: 'scenario',
+      salesChannel: selectedChannel,
       documentContext: uploadedDocs.length > 0
         ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
         : undefined,
@@ -442,6 +463,18 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
                 自定义场景
               </h3>
               <p className="mt-1 text-xs text-gray-500">描述你自己的练习场景</p>
+            </button>
+
+            {/* Objection training option */}
+            <button
+              onClick={() => handleCategorySelect('objection_training')}
+              className="group rounded-xl border-2 border-orange-200 bg-orange-50 p-5 text-left transition-all hover:border-orange-400 hover:shadow-md"
+            >
+              <span className="text-3xl">🎯</span>
+              <h3 className="mt-3 font-semibold text-gray-900 group-hover:text-orange-700">
+                异议专项训练
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">先判断异议类型，再学习应对策略</p>
             </button>
           </div>
         </div>
@@ -623,6 +656,34 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
                 >
                   <div>{config.icon}</div>
                   <div className="mt-1 text-xs font-medium">{config.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 销售场景选择 */}
+          <div className="mb-6">
+            <h3 className="mb-3 text-sm font-medium text-gray-700">销售场景</h3>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { key: 'phone', label: '电话销售', icon: '📞' },
+                { key: 'wechat', label: '微信销售', icon: '💬' },
+                { key: 'inperson', label: '面销', icon: '🤝' },
+                { key: 'event', label: '会销', icon: '🎤' },
+                { key: 'group', label: '群运营', icon: '👥' },
+              ].map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setSelectedChannel(key)}
+                  className={cn(
+                    'rounded-lg border-2 p-2 text-center transition-all',
+                    selectedChannel === key
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  )}
+                >
+                  <div>{icon}</div>
+                  <div className="mt-1 text-[10px] font-medium">{label}</div>
                 </button>
               ))}
             </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X,
   Target, MessageCircleQuestion, Shield, TrendingUp, Lightbulb, ChevronRight,
-  Swords, Network, ChevronDown, ChevronUp, Gauge,
+  Swords, Network, ChevronDown, ChevronUp, Gauge, Star,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
@@ -60,29 +60,11 @@ function CopyButton({ text }: { text: string }) {
 export default function ScriptDisplay() {
   const { activeStyle, setActiveStyle, currentScript, isGenerating, generatedScriptIds } =
     useScriptStore();
-  const { activeSessionId } = useSessionStore();
+  const { sessions, activeSessionId } = useSessionStore();
   const navigate = useNavigate();
+  const activeSession = sessions.find(s => s.id === activeSessionId);
   const [compareMode, setCompareMode] = useState(false);
   const [showFrameworkDetails, setShowFrameworkDetails] = useState(false);
-
-  const handlePractice = useCallback(() => {
-    // Navigate to practice page with session context
-    navigate('/app/practice', {
-      state: {
-        sessionId: activeSessionId,
-        scenario: currentScript?.scenarioBreakdown?.objective || '',
-        industry: currentScript?.scenarioBreakdown?.stage || '',
-        fromScript: true,
-      },
-    });
-  }, [navigate, activeSessionId, currentScript]);
-
-  const handleStyleSelect = useCallback(
-    (key: string) => {
-      setActiveStyle(key);
-    },
-    [setActiveStyle],
-  );
 
   // Find the content for the active style tab
   const getStyleContent = useCallback(
@@ -111,6 +93,34 @@ export default function ScriptDisplay() {
       return currentScript.speechStyles[0]?.content || '';
     },
     [currentScript],
+  );
+
+  const handlePractice = useCallback(() => {
+    const scriptContent = getStyleContent(activeStyle);
+    const scenario = currentScript?.scenarioBreakdown?.objective
+      || currentScript?.buyerPersonaAnalysis?.targetStakeholder
+      || '';
+    const activePath = currentScript?.tacticalExecutionPaths?.find(
+      p => p.pathType === STYLE_TABS.find(t => t.key === activeStyle)?.label
+    );
+
+    navigate('/app/practice', {
+      state: {
+        fromScript: true,
+        scenario,
+        scriptContent,
+        industry: activeSession?.industry || currentScript?.detectedBusinessMode || '',
+        style: activeStyle,
+        coachingDirectives: activePath?.coachingDirectives || null,
+      },
+    });
+  }, [navigate, activeStyle, currentScript, getStyleContent]);
+
+  const handleStyleSelect = useCallback(
+    (key: string) => {
+      setActiveStyle(key);
+    },
+    [setActiveStyle],
   );
 
   if (!currentScript && !isGenerating) {
@@ -218,17 +228,36 @@ export default function ScriptDisplay() {
               })}
             </div>
           ) : (
-            /* Single style view */
-            <div className="mb-4 rounded-lg bg-gray-50 p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-500">
-                  {STYLE_TABS.find((t) => t.key === activeStyle)?.label} 话术
-                </span>
-                <CopyButton text={getStyleContent(activeStyle)} />
+            /* Single style view - 即用卡片 */
+            <div className="mb-4">
+              <div className="rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 p-4 border border-gray-200">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-500">
+                    {STYLE_TABS.find((t) => t.key === activeStyle)?.icon} {STYLE_TABS.find((t) => t.key === activeStyle)?.label}
+                  </span>
+                  <CopyButton text={getStyleContent(activeStyle)} />
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800 mb-3">
+                  {getStyleContent(activeStyle)}
+                </p>
+                {/* 快速操作 */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={handlePractice}
+                    className="flex items-center gap-1.5 rounded-full bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 transition-colors"
+                  >
+                    <Swords className="h-3 w-3" />
+                    练一下
+                  </button>
+                  <button
+                    onClick={() => setCompareMode(true)}
+                    className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 hover:border-gray-400 transition-colors"
+                  >
+                    <Columns className="h-3 w-3" />
+                    三版对比
+                  </button>
+                </div>
               </div>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
-                {getStyleContent(activeStyle)}
-              </p>
             </div>
           )}
 
@@ -250,6 +279,31 @@ export default function ScriptDisplay() {
                   <div>
                     <p className="text-xs font-medium text-purple-500">隐藏动机</p>
                     <p className="text-sm text-purple-800">{currentScript.buyerPersonaAnalysis.hiddenDriver}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 销冠经验 */}
+          {currentScript.pitfalls && currentScript.pitfalls.length > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-amber-700">
+                <Star className="h-4 w-4" />
+                销冠经验
+              </h4>
+              <div className="space-y-3">
+                {currentScript.pitfalls.slice(0, 2).map((pitfall, idx) => (
+                  <div key={idx} className="rounded-lg bg-white/60 p-3">
+                    <p className="text-xs font-medium text-amber-500">避免踩坑</p>
+                    <p className="text-sm text-amber-800 font-medium">❌ {pitfall.action}</p>
+                    <p className="text-xs text-amber-600 mt-1">{pitfall.reason}</p>
+                  </div>
+                ))}
+                {currentScript.reasoning && currentScript.reasoning.length > 0 && (
+                  <div className="rounded-lg bg-white/60 p-3">
+                    <p className="text-xs font-medium text-amber-500">为什么这样说有效</p>
+                    <p className="text-sm text-amber-800">{currentScript.reasoning[0]}</p>
                   </div>
                 )}
               </div>

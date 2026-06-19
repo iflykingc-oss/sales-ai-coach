@@ -96,12 +96,15 @@ export default function SessionPage() {
             description: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
           });
 
-          // Add assistant message
+          // Add assistant message - support both new and old format
+          const styleNames = data.tacticalExecutionPaths?.map(p => p.pathType)
+            || data.speechStyles?.map(s => s.style)
+            || ['共情版', '直爽版', '专业版'];
           const assistantMsg = {
             id: `assistant-${Date.now()}`,
             sessionId: activeSessionId,
             role: 'ASSISTANT' as const,
-            content: `已为您生成 3 种风格的话术：\n- ${data.speechStyles.map((s) => s.style).join('\n- ')}`,
+            content: `已为您生成 3 种风格的话术：\n- ${styleNames.join('\n- ')}`,
             inputType: 'TEXT' as InputType,
             createdAt: new Date().toISOString(),
           };

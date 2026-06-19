@@ -12,8 +12,8 @@ import type { RadarDimension } from '@/components/ui/RadarChart';
 import { usePracticeStore } from '@/stores/practiceStore';
 import { cn } from '@/utils/cn';
 import { api } from '@/services/api';
-import { EVALUATION_DIMENSIONS } from '@sales-ai-coach/shared';
 import { toast } from '@/hooks/useToast';
+import { EVALUATION_DIMENSIONS } from '@sales-ai-coach/shared';
 import EmotionTimeline from './EmotionTimeline';
 
 const defaultDimensions: string[] = [...EVALUATION_DIMENSIONS];
@@ -36,6 +36,7 @@ interface Exercise {
 interface PracticeReportData {
   transcript?: Array<Record<string, unknown>>;
   round_analysis?: RoundAnalysis[];
+  radarScores?: Record<string, number>;
   improvement_plan?: {
     priority?: string;
     exercises?: Exercise[];
@@ -204,31 +205,44 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
   const [reportData, setReportData] = useState<PracticeReportData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Auto-save when reportData is available
+  useEffect(() => {
+    if (!session || !reportData || saved || saving) return;
+    const autoSave = async () => {
+      setSaving(true);
+      try {
+        const radarScores = reportData?.radarScores || {};
+        await api.post('/practices/save', {
+          sessionId: session.linkedSessionId || null,
+          scriptId: session.linkedScriptId || null,
+          scenario: session.scenarioName || '',
+          industry: session.industry || '',
+          rounds: session.round,
+          score: summary?.totalScore || 0,
+          feedback: reportData,
+          transcript: reportData?.transcript || [],
+          radarScores,
+        });
+        setSaved(true);
+      } catch (err) {
+        console.error('Failed to save practice:', err);
+        toast.error('练习保存失败', { description: '数据可能丢失，请重试' });
+      } finally {
+        setSaving(false);
+      }
+    };
+    autoSave();
+  }, [session, reportData, saved, saving, summary]);
 
   const handleSaveAndReview = useCallback(async () => {
     if (!session || !reportData) return;
-    setSaving(true);
-    try {
-      const saveRes = await api.post('/practices/save', {
-        sessionId: session.linkedSessionId || null,
-        scriptId: session.linkedScriptId || null,
-        scenario: session.scenarioName || '',
-        industry: session.industry || '',
-        rounds: session.round,
-        score: summary?.totalScore ? summary.totalScore / 100 : 0,
-        feedback: reportData,
-        transcript: reportData?.transcript || [],
-      });
-      const practiceId = saveRes.data?.data?.id;
-      navigate('/app/review', {
-        state: { practiceSessionId: practiceId, autoReview: true },
-      });
-    } catch (err) {
-      console.error('Failed to save practice:', err);
-    } finally {
-      setSaving(false);
-    }
-  }, [session, reportData, summary, navigate]);
+    const practiceId = session.linkedSessionId;
+    navigate('/app/review', {
+      state: { practiceSessionId: practiceId, autoReview: true },
+    });
+  }, [session, reportData, navigate]);
 
   const handleDimensionClick = useCallback((dim: RadarDimension) => {
     setSelectedDimension((prev) => (prev === dim.label ? null : dim.label));
@@ -428,12 +442,17 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
 
           {/* Score Details */}
           <div className="flex-1 text-center md:text-left">
-            <div className="text-sm font-medium text-gray-400">陪练完成</div>
+            <div className="text-sm font-medium text-gray-400">成单概率评估</div>
             <div className="mt-2 flex items-baseline gap-3">
               <span className="text-6xl font-black text-white">
                 <AnimatedCounter target={totalScore} />
               </span>
-              <span className="text-2xl text-gray-400">/100</span>
+              <span className="text-2xl text-gray-400">%</span>
+            </div>
+            <div className="mt-2 text-sm text-gray-400">
+              {totalScore >= 80 ? '🎯 高成单概率 — 这个场景你已经很熟练了' :
+               totalScore >= 60 ? '📈 中等成单概率 — 再练几次会更好' :
+               '💪 需要加强 — 建议多练习这个场景'}
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-400">
               {session?.scenarioName && (
@@ -492,7 +511,7 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
                   ? Math.round(roundData.scores[roundData.scores.length - 1].score * 100)
                   : '-'}
               </div>
-              <div className="mt-1 text-xs text-gray-400">末轮得分</div>
+              <div className="mt-1 text-xs text-gray-400">末轮成单概率</div>
             </div>
           </div>
         </div>
@@ -502,22 +521,20 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           icon={Target}
-          label="练习轮数"
+          label="对话轮数"
           value={session?.round || 0}
           color="bg-blue-500"
         />
         <StatCard
           icon={Brain}
-          label="最强维度"
+          label="最强技能"
           value={topDimensions[0]?.label || '-'}
           color="bg-purple-500"
         />
         <StatCard
           icon={TrendingUp}
-          label="平均得分"
-          value={roundData.scores.length > 0
-            ? Math.round(roundData.scores.reduce((s, r) => s + r.score, 0) / roundData.scores.length * 100)
-            : '-'}
+          label="成单概率"
+          value={`${totalScore}%`}
           color="bg-green-500"
         />
         <StatCard
@@ -744,6 +761,31 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
           <RotateCcw className="mr-2 h-4 w-4" />
           再来一次
         </Button>
+        {/* 针对弱项练习 */}
+        {reportData?.radarScores && (() => {
+          const weakDim = Object.entries(reportData.radarScores as Record<string, number>)
+            .sort(([, a], [, b]) => a - b)[0];
+          if (weakDim && weakDim[1] < 70) {
+            return (
+              <Button
+                size="lg"
+                onClick={() => navigate('/app/practice', {
+                  state: {
+                    fromScript: false,
+                    scenario: `专项练习: ${weakDim[0]}`,
+                    scriptContent: '',
+                    industry: session?.industry || '',
+                    focusDimension: weakDim[0],
+                  },
+                })}
+              >
+                <Target className="mr-2 h-4 w-4" />
+                针对「{weakDim[0]}」专项练习
+              </Button>
+            );
+          }
+          return null;
+        })()}
         {reportData && (
           <Button
             size="lg"
@@ -752,7 +794,7 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
             disabled={saving}
           >
             <FileSearch className="mr-2 h-4 w-4" />
-            {saving ? '保存中...' : '保存并复盘'}
+            {saving ? '保存中...' : saved ? '查看复盘报告' : '保存并复盘'}
           </Button>
         )}
       </div>

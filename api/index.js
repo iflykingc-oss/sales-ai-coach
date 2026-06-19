@@ -343,17 +343,27 @@ async function trackUsage(userId, action) {
 function validateScriptOutput(parsed, lang) {
   // Check required fields exist
   if (!parsed || typeof parsed !== 'object') return { valid: false, reason: 'Invalid response format' };
-  if (!parsed.speechStyles || !Array.isArray(parsed.speechStyles) || parsed.speechStyles.length === 0) {
-    return { valid: false, reason: 'Missing speech styles' };
+  // Support both old format (speechStyles) and new format (tacticalExecutionPaths)
+  const hasSpeechStyles = parsed.speechStyles && Array.isArray(parsed.speechStyles) && parsed.speechStyles.length > 0;
+  const hasTacticalPaths = parsed.tacticalExecutionPaths && Array.isArray(parsed.tacticalExecutionPaths) && parsed.tacticalExecutionPaths.length > 0;
+
+  if (!hasSpeechStyles && !hasTacticalPaths) {
+    return { valid: false, reason: 'Missing speech styles or tactical execution paths' };
   }
 
-  const mainScript = parsed.speechStyles[0];
-  if (!mainScript || !mainScript.content || mainScript.content.length < 50) {
+  // Get main content from either format
+  let content = '';
+  if (hasTacticalPaths) {
+    content = parsed.tacticalExecutionPaths[0]?.verbalScript || '';
+  } else if (hasSpeechStyles) {
+    content = parsed.speechStyles[0]?.content || '';
+  }
+
+  if (content.length < 50) {
     return { valid: false, reason: 'Script too short' };
   }
 
   // Check for key sections (language-aware)
-  const content = mainScript.content;
   const hasOpening = content.includes('开场') || content.includes('Opening') || content.includes('เปิด') || content.includes('Mở đầu') || content.includes('Pembuka');
   const hasDiscovery = content.includes('需求') || content.includes('Need') || content.includes('ความต้องการ') || content.includes('nhu cầu') || content.includes('kebutuhan');
   const hasValue = content.includes('价值') || content.includes('Value') || content.includes('คุณค่า') || content.includes('giá trị') || content.includes('nilai');
@@ -799,6 +809,11 @@ function generateFallbackScript(style, scenario, industry) {
     .concat('\n\n💡 专业要点：引用行业数据、市场趋势，用专业知识帮助客户做出理性决策。');
 
   return {
+    tacticalExecutionPaths: [
+      { pathType: '共情版', strategicLever: '情感共鸣与信任建立', verbalScript: empatheticVersion },
+      { pathType: '直爽版', strategicLever: '数据驱动与效率优先', verbalScript: directVersion },
+      { pathType: '专业版', strategicLever: '专业背书与理性决策', verbalScript: professionalVersion }
+    ],
     speechStyles: [
       { style: '共情版', content: empatheticVersion },
       { style: '直爽版', content: directVersion },
@@ -1290,13 +1305,30 @@ routes['GET /api/dashboard'] = async (req, res) => {
       weeklyScripts = scripts.filter(s => s.created_at > weekAgo).length;
     } catch {}
 
+    let thisWeekAvg = 0, lastWeekAvg = 0, weakDimension = null, recentImprovement = 0;
     try {
-      const practices = await sbSafeQuery('practice_sessions', { select: 'id,scenario,score,rounds,session_id,created_at', eq: { user_id: userId }, order: 'created_at.desc', limit: 10 });
+      const practices = await sbSafeQuery('practice_sessions', { select: 'id,scenario,score,radar_scores,rounds,session_id,created_at', eq: { user_id: userId }, order: 'created_at.desc', limit: 50 });
       totalPractices = practices.length;
-      recentPractices = practices;
-      const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+      recentPractices = practices.slice(0, 10);
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7*24*60*60*1000).toISOString();
+      const twoWeeksAgo = new Date(now.getTime() - 14*24*60*60*1000).toISOString();
       weeklyPractices = practices.filter(p => p.created_at > weekAgo).length;
       if (practices.length > 0) avgPracticeScore = practices.reduce((sum, p) => sum + (p.score || 0), 0) / practices.length;
+
+      const thisWeek = practices.filter(p => p.created_at > weekAgo);
+      const lastWeek = practices.filter(p => p.created_at > twoWeeksAgo && p.created_at <= weekAgo);
+      thisWeekAvg = thisWeek.length > 0 ? Math.round(thisWeek.reduce((s, p) => s + (p.score || 0), 0) / thisWeek.length) : 0;
+      lastWeekAvg = lastWeek.length > 0 ? Math.round(lastWeek.reduce((s, p) => s + (p.score || 0), 0) / lastWeek.length) : 0;
+      recentImprovement = thisWeekAvg - lastWeekAvg;
+
+      if (practices.length > 0) {
+        const latest = practices[0];
+        const radar = typeof latest.radar_scores === 'string' ? JSON.parse(latest.radar_scores || '{}') : (latest.radar_scores || {});
+        if (Object.keys(radar).length > 0) {
+          weakDimension = Object.entries(radar).sort((a, b) => a[1] - b[1])[0][0];
+        }
+      }
     } catch {}
 
     try {
@@ -1305,7 +1337,7 @@ routes['GET /api/dashboard'] = async (req, res) => {
     } catch {}
 
     sendJson(res, 200, { data: {
-      stats: { totalScripts, totalPractices, totalReviews, weeklyScripts, weeklyPractices, avgPracticeScore: Math.round(avgPracticeScore * 100) / 100 },
+      stats: { totalScripts, totalPractices, totalReviews, weeklyScripts, weeklyPractices, avgPracticeScore: Math.round(avgPracticeScore * 100) / 100, thisWeekAvg, lastWeekAvg, recentImprovement, weakDimension },
       pipeline, recentSessions, recentPractices
     }});
   } catch (err) {
@@ -1363,6 +1395,57 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
 
+    // Fetch session conversation context
+    let sessionContext = '';
+    if (sessionId) {
+      try {
+        const sessionMsgs = await sbSafeQuery('messages', {
+          select: 'role,content,created_at',
+          eq: { session_id: sessionId },
+          order: 'created_at.desc',
+          limit: 5
+        });
+        if (sessionMsgs.length > 0) {
+          sessionContext = '\n\n【对话上下文】\n' + sessionMsgs.reverse().map(m =>
+            `${m.role === 'USER' ? '用户' : '助手'}：${m.content.slice(0, 200)}`
+          ).join('\n');
+        }
+      } catch (e) { console.error('Session context fetch error:', e.message); }
+    }
+
+    // Fetch user weak dimensions from recent practice
+    let weakDimensionContext = '';
+    try {
+      const recentPractices = await sbSafeQuery('practice_sessions', {
+        select: 'radar_scores',
+        eq: { user_id: jwt.userId },
+        order: 'created_at.desc',
+        limit: 3
+      });
+      if (recentPractices.length > 0) {
+        const dimTotals = {};
+        let count = 0;
+        for (const p of recentPractices) {
+          const radar = typeof p.radar_scores === 'string' ? JSON.parse(p.radar_scores || '{}') : (p.radar_scores || {});
+          if (Object.keys(radar).length > 0) {
+            for (const [dim, score] of Object.entries(radar)) {
+              dimTotals[dim] = (dimTotals[dim] || 0) + score;
+            }
+            count++;
+          }
+        }
+        if (count > 0) {
+          const weakDims = Object.entries(dimTotals)
+            .map(([dim, total]) => [dim, Math.round(total / count)])
+            .sort((a, b) => a[1] - b[1])
+            .slice(0, 2);
+          if (weakDims.length > 0 && weakDims[0][1] < 70) {
+            weakDimensionContext = `\n\n【用户技能画像】该用户的薄弱维度：${weakDims.map(([d, s]) => `${d}(${s}分)`).join('、')}。生成话术时请特别注意强化这些维度的技巧。`;
+          }
+        }
+      }
+    } catch (e) { console.error('Weak dimension fetch error:', e.message); }
+
     // Try real AI first - API 级别的工程化 prompt
     const scriptPrompt = `[ROLE: ELITE SALES SYSTEM BACKEND]
 You are the structured data engine for an enterprise-grade AI Sales Coach. Your sole purpose is to analyze input scenarios and output a single, syntactically flawless JSON object based on deep behavioral psychology.
@@ -1388,6 +1471,7 @@ ${industryContextPrompt}
 
 [KNOWLEDGE BASE REFERENCE]
 ${knowledgeContext || '(No additional knowledge base)'}
+${sessionContext}${weakDimensionContext}
 
 [JSON STRUCTURE]
 {
@@ -1457,7 +1541,7 @@ ${frameworks ? frameworks.join(', ') : 'SPIN、MEDDPICC、挑战型销售、SPB�
 2. 三个版本的 "verbalScript" 严禁出现行文相似性，必须彻底打碎并根据三种完全不同的底层人性逻辑独立编写。
 3. 话术中必须包含由当前场景推演出的具体业务痛点、具体财务损益或产品技术优势，禁止出现任何占位符。
 
-${knowledgeContext}`,
+${knowledgeContext}${sessionContext}${weakDimensionContext}`,
       en: `Analyze the following sales scenario and generate battle-ready scripts strictly following the JSON structure and [ANTI-LAZY & VALUE INJECTION LAWS]:
 
 【Scenario】
@@ -1496,12 +1580,29 @@ ${knowledgeContext}`,
 
         if (validation.valid) {
           scriptData = {
-            speechStyles: parsed.speechStyles || [{ style: styleName, content: aiResult }],
+            // New format fields (pass through from AI)
+            tacticalExecutionPaths: parsed.tacticalExecutionPaths || undefined,
+            detectedBusinessMode: parsed.detectedBusinessMode || undefined,
+            salesLifecycleStage: parsed.salesLifecycleStage || undefined,
+            buyerPersonaAnalysis: parsed.buyerPersonaAnalysis || undefined,
+            multiStageSimulation: parsed.multiStageSimulation || undefined,
+            // Legacy format (for backward compatibility)
+            speechStyles: parsed.speechStyles || undefined,
+            // Common fields
             reasoning: parsed.reasoning || ['AI生成'],
             pitfalls: parsed.pitfalls || [],
             knowledgeSource: parsed.knowledgeSource || 'AI生成',
             confidenceScore: parsed.confidenceScore || 0.8
           };
+          // If AI returned tacticalExecutionPaths but no speechStyles, generate legacy fallback
+          if (!scriptData.speechStyles && scriptData.tacticalExecutionPaths) {
+            scriptData.speechStyles = scriptData.tacticalExecutionPaths.map(p => ({
+              style: p.pathType,
+              content: p.verbalScript
+            }));
+          }
+          // Clean up undefined fields
+          Object.keys(scriptData).forEach(k => scriptData[k] === undefined && delete scriptData[k]);
         } else {
           console.log('AI output quality check failed:', validation.reason);
           scriptData = generateFallbackScript(styleName, scenarioName, industry);
@@ -1654,9 +1755,19 @@ routes['POST /api/practices/init'] = async (req, res) => {
     // Track usage
     await trackUsage(jwt.userId, 'practices');
 
+    // Generate a contextual greeting based on scenario
+    const scenarioPreview = (scenario || '').split('\n')[0].slice(0, 30);
+    const greetings = [
+      '您好，请问有什么事吗？',
+      '你好，你是？',
+      '喂，您好，请问哪位？',
+      '你好，请问有什么可以帮您的？',
+    ];
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+
     sendJson(res, 201, { data: { data: {
       session_id: practiceId,
-      greeting: `您好，我是您的${scenario || '销售'}练习客户。请开始您的销售话术。`,
+      greeting,
       archetype_name: '标准客户'
     }}});
   } catch (err) {
@@ -1955,17 +2066,45 @@ JSON 结构：
   }
 };
 
+routes['GET /api/practices'] = async (req, res) => {
+  try {
+    const jwt = requireAuth(req);
+    const sessions = await sbSafeQuery('practice_sessions', {
+      select: 'id,scenario,industry,rounds,score,radar_scores,created_at',
+      eq: { user_id: jwt.userId },
+      order: 'created_at.desc',
+      limit: 50
+    });
+
+    const totalPractices = sessions.length;
+    const avgScore = totalPractices > 0
+      ? Math.round(sessions.reduce((s, p) => s + (p.score || 0), 0) / totalPractices)
+      : 0;
+    const totalRounds = sessions.reduce((s, p) => s + (p.rounds || 0), 0);
+    const lastPracticeDate = sessions.length > 0 ? sessions[0].created_at : null;
+
+    sendJson(res, 200, {
+      data: sessions,
+      stats: { totalPractices, avgScore, totalRounds, lastPracticeDate }
+    });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
 routes['POST /api/practices/save'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const { sessionId, scriptId, scenario, industry, rounds, score, feedback, transcript } = await parseBody(req);
+    const { sessionId, scriptId, scenario, industry, rounds, score, feedback, transcript, radarScores } = await parseBody(req);
     const practiceId = crypto.randomUUID();
     try {
       await sbInsert('practice_sessions', {
         id: practiceId, user_id: jwt.userId, session_id: sessionId || null,
         script_id: scriptId || null, scenario: scenario || '通用', industry: industry || null,
         rounds: rounds || 0, score: score || 0, feedback: feedback || {},
-        transcript: transcript || [], created_at: new Date().toISOString()
+        transcript: transcript || [], radar_scores: radarScores || {},
+        created_at: new Date().toISOString()
       });
 
       // Auto-save to knowledge base if score is high
@@ -2057,6 +2196,8 @@ JSON 结构：
       summary: report.overall_score > 0.6 ? '整体表现良好，有提升空间' : '需要加强基础技能训练',
       strengths: report.strengths || [], improvements: report.weaknesses || report.improvements || [],
       recommendations: (report.recommendations || []).map(r => typeof r === 'string' ? r : r.advice || r),
+      radar_scores: report.radarScores || {},
+      overall_score: report.overall_score || 0,
       created_at: new Date().toISOString()
     });
 
@@ -2653,14 +2794,67 @@ routes['GET /api/achievements'] = async (req, res) => {
 routes['GET /api/achievements/progress'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
+    const practices = await sbSafeQuery('practice_sessions', {
+      select: 'score,radar_scores,created_at',
+      eq: { user_id: jwt.userId },
+      order: 'created_at.asc'
+    });
+
+    const practiceSessions = practices.length;
+    const totalXp = practiceSessions * 20 + practices.filter(p => p.score >= 80).length * 30;
+    const level = Math.min(8, Math.floor(totalXp / 100) + 1);
+    const levelNames = ['新手销售', '初级销售', '中级销售', '高级销售', '资深销售', '销售精英', '销售导师', '传奇销冠'];
+    const levelIcons = ['🌱', '🌿', '🌳', '💪', '⭐', '🏆', '👑', '🔥'];
+
+    // Compute skill scores from latest practice's radar_scores
+    let skillScores = {};
+    if (practices.length > 0) {
+      const latest = practices[practices.length - 1];
+      const radar = typeof latest.radar_scores === 'string' ? JSON.parse(latest.radar_scores || '{}') : (latest.radar_scores || {});
+      skillScores = radar;
+    }
+
+    // Best scores per scenario
+    const bestScores = {};
+    for (const p of practices) {
+      const key = p.scenario || '通用';
+      if (!bestScores[key] || p.score > bestScores[key]) bestScores[key] = p.score;
+    }
+
+    // Streak calculation
+    let currentStreak = 0, longestStreak = 0, streak = 0;
+    const today = new Date().toISOString().slice(0, 10);
+    const practiceDates = [...new Set(practices.map(p => p.created_at.slice(0, 10)))].sort().reverse();
+    for (let i = 0; i < practiceDates.length; i++) {
+      const expected = new Date(today);
+      expected.setDate(expected.getDate() - i);
+      if (practiceDates[i] === expected.toISOString().slice(0, 10)) {
+        streak++;
+      } else { break; }
+    }
+    currentStreak = streak;
+    // Longest streak
+    let maxStreak = 0, curStreak = 0;
+    for (let i = 0; i < practiceDates.length; i++) {
+      if (i === 0) { curStreak = 1; } else {
+        const prev = new Date(practiceDates[i - 1]);
+        const cur = new Date(practiceDates[i]);
+        const diff = (prev - cur) / (1000 * 60 * 60 * 24);
+        if (diff === 1) { curStreak++; } else { curStreak = 1; }
+      }
+      maxStreak = Math.max(maxStreak, curStreak);
+    }
+    longestStreak = maxStreak;
+
     sendJson(res, 200, { data: {
-      totalXp: 10, level: 1, practiceSessions: 0, currentStreak: 1, longestStreak: 1,
-      lastPracticeDate: null, unlockedAchievements: ['first-login'],
-      skillScores: { 开场白: 0, 需求探寻: 0, 价值传递: 0, 异议处理: 0, 促成能力: 0, 倾听技巧: 0, 情绪管理: 0, 专业形象: 0 },
-      bestScores: {},
-      currentLevel: { level: 1, name: '新手销售', xpRequired: 100, icon: '🌱' },
-      nextLevel: { level: 2, name: '初级销售', xpRequired: 200, icon: '🌿' },
-      xpForNextLevel: 190
+      totalXp, level, practiceSessions, currentStreak, longestStreak,
+      lastPracticeDate: practices.length > 0 ? practices[practices.length - 1].created_at : null,
+      unlockedAchievements: ['first-login'],
+      skillScores,
+      bestScores,
+      currentLevel: { level, name: levelNames[level - 1] || '新手销售', xpRequired: level * 100, icon: levelIcons[level - 1] || '🌱' },
+      nextLevel: level < 8 ? { level: level + 1, name: levelNames[level], xpRequired: (level + 1) * 100, icon: levelIcons[level] } : null,
+      xpForNextLevel: Math.max(0, (level * 100) - totalXp)
     }});
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
@@ -2671,19 +2865,70 @@ routes['GET /api/achievements/progress'] = async (req, res) => {
 routes['GET /api/achievements/analytics'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    let totalSessions = 0, practiceTrend = [], averageScore = 0;
-    try {
-      const practices = await sbSafeQuery('practice_sessions', { select: 'scenario,score,created_at', eq: { user_id: jwt.userId }, order: 'created_at.desc' });
-      totalSessions = practices.length;
-      practiceTrend = practices.map(p => ({ date: p.created_at, score: p.score, scenario: p.scenario, difficulty: 'medium' }));
-      if (practices.length > 0) averageScore = practices.reduce((s, p) => s + (p.score || 0), 0) / practices.length;
-    } catch {}
+    const practices = await sbSafeQuery('practice_sessions', {
+      select: 'scenario,score,radar_scores,created_at',
+      eq: { user_id: jwt.userId },
+      order: 'created_at.asc'
+    });
+
+    const totalSessions = practices.length;
+    const practiceTrend = practices.map(p => ({
+      date: p.created_at, score: p.score, scenario: p.scenario, difficulty: 'medium'
+    }));
+
+    const averageScore = totalSessions > 0
+      ? Math.round(practices.reduce((s, p) => s + (p.score || 0), 0) / totalSessions)
+      : 0;
+
+    // Practice dates for heatmap
+    const practiceDates = practices.map(p => p.created_at.slice(0, 10));
+
+    // Skill trend by week
+    const skillTrend = [];
+    const weekMap = {};
+    for (const p of practices) {
+      const d = new Date(p.created_at);
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay());
+      const weekKey = weekStart.toISOString().slice(0, 10);
+      if (!weekMap[weekKey]) weekMap[weekKey] = { scores: {}, count: 0 };
+      const radar = typeof p.radar_scores === 'string' ? JSON.parse(p.radar_scores || '{}') : (p.radar_scores || {});
+      for (const [dim, score] of Object.entries(radar)) {
+        weekMap[weekKey].scores[dim] = (weekMap[weekKey].scores[dim] || 0) + score;
+      }
+      weekMap[weekKey].count++;
+    }
+    for (const [week, data] of Object.entries(weekMap).sort((a, b) => a[0].localeCompare(b[0]))) {
+      const entry = { week };
+      for (const [dim, total] of Object.entries(data.scores)) {
+        entry[dim] = Math.round(total / data.count);
+      }
+      skillTrend.push(entry);
+    }
+
+    // Recent improvement: last 5 vs previous 5
+    let recentImprovement = 0;
+    if (totalSessions >= 10) {
+      const recent5 = practices.slice(-5).reduce((s, p) => s + (p.score || 0), 0) / 5;
+      const prev5 = practices.slice(-10, -5).reduce((s, p) => s + (p.score || 0), 0) / 5;
+      recentImprovement = Math.round(recent5 - prev5);
+    }
+
+    // Top scenarios
+    const scenarioCounts = {};
+    for (const p of practices) {
+      const key = p.scenario || '通用';
+      scenarioCounts[key] = (scenarioCounts[key] || 0) + 1;
+    }
+    const topScenarios = Object.entries(scenarioCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([scenario, count]) => ({ scenario, count }));
+
     sendJson(res, 200, { data: {
-      totalSessions, practiceTrend,
-      skillTrend: [], difficultyDistribution: {},
-      topScenarios: [], scoreByDifficulty: {},
-      recentImprovement: 0, practiceDates: [],
-      averageScore: Math.round(averageScore * 100) / 100
+      totalSessions, practiceTrend, skillTrend,
+      difficultyDistribution: {}, topScenarios, scoreByDifficulty: {},
+      recentImprovement, practiceDates, averageScore
     }});
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
@@ -2958,6 +3203,18 @@ routes['POST /api/admin/sync/trigger'] = async (req, res) => {
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+routes['POST /api/admin/knowledge/crawl'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { crawlKnowledge } = require('./knowledge-crawler');
+    const result = await crawlKnowledge();
+    sendJson(res, 200, { success: true, data: result });
+  } catch (err) {
+    console.error('Knowledge crawl error:', err);
+    sendJson(res, 500, { success: false, error: 'Crawl failed' });
   }
 };
 

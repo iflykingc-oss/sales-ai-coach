@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, History } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -171,11 +171,13 @@ const QUICK_SCENARIOS: Record<string, {
 export default function PracticePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation() as { state?: { fromScript?: boolean; scenario?: string; scriptContent?: string; industry?: string; style?: string; coachingDirectives?: { pacingAndTone?: string; microBehaviors?: string } } };
   const [view, setView] = useState<PracticeView>('setup');
   const [isStarting, setIsStarting] = useState(false);
   const { resetPractice, setSession } = usePracticeStore();
   const { addActivity } = useActivityStore();
   const quickStartRef = useRef(false);
+  const fromScriptRef = useRef(false);
 
   // 快速开始逻辑
   useEffect(() => {
@@ -201,6 +203,36 @@ export default function PracticePage() {
     }
   }, [searchParams]);
 
+  // 从话术生成跳转过来，自动创建自定义场景
+  useEffect(() => {
+    if (location.state?.fromScript && !fromScriptRef.current) {
+      fromScriptRef.current = true;
+      const { scenario, scriptContent, industry, style, coachingDirectives } = location.state;
+
+      // Build a richer description that includes coaching directives
+      let desc = scriptContent ? `基于生成的话术进行实战练习。\n\n参考话术：\n${scriptContent.slice(0, 500)}` : '基于生成的话术进行实战练习';
+      if (coachingDirectives) {
+        desc += '\n\n【教练指令】';
+        if (coachingDirectives.pacingAndTone) desc += `\n语速语调：${coachingDirectives.pacingAndTone}`;
+        if (coachingDirectives.microBehaviors) desc += `\n微行为：${coachingDirectives.microBehaviors}`;
+      }
+
+      handleStartPractice({
+        scenarioId: 'from-script',
+        scenarioTitle: `话术练习: ${(scenario || '销售场景').slice(0, 30)}`,
+        scenarioDesc: desc,
+        difficulty: 'medium',
+        greeting: '你好，请问有什么事吗？',
+        customerProfile: scenario || '普通客户',
+        objectives: ['运用话术完成销售对话'],
+        industry: industry || '通用',
+        mode: 'scenario',
+        scriptStyle: style,
+        coachingDirectives,
+      });
+    }
+  }, [location.state]);
+
   const handleStartPractice = async (config: {
     scenarioId: string;
     scenarioTitle: string;
@@ -212,6 +244,8 @@ export default function PracticePage() {
     industry?: string;
     mode?: string;
     documentContext?: string;
+    scriptStyle?: string;
+    coachingDirectives?: { pacingAndTone?: string; microBehaviors?: string };
   }) => {
     setIsStarting(true);
 
@@ -268,12 +302,15 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
 
       setSession({
         id: initData.session_id,
-        mode: 'scenario' as PracticeMode,
+        mode: (config.mode || 'scenario') as PracticeMode,
         scenarioId: config.scenarioId,
         scenarioName: config.scenarioTitle,
+        industry: config.industry,
         difficulty: config.difficulty,
         archetypeName: initData.archetype_name,
         logicFramework: frameworkRec?.recommendedFramework?.id || '',
+        scriptStyle: config.scriptStyle,
+        coachingDirectives: config.coachingDirectives,
         messages,
         round: 0,
         maxRounds: 10,

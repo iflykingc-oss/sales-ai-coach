@@ -1,9 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type PracticeMode = 'scenario' | 'freeform' | 'special';
+export type PracticeMode = 'scenario' | 'freeform' | 'special' | 'objection_training';
 export type EmotionType = 'interest' | 'hesitate' | 'resist' | 'empathy';
 export type CustomerState = 'idle' | 'practicing' | 'completed';
+
+export interface CoachingMoment {
+  user_quote: string;
+  issue: string;
+  improve: string;
+  dimension: string;
+}
 
 export interface ChatMessage {
   id: string;
@@ -14,6 +21,10 @@ export interface ChatMessage {
   emotion?: string;
   roundScore?: number;
   evaluationFeedback?: string;
+  coachingMoments?: CoachingMoment[];
+  objectionTraining?: boolean;
+  objectionText?: string;
+  objectionTypes?: string[];
 }
 
 export interface PracticeSession {
@@ -30,6 +41,8 @@ export interface PracticeSession {
   archetypeName?: string;
   linkedSessionId?: string;
   linkedScriptId?: string;
+  scriptStyle?: string;
+  coachingDirectives?: { pacingAndTone?: string; microBehaviors?: string };
   messages: ChatMessage[];
   round: number;
   maxRounds: number;
@@ -148,6 +161,14 @@ export const usePracticeStore = create<PracticeState>()(
           return { session: { ...state.session, detectedStage: stage } };
         }),
     }),
-    { name: 'practice-state' },
+    {
+      name: 'practice-state',
+      partialize: (state) => ({
+        session: state.session ? {
+          ...state.session,
+          messages: state.session.messages?.slice(-20) || [],
+        } : null,
+      }),
+    },
   ),
 );

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface ScriptVariant {
   style: string;
@@ -118,30 +119,41 @@ export interface ScriptFeedbackState {
   reset: () => void;
 }
 
-export const useScriptStore = create<ScriptFeedbackState>((set) => ({
-  sessionId: null,
-  activeStyle: 'empathy',
-  isGenerating: false,
-  error: null,
-  currentScript: null,
-  generatedScriptIds: [],
-  feedbackSubmitted: {},
-  setActiveStyle: (style) => set({ activeStyle: style }),
-  setSessionId: (sessionId) => set({ sessionId }),
-  setCurrentScript: (data) => set({ currentScript: data }),
-  setGeneratedScriptIds: (ids) => set({ generatedScriptIds: ids }),
-  markFeedbackSubmitted: (scriptId) =>
-    set((state) => ({
-      feedbackSubmitted: { ...state.feedbackSubmitted, [scriptId]: true },
-    })),
-  reset: () =>
-    set({
-      sessionId: null,
-      activeStyle: 'empathy',
-      isGenerating: false,
-      error: null,
-      currentScript: null,
-      generatedScriptIds: [],
-      feedbackSubmitted: {},
+export const useScriptStore = create<ScriptFeedbackState>()(persist(
+  (set) => ({
+    sessionId: null,
+    activeStyle: 'empathy',
+    isGenerating: false,
+    error: null,
+    currentScript: null,
+    generatedScriptIds: [],
+    feedbackSubmitted: {},
+    setActiveStyle: (style) => set({ activeStyle: style }),
+    setSessionId: (sessionId) => set({ sessionId }),
+    setCurrentScript: (data) => set({ currentScript: data }),
+    setGeneratedScriptIds: (ids) => set({ generatedScriptIds: ids }),
+    markFeedbackSubmitted: (scriptId) =>
+      set((state) => ({
+        feedbackSubmitted: { ...state.feedbackSubmitted, [scriptId]: true },
+      })),
+    reset: () =>
+      set({
+        sessionId: null,
+        activeStyle: 'empathy',
+        isGenerating: false,
+        error: null,
+        currentScript: null,
+        generatedScriptIds: [],
+        feedbackSubmitted: {},
+      }),
+  }),
+  {
+    name: 'script-state',
+    partialize: (state) => ({
+      currentScript: state.currentScript,
+      activeStyle: state.activeStyle,
+      generatedScriptIds: state.generatedScriptIds,
+      feedbackSubmitted: state.feedbackSubmitted,
     }),
-}));
+  }
+));

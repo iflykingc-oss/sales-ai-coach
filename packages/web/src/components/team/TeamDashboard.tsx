@@ -1,4 +1,4 @@
-import { Users, Activity, FileText, TrendingUp } from 'lucide-react';
+import { Users, Activity, Target, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/MiniChart';
@@ -24,7 +24,7 @@ export function TeamDashboard() {
       <EmptyState
         icon={<Users className="h-6 w-6" />}
         title="暂无团队数据"
-        description="团队成员加入后，此处将展示团队统计数据"
+        description="团队成员加入后，此处将展示团队成单能力数据"
         className="py-20"
       />
     );
@@ -32,7 +32,7 @@ export function TeamDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
+      {/* Stats Cards - 成单导向 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="团队成员"
@@ -47,23 +47,24 @@ export function TeamDashboard() {
           trend={{ value: 12, label: '较昨日' }}
         />
         <StatCard
-          title="话术生成"
+          title="话术使用"
           value={teamStats.totalScriptsGenerated}
-          icon={<FileText className="h-5 w-5" />}
+          icon={<Zap className="h-5 w-5" />}
           trend={{ value: 23, label: '较上周' }}
         />
         <StatCard
-          title="平均陪练分数"
-          value={`${teamStats.avgPracticeScore}`}
-          icon={<TrendingUp className="h-5 w-5" />}
+          title="团队成单概率"
+          value={`${teamStats.avgPracticeScore}%`}
+          icon={<Target className="h-5 w-5" />}
           trend={{ value: 5, label: '较上周' }}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Team Weak Scenarios */}
+        {/* Team Weak Scenarios - 成单薄弱环节 */}
         <Card>
-          <h3 className="mb-4 text-base font-semibold text-gray-900">团队薄弱场景</h3>
+          <h3 className="mb-4 text-base font-semibold text-gray-900">成单薄弱环节</h3>
+          <p className="mb-3 text-xs text-gray-500">这些场景的成单概率较低，建议针对性练习</p>
           <div className="space-y-3">
             {weakScenarios.map((scenario, index) => (
               <div key={scenario.name} className="space-y-1">
@@ -87,9 +88,10 @@ export function TeamDashboard() {
           </div>
         </Card>
 
-        {/* Member Growth Trends */}
+        {/* Member Growth Trends - 成单能力排名 */}
         <Card>
-          <h3 className="mb-4 text-base font-semibold text-gray-900">成员成长趋势</h3>
+          <h3 className="mb-4 text-base font-semibold text-gray-900">成单能力排名</h3>
+          <p className="mb-3 text-xs text-gray-500">基于练习数据的成单概率排名</p>
           <div className="space-y-3">
             {members.slice(0, 5).map((member) => (
               <div key={member.id} className="flex items-center justify-between">

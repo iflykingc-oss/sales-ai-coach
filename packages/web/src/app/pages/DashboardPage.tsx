@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Lock, CheckCircle2, Play, Star, Target, Flame, Shield, Swords, Crown } from 'lucide-react';
+import { TrendingUp, Lock, CheckCircle2, Play, Star, Target, Flame, Shield, Swords, Crown, Zap, Copy, ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +20,10 @@ interface DashboardData {
     weeklyScripts: number;
     weeklyPractices: number;
     avgPracticeScore: number;
+    thisWeekAvg?: number;
+    lastWeekAvg?: number;
+    recentImprovement?: number;
+    weakDimension?: string | null;
   };
   pipeline: { SCRIPT: number; PRACTICE: number; REVIEW: number; CLOSED: number };
   recentSessions: Array<{ id: string; name: string; industry: string | null; stage: string; customerName: string | null; createdAt: string; _count: { scripts: number; practices: number; reviews: number } }>;
@@ -256,6 +260,43 @@ export default function DashboardPage() {
         )}
       </Card>
 
+      {/* 成单助手 - 核心入口 */}
+      <Card className="border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="h-5 w-5 text-orange-500" />
+          <h2 className="text-lg font-bold text-gray-900">成单助手</h2>
+          <span className="text-xs text-gray-500">客户说了什么？立刻拿话术</span>
+        </div>
+        <div
+          className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-orange-300 bg-white p-4 transition-all hover:border-orange-400 hover:shadow-md"
+          onClick={() => navigate('/app/scripts')}
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+            <Swords className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-700">输入客户的原话，生成即用话术</p>
+            <p className="text-xs text-gray-500">支持异议处理、竞品比较、价格谈判等场景</p>
+          </div>
+          <ArrowRight className="h-5 w-5 text-gray-400" />
+        </div>
+        {/* 最近话术快速入口 */}
+        {data?.recentPractices && data.recentPractices.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {data.recentPractices.slice(0, 3).map((p, i) => (
+              <button
+                key={i}
+                onClick={() => navigate('/app/scripts')}
+                className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs text-gray-600 border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all"
+              >
+                <Copy className="h-3 w-3" />
+                {p.scenario?.slice(0, 15) || '销售场景'}
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
       {/* 当前课程 - 快速开始 */}
       <Card className="border-2 border-primary-200 bg-primary-50">
         <div className="flex items-center justify-between">
@@ -411,32 +452,81 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 本周成绩概览 */}
+      {/* 本周成单辅助数据 */}
       {data?.stats && (
         <Card>
           <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-gray-500" />
-            {t('dashboard.weeklyStats')}
+            本周成单辅助
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="text-center">
               <p className="text-2xl font-bold text-blue-600">{data.stats.weeklyScripts}</p>
-              <p className="text-xs text-gray-500">{t('scripts.title')}</p>
+              <p className="text-xs text-gray-500">话术使用</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-purple-600">{data.stats.weeklyPractices}</p>
-              <p className="text-xs text-gray-500">{t('practice.title')}</p>
+              <p className="text-xs text-gray-500">陪练次数</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-emerald-600">{data.stats.totalReviews}</p>
-              <p className="text-xs text-gray-500">{t('review.title')}</p>
+              <p className="text-xs text-gray-500">复盘分析</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-amber-600">
                 {data.stats.avgPracticeScore > 0 ? Math.round(data.stats.avgPracticeScore) : '-'}
               </p>
-              <p className="text-xs text-gray-500">{t('review.score')}</p>
+              <p className="text-xs text-gray-500">成单概率</p>
             </div>
+
+          {/* 成单概率趋势 */}
+          {(data.stats.thisWeekAvg ?? 0) > 0 && (
+            <div className="col-span-2 sm:col-span-4 mt-2 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">本周成单概率</span>
+                  <span className="text-sm font-semibold text-gray-800">{data.stats.thisWeekAvg}%</span>
+                  {(data.stats.lastWeekAvg ?? 0) > 0 && (
+                    <>
+                      <span className="text-xs text-gray-400">vs 上周 {data.stats.lastWeekAvg}%</span>
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${(data.stats.recentImprovement ?? 0) > 0 ? 'bg-green-100 text-green-700' : (data.stats.recentImprovement ?? 0) < 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {(data.stats.recentImprovement ?? 0) > 0 ? '+' : ''}{data.stats.recentImprovement}%
+                      </span>
+                    </>
+                  )}
+                </div>
+                {data.stats.weakDimension && (
+                  <a href="/app/practice" className="text-xs text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                    弱项：{data.stats.weakDimension}，去练习 →
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+          </div>
+        </Card>
+      )}
+
+      {/* 弱项提醒 */}
+      {data?.stats?.weakDimension && (
+        <Card className="border-orange-200 bg-orange-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                <Target className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">成单薄弱环节：{data.stats.weakDimension}</p>
+                <p className="text-xs text-gray-500">针对这个技能练习，可以显著提升成单率</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => navigate('/app/practice')}
+              className="bg-orange-500 hover:bg-orange-600"
+            >
+              针对练习
+            </Button>
           </div>
         </Card>
       )}

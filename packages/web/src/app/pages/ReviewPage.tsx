@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ReviewUploader } from '@/components/review/ReviewUploader';
@@ -12,6 +13,29 @@ export default function ReviewPage() {
   const { uploads, report, state, setState, setError, setReport } = useReviewStore();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState(false);
+  const location = useLocation() as { state?: { practiceSessionId?: string; autoReview?: boolean } };
+
+  // Auto-review from practice if state is passed
+  useEffect(() => {
+    const state = location.state as { practiceSessionId?: string; autoReview?: boolean } | null;
+    if (state?.practiceSessionId && state?.autoReview) {
+      const loadPracticeAndReview = async () => {
+        try {
+          const res = await api.get(`/practices/${state.practiceSessionId}`) as { data?: { transcript?: Array<{ role: string; content: string }>; scenario?: string } };
+          if (res?.data?.transcript) {
+            const conversations = [{
+              fileName: `practice-${state.practiceSessionId}.txt`,
+              content: res.data.transcript.map((t: { role: string; content: string }) => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`).join('\n'),
+            }];
+            generateMutation.mutate({ conversations });
+          }
+        } catch (err) {
+          console.error('Failed to load practice for review:', err);
+        }
+      };
+      loadPracticeAndReview();
+    }
+  }, [location.state]);
 
   const generateMutation = useMutation({
     mutationFn: async (data: { conversations: Array<{ fileName: string; content: string }> }) => {
