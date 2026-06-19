@@ -55,6 +55,15 @@ async function sbQuery(table, params) {
 // 搜索关键词配置
 // ============================================================
 
+// 预定义优质来源（搜索引擎不可用时的备选）
+const PREDEFINED_SOURCES = [
+  { url: 'https://www.close.com/blog/sales-objection-handling', industry: '通用', type: 'objection_handling', lang: 'en' },
+  { url: 'https://www.cpic.com.cn/c/2021-05-31/1820152.shtml', industry: '保险', type: 'case_study', lang: 'zh' },
+  { url: 'https://www.jiandaoyun.com/news/article/68beba81229b892d52226b61', industry: '房产', type: 'case_study', lang: 'zh' },
+  { url: 'https://www.hubspot.com/sales/sales-objections', industry: '通用', type: 'objection_handling', lang: 'en' },
+  { url: 'https://www.influenceatwork.com/principles-of-influence/', industry: '通用', type: 'psychology', lang: 'en' },
+];
+
 const SEARCH_QUERIES = [
   // 保险销售
   { query: '保险销售话术 太贵了', industry: '保险', type: 'objection_handling' },
@@ -392,6 +401,21 @@ async function crawlSalesContent() {
       }
     } catch (e) {
       console.log(`[Crawler] Search error: ${e.message.slice(0, 50)}`);
+    }
+
+    // 如果搜索没有结果，使用预定义来源
+    if (items.length === 0) {
+      const matchingSources = PREDEFINED_SOURCES.filter(s =>
+        s.industry === industry || s.industry === '通用'
+      );
+      if (matchingSources.length > 0) {
+        console.log(`[Crawler] Using ${matchingSources.length} predefined sources`);
+        items = matchingSources.map(s => ({
+          title: s.url.split('/').pop() || s.url,
+          content: '',
+          url: s.url,
+        }));
+      }
     }
 
     console.log(`[Crawler] Found ${items.length} results`);
