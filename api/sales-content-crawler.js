@@ -1,11 +1,14 @@
 /**
- * 销售内容爬虫 - 用 Playwright 爬取中文销售实战内容
+ * 销售内容爬虫 - 从 Google 搜索结果抓取销售知识
  *
- * 使用反检测策略绕过 Cloudflare/DataDome 等反爬系统
- * 参考：https://github.com/rebrowser/rebrowser-patches
+ * 两种模式：
+ * 1. 本地运行：用 Playwright（反检测浏览器）
+ * 2. Vercel 运行：用 fetch + 正则提取（无浏览器依赖）
  */
 
-const { chromium } = require('playwright');
+// 尝试加载 Playwright，如果不可用则用 fetch
+let chromium = null;
+try { chromium = require('playwright').chromium; } catch (e) {}
 const crypto = require('crypto');
 
 // Supabase helper
@@ -298,43 +301,28 @@ async function contentExists(sourceUrl) {
 async function crawlSalesContent() {
   console.log(`[Crawler] Starting at ${new Date().toISOString()}`);
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process',
-    ],
-  });
+  const usePlaywright = !!chromium;
+  let browser, page;
 
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    viewport: { width: 1366, height: 768 },
-    locale: 'zh-CN',
-    timezoneId: 'Asia/Shanghai',
-    extraHTTPHeaders: {
-      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    },
-  });
-
-  // 注入反检测脚本
-  await context.addInitScript(() => {
-    // 隐藏 webdriver 标志
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    // 隐藏自动化工具
-    delete navigator.__proto__.webdriver;
-    // 模拟真实的 plugins
-    Object.defineProperty(navigator, 'plugins', {
-      get: () => [1, 2, 3, 4, 5],
+  if (usePlaywright) {
+    // Playwright 模式（本地运行）
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-blink-features=AutomationControlled'],
     });
-    // 模拟真实的 languages
-    Object.defineProperty(navigator, 'languages', {
-      get: () => ['zh-CN', 'zh', 'en'],
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      viewport: { width: 1366, height: 768 },
+      locale: 'zh-CN',
     });
-  });
-
-  const page = await context.newPage();
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
+    page = await context.newPage();
+    console.log('[Crawler] Using Playwright mode');
+  } else {
+    console.log('[Crawler] Using fetch mode (no Playwright)');
+  }
 
   let totalAdded = 0;
   let totalSkipped = 0;
@@ -346,14 +334,36 @@ async function crawlSalesContent() {
     // 爬取多个来源
     let items = [];
 
-    // 使用 Google 搜索（反检测版本，绕过 Cloudflare）
-    const googleItems = await crawlGoogle(page, query, 3);
-    items.push(...googleItems);
-
-    // 如果 Google 没有结果，尝试直接访问已知内容页面
-    if (items.length === 0) {
-      console.log(`[Crawler] No Google results for: ${query}, trying direct URLs...`);
+    // 搜索
+    try {
+      if (usePlaywright) {
+        const googleItems = await crawlGoogle(page, query, 3);
+        items.push(...googleItems);
+      } else {
+        // fetch 模式：直接用 Google 搜索结果页面
+        const resp = await fetch(`https://www.google.com/search?q=${encodeURIComponent(query)}&hl=zh-CN&num=5`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (resp.ok) {
+          const html = await resp.text();
+          // 简单提取搜索结果
+          const titleMatches = html.match(/<h3[^>]*>([^<]+)<\/h3>/g) || [];
+          const descMatches = html.match(/<span class="[^"]*">([^<]{30,})<\/span>/g) || [];
+          for (let i = 0; i < Math.min(titleMatches.length, 3); i++) {
+            const title = titleMatches[i]?.replace(/<[^>]+>/g, '').trim();
+            const content = descMatches[i]?.replace(/<[^>]+>/g, '').trim() || '';
+            if (title && content) {
+              items.push({ title, content: content.slice(0, 800), url: '' });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[Crawler] Search error: ${e.message.slice(0, 50)}`);
     }
+
+    console.log(`[Crawler] Found ${items.length} results`);
 
     // 处理每个结果
     for (const item of items) {
@@ -363,22 +373,25 @@ async function crawlSalesContent() {
         continue;
       }
 
-      // 如果内容太短，尝试访问原始页面获取更多内容
+      // 如果内容太短，尝试访问原始页面
       let fullContent = item.content;
       if (item.content.length < 200 && item.url) {
         try {
-          await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-          await page.waitForTimeout(2000);
-          const pageContent = await page.evaluate(() => {
-            const article = document.querySelector('article, .Post-RichText, .RichContent-inner, .article-content, main, .content');
-            return article ? article.innerText.slice(0, 5000) : document.body.innerText.slice(0, 3000);
+          const resp = await fetch(item.url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout(10000),
           });
-          if (pageContent.length > fullContent.length) {
-            fullContent = pageContent;
+          if (resp.ok) {
+            const html = await resp.text();
+            const text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 5000);
+            if (text.length > fullContent.length) fullContent = text;
           }
-        } catch (e) {
-          console.log(`[Crawler] Failed to fetch full content from ${item.url}: ${e.message.slice(0, 50)}`);
-        }
+        } catch (e) {}
       }
 
       // LLM 提取
@@ -416,10 +429,14 @@ async function crawlSalesContent() {
     }
 
     // 避免请求过快
-    await page.waitForTimeout(2000);
+    if (usePlaywright) {
+      await page.waitForTimeout(2000);
+    } else {
+      await new Promise(r => setTimeout(r, 2000));
+    }
   }
 
-  await browser.close();
+  if (browser) await browser.close();
 
   const result = { added: totalAdded, skipped: totalSkipped, failed: totalFailed };
   console.log(`\n[Crawler] Complete:`, result);
