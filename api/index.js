@@ -3204,6 +3204,19 @@ routes['POST /api/admin/knowledge/crawl'] = async (req, res) => {
   }
 };
 
+// 销售内容爬虫 - 用 Playwright 爬取知乎/小红书/百度的销售实战内容
+routes['POST /api/admin/knowledge/crawl-sales'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const { crawlSalesContent } = require('./sales-content-crawler');
+    const result = await crawlSalesContent();
+    sendJson(res, 200, { success: true, data: result });
+  } catch (err) {
+    console.error('Sales content crawl error:', err);
+    sendJson(res, 500, { success: false, error: 'Sales content crawl failed' });
+  }
+};
+
 // 同步管理 API - 配置外部数据源
 routes['POST /api/admin/sync/sources'] = async (req, res) => {
   try {
