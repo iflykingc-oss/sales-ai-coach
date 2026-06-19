@@ -426,7 +426,62 @@ async function crawlSalesContent() {
   return result;
 }
 
-module.exports = { crawlSalesContent };
+/**
+ * 从抓取的文章中批量提取知识
+ */
+function extractKnowledgeFromArticles(articles) {
+  const keywords = ['话术', '异议', '客户', '销售', '成交', '促单', '信任', '价格', '太贵', '考虑', '对比', '竞品', '心理学', '损失厌恶', '锚定', '开场白', '跟进', '朋友圈'];
+  const knowledgeItems = [];
+  const seen = new Set();
+
+  for (const article of articles) {
+    const { content, query, title } = article;
+    const paragraphs = content.split(/\n\n+/).filter(p => p.length > 50 && p.length < 2000);
+
+    for (const para of paragraphs) {
+      const matchedKeywords = keywords.filter(k => para.includes(k));
+      if (matchedKeywords.length < 2) continue;
+
+      // 去重
+      const key = para.slice(0, 100);
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // 判断类型
+      let type = 'general';
+      if (para.includes('异议') || para.includes('太贵') || para.includes('考虑') || para.includes('对比')) type = 'objection_handling';
+      else if (para.includes('开场白') || para.includes('开场')) type = 'opening';
+      else if (para.includes('成交') || para.includes('促单') || para.includes('逼单')) type = 'closing';
+      else if (para.includes('心理学') || para.includes('损失厌恶') || para.includes('锚定')) type = 'psychology';
+      else if (para.includes('跟进') || para.includes('维护')) type = 'follow_up';
+      else if (para.includes('信任')) type = 'trust_building';
+      else if (para.includes('朋友圈')) type = 'social_selling';
+
+      // 判断行业
+      let industry = '通用';
+      if (query.includes('保险') || title.includes('保险')) industry = '保险';
+      else if (query.includes('房产') || title.includes('房产') || title.includes('地产')) industry = '房产';
+      else if (query.includes('教育') || title.includes('课程') || title.includes('培训')) industry = '教育';
+      else if (query.includes('汽车') || title.includes('汽车') || title.includes('4S')) industry = '汽车';
+      else if (query.includes('SaaS') || title.includes('SaaS') || title.includes('B2B')) industry = 'SaaS';
+      else if (query.includes('金融') || title.includes('理财') || title.includes('银行')) industry = '金融';
+      else if (query.includes('快消') || title.includes('快消')) industry = '快消品';
+      else if (query.includes('跨境') || title.includes('跨境') || title.includes('外贸')) industry = '跨境电商';
+
+      knowledgeItems.push({
+        knowledge_type: type,
+        industry,
+        content: para.slice(0, 500),
+        source: title.slice(0, 100),
+        matchedKeywords,
+      });
+    }
+  }
+
+  return knowledgeItems;
+}
+
+module.exports = { crawlSalesContent, extractKnowledgeFromArticles };
 
 // 直接运行
 if (require.main === module) {
