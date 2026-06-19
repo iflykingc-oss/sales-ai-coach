@@ -8,6 +8,10 @@
 const { chromium } = require('playwright');
 const crypto = require('crypto');
 
+// Supabase 配置
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 // API 配置（通过 API 入库，不直接连数据库）
 const API_BASE = process.env.API_BASE || 'http://localhost:3000/api';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
