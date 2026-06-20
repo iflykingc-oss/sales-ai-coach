@@ -34,34 +34,37 @@ jobs:
           node scripts/crawl-and-insert.js 2>&1 | tee crawl-output.log
           echo "done=true" >> $GITHUB_OUTPUT
 
-      - name: Notify success
-        if: success()
+      - name: Notify Feishu
+        if: always()
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
         run: |
-          # 解析爬取结果
+          # 解析结果（只取最后一行匹配）
           LOG="crawl-output.log"
-          ADDED=$(grep -oP 'Inserted: \K\d+' "$LOG" || echo "0")
-          FAILED=$(grep -oP 'Failed: \K\d+' "$LOG" || echo "0")
-          FETCHED=$(grep -oP 'Fetched: \K\d+' "$LOG" || echo "0")
-          EXTRACTED=$(grep -oP 'Extracted: \K\d+' "$LOG" || echo "0")
-          URLS=$(grep -oP 'Unique URLs: \K\d+' "$LOG" || echo "0")
+          ADDED=$(grep 'Inserted:' "$LOG" | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
+          FAILED=$(grep 'Failed:' "$LOG" | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
+          FETCHED=$(grep 'Fetched:' "$LOG" | tail -1 | grep -oP '\d+' || echo "0")
+          EXTRACTED=$(grep 'Extracted:' "$LOG" | tail -1 | grep -oP '\d+' || echo "0")
+          URLS=$(grep 'Unique URLs:' "$LOG" | grep -oP '\d+' || echo "0")
 
           # 北京时间
           BJ_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')
 
-          # 判断状态颜色
-          if [ "$ADDED" -gt 0 ]; then
-            TEMPLATE="green"
-            TITLE="✅ 每日知识爬取完成"
-          elif [ "$FAILED" -gt 0 ]; then
-            TEMPLATE="orange"
-            TITLE="⚠️ 每日知识爬取完成（部分失败）"
-          else
+          # 判断状态
+          STATUS="success"
+          TEMPLATE="green"
+          TITLE="✅ 每日知识爬取完成"
+
+          if [ "$ADDED" -eq 0 ] && [ "$FAILED" -gt 0 ]; then
+            TEMPLATE="red"
+            TITLE="❌ 知识爬取失败"
+            STATUS="failed"
+          elif [ "$ADDED" -eq 0 ]; then
             TEMPLATE="blue"
-            TITLE="📥 每日知识爬取完成（无新增）"
+            TITLE="📥 每日知识爬取（无新增）"
           fi
 
+          # 发送飞书通知
           curl -s -X POST "$FEISHU_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{
@@ -75,33 +78,7 @@ jobs:
                   \"tag\": \"div\",
                   \"text\": {
                     \"tag\": \"lark_md\",
-                    \"content\": \"**🕐 时间**：$BJ_TIME（北京时间）\n**🔍 搜索关键词**：91 个\n**🌐 搜索结果**：$URLS 个 URL\n**📄 抓取文章**：$FETCHED 篇\n**🧠 提取知识**：$EXTRACTED 条\n**✅ 成功入库**：$ADDED 条\n**❌ 失败**：$FAILED 条\"
-                  }
-                }]
-              }
-            }"
-
-      - name: Notify failure
-        if: failure()
-        env:
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-        run: |
-          BJ_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')
-
-          curl -s -X POST "$FEISHU_WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"msg_type\": \"interactive\",
-              \"card\": {
-                \"header\": {
-                  \"title\": {\"tag\": \"plain_text\", \"content\": \"❌ 知识爬取失败\"},
-                  \"template\": \"red\"
-                },
-                \"elements\": [{
-                  \"tag\": \"div\",
-                  \"text\": {
-                    \"tag\": \"lark_md\",
-                    \"content\": \"**🕐 时间**：$BJ_TIME（北京时间）\n**状态**：失败\n**详情**：请检查 GitHub Actions 日志\"
+                    \"content\": \"**🕐 时间**: $BJ_TIME (北京时间)\n**🔍 搜索关键词**: 91 个\n**🌐 搜索结果**: $URLS 个 URL\n**📄 抓取文章**: $FETCHED 篇\n**🧠 提取知识**: $EXTRACTED 条\n**✅ 成功入库**: $ADDED 条\n**❌ 失败**: $FAILED 条\"
                   }
                 }]
               }
