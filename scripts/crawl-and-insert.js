@@ -389,37 +389,33 @@ async function main() {
   console.log('By type:', JSON.stringify(byType));
   console.log('By industry:', JSON.stringify(byInd));
 
-  // Phase 4: 通过 API 批量入库
-  console.log('\nPhase 4: Inserting via API...');
+  // Phase 4: 直接入库（Supabase REST API）
+  console.log('\nPhase 4: Inserting into Supabase...');
 
-  // 转换为 API 格式
-  const knowledgeItems = items.map(item => ({
-    id: crypto.randomUUID(),
-    source: item.source,
-    source_url: item.source_url || '',
-    content: item.content,
-    tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
-    industry: item.industry,
-    weight: 0.7,
-    status: 'ACTIVE',
-    knowledge_type: item.knowledge_type,
-    language: item.language || 'zh',
-  }));
-
-  // 分批插入（每批 50 条）
   let inserted = 0;
   let failed = 0;
-  const batchSize = 50;
 
-  for (let i = 0; i < knowledgeItems.length; i += batchSize) {
-    const batch = knowledgeItems.slice(i, i + batchSize);
+  for (const item of items) {
     try {
-      await apiInsertKnowledge(batch);
-      inserted += batch.length;
-      console.log(`  Inserted: ${inserted}/${knowledgeItems.length}`);
+      await sbInsert('knowledge_items', {
+        id: crypto.randomUUID(),
+        user_id: null,
+        source: (item.source || '').slice(0, 200),
+        source_url: (item.source_url || '').slice(0, 500),
+        content: (item.content || '').slice(0, 500),
+        tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
+        industry: item.industry || '通用',
+        weight: 0.7,
+        status: 'ACTIVE',
+        knowledge_type: item.knowledge_type || 'general',
+        language: item.language || 'zh',
+        created_at: new Date().toISOString(),
+      });
+      inserted++;
+      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${items.length}`);
     } catch (e) {
-      failed += batch.length;
-      console.error(`  Batch failed: ${e.message.slice(0, 80)}`);
+      failed++;
+      if (failed <= 3) console.error(`  Insert failed: ${e.message.slice(0, 80)}`);
     }
   }
 
