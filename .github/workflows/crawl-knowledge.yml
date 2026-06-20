@@ -31,37 +31,26 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # 运行爬虫，捕获输出
-          OUTPUT=$(node scripts/crawl-and-insert.js 2>&1) || true
-          echo "$OUTPUT"
-
-          # 提取关键数据
-          ADDED=$(echo "$OUTPUT" | grep -oP 'Inserted: \K\d+' || echo "0")
-          FAILED=$(echo "$OUTPUT" | grep -oP 'Failed: \K\d+' || echo "0")
-          FETCHED=$(echo "$OUTPUT" | grep -oP 'Fetched: \K\d+' || echo "0")
-          EXTRACTED=$(echo "$OUTPUT" | grep -oP 'Extracted: \K\d+' || echo "0")
-          URLS=$(echo "$OUTPUT" | grep -oP 'Unique URLs: \K\d+' || echo "0")
-
-          echo "added=$ADDED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "fetched=$FETCHED" >> $GITHUB_OUTPUT
-          echo "extracted=$EXTRACTED" >> $GITHUB_OUTPUT
-          echo "urls=$URLS" >> $GITHUB_OUTPUT
+          node scripts/crawl-and-insert.js 2>&1 | tee crawl-output.log
+          echo "done=true" >> $GITHUB_OUTPUT
 
       - name: Notify success
         if: success()
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-          ADDED: ${{ steps.crawl.outputs.added }}
-          FAILED: ${{ steps.crawl.outputs.failed }}
-          FETCHED: ${{ steps.crawl.outputs.fetched }}
-          EXTRACTED: ${{ steps.crawl.outputs.extracted }}
-          URLS: ${{ steps.crawl.outputs.urls }}
         run: |
+          # 解析爬取结果
+          LOG="crawl-output.log"
+          ADDED=$(grep -oP 'Inserted: \K\d+' "$LOG" || echo "0")
+          FAILED=$(grep -oP 'Failed: \K\d+' "$LOG" || echo "0")
+          FETCHED=$(grep -oP 'Fetched: \K\d+' "$LOG" || echo "0")
+          EXTRACTED=$(grep -oP 'Extracted: \K\d+' "$LOG" || echo "0")
+          URLS=$(grep -oP 'Unique URLs: \K\d+' "$LOG" || echo "0")
+
           # 北京时间
           BJ_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')
 
-          # 判断状态
+          # 判断状态颜色
           if [ "$ADDED" -gt 0 ]; then
             TEMPLATE="green"
             TITLE="✅ 每日知识爬取完成"
