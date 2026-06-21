@@ -114,6 +114,47 @@ async function sbQuery(table, params) {
 }
 
 // ============================================================
+// Embedding API
+// ============================================================
+const EMBEDDING_API_KEY = process.env.EMBEDDING_API_KEY || process.env.QWEN_API_KEY || process.env.OPENAI_API_KEY;
+const EMBEDDING_BASE_URL = process.env.EMBEDDING_BASE_URL || process.env.QWEN_BASE_URL || 'https://api.openai.com/v1';
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-v3';
+
+async function callEmbeddings(texts) {
+  if (!EMBEDDING_API_KEY || texts.length === 0) return texts.map(() => null);
+
+  try {
+    let url = (EMBEDDING_BASE_URL || '').replace(/\/+$/, '');
+    if (url.startsWith('http://')) url = url.replace('http://', 'https://');
+    if (!url.includes('/embeddings')) {
+      url += (url.endsWith('/v1') || url.endsWith('/v3')) ? '/embeddings' : '/v1/embeddings';
+    }
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${EMBEDDING_API_KEY}` },
+      body: JSON.stringify({ model: EMBEDDING_MODEL, input: texts, encoding_format: 'float' }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!resp.ok) {
+      console.error('Embedding API error:', resp.status);
+      return texts.map(() => null);
+    }
+
+    const data = await resp.json();
+    const results = new Array(texts.length).fill(null);
+    for (const item of (data.data || [])) {
+      results[item.index] = item.embedding;
+    }
+    return results;
+  } catch (e) {
+    console.error('callEmbeddings error:', e.message);
+    return texts.map(() => null);
+  }
+}
+
+// ============================================================
 // 合规配置
 // ============================================================
 const COMPLIANCE = {
@@ -416,19 +457,45 @@ async function main() {
   let skipped = 0;
   let failed = 0;
 
+  // 4b. 过滤出需要插入的新项
+  const toInsert = [];
   for (const item of items) {
-    // 去重：URL 相同 or 内容前 100 字相同
     const url = (item.source_url || '').slice(0, 500);
     const contentKey = (item.content || '').slice(0, 100);
     if (url && existingUrls.has(url)) { skipped++; continue; }
     if (contentKey && existingContents.has(contentKey)) { skipped++; continue; }
+    toInsert.push(item);
+  }
+  console.log(`  To insert: ${toInsert.length} (skipped ${skipped} duplicates)`);
 
+  // 4c. 批量生成 embedding
+  let embeddings = toInsert.map(() => null);
+  if (EMBEDDING_API_KEY && toInsert.length > 0) {
+    console.log(`  Generating embeddings for ${toInsert.length} items...`);
+    // Batch in groups of 20 to avoid API limits
+    for (let i = 0; i < toInsert.length; i += 20) {
+      const batch = toInsert.slice(i, i + 20);
+      const batchTexts = batch.map(item => (item.content || '').slice(0, 2000));
+      const batchEmbeddings = await callEmbeddings(batchTexts);
+      for (let j = 0; j < batchEmbeddings.length; j++) {
+        embeddings[i + j] = batchEmbeddings[j];
+      }
+    }
+    const embeddingCount = embeddings.filter(e => e !== null).length;
+    console.log(`  Embeddings generated: ${embeddingCount}/${toInsert.length}`);
+  } else if (!EMBEDDING_API_KEY) {
+    console.log('  Skipping embeddings (no EMBEDDING_API_KEY)');
+  }
+
+  // 4d. 插入（带 embedding）
+  for (let idx = 0; idx < toInsert.length; idx++) {
+    const item = toInsert[idx];
     try {
-      await sbInsert('knowledge_items', {
+      const insertData = {
         id: crypto.randomUUID(),
         user_id: null,
         source: (item.source || '').slice(0, 200),
-        source_url: url,
+        source_url: (item.source_url || '').slice(0, 500),
         content: (item.content || '').slice(0, 500),
         tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
         industry: item.industry || '通用',
@@ -437,9 +504,11 @@ async function main() {
         knowledge_type: item.knowledge_type || 'general',
         language: item.language || 'zh',
         created_at: new Date().toISOString(),
-      });
+      };
+      if (embeddings[idx]) insertData.embedding = embeddings[idx];
+      await sbInsert('knowledge_items', insertData);
       inserted++;
-      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${items.length - skipped}`);
+      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${toInsert.length}`);
     } catch (e) {
       failed++;
       if (failed <= 3) console.error(`  Insert failed: ${e.message.slice(0, 80)}`);
