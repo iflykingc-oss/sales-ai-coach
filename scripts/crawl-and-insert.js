@@ -114,6 +114,31 @@ async function sbQuery(table, params) {
 }
 
 // ============================================================
+// Embedding via Supabase AI (gte-small, 384 dimensions)
+// ============================================================
+async function sbRpc(fnName, params = {}) {
+  const url = `${SUPABASE_URL}/rest/v1/rpc/${fnName}`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body: JSON.stringify(params),
+  });
+  if (!resp.ok) { const e = await resp.text(); throw new Error(`SB rpc ${fnName}: ${resp.status} ${e}`); }
+  return resp.json();
+}
+
+// Call Supabase backfill_embeddings RPC to batch-generate embeddings for items without them
+async function backfillEmbeddings(batchSize = 50) {
+  try {
+    const result = await sbRpc('backfill_embeddings', { batch_size: batchSize });
+    return Array.isArray(result) ? result[0] : result;
+  } catch (e) {
+    console.error('backfillEmbeddings error:', e.message.slice(0, 100));
+    return 0;
+  }
+}
+
+// ============================================================
 // 合规配置
 // ============================================================
 const COMPLIANCE = {
@@ -416,19 +441,25 @@ async function main() {
   let skipped = 0;
   let failed = 0;
 
+  // 4b. 过滤出需要插入的新项
+  const toInsert = [];
   for (const item of items) {
-    // 去重：URL 相同 or 内容前 100 字相同
     const url = (item.source_url || '').slice(0, 500);
     const contentKey = (item.content || '').slice(0, 100);
     if (url && existingUrls.has(url)) { skipped++; continue; }
     if (contentKey && existingContents.has(contentKey)) { skipped++; continue; }
+    toInsert.push(item);
+  }
+  console.log(`  To insert: ${toInsert.length} (skipped ${skipped} duplicates)`);
 
+  // 4c. 插入（不含 embedding，后面批量回填）
+  for (const item of toInsert) {
     try {
       await sbInsert('knowledge_items', {
         id: crypto.randomUUID(),
         user_id: null,
         source: (item.source || '').slice(0, 200),
-        source_url: url,
+        source_url: (item.source_url || '').slice(0, 500),
         content: (item.content || '').slice(0, 500),
         tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
         industry: item.industry || '通用',
@@ -439,11 +470,25 @@ async function main() {
         created_at: new Date().toISOString(),
       });
       inserted++;
-      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${items.length - skipped}`);
+      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${toInsert.length}`);
     } catch (e) {
       failed++;
       if (failed <= 3) console.error(`  Insert failed: ${e.message.slice(0, 80)}`);
     }
+  }
+
+  // 4d. 批量回填 embedding（Supabase AI gte-small）
+  if (inserted > 0) {
+    console.log(`  Backfilling embeddings via Supabase AI...`);
+    let totalBackfilled = 0;
+    // 分批回填，每次 50 条
+    for (let round = 0; round < 10; round++) {
+      const count = await backfillEmbeddings(50);
+      totalBackfilled += count;
+      if (count === 0) break;
+      console.log(`    Backfilled: ${totalBackfilled} embeddings`);
+    }
+    console.log(`  Embeddings backfilled: ${totalBackfilled}`);
   }
 
   console.log(`\n=== DONE ===`);
