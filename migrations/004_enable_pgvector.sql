@@ -1,35 +1,46 @@
--- Migration 004: Enable pgvector + Supabase AI for RAG
+-- Migration 004: Hybrid knowledge retrieval (keyword + trigram + full-text)
 -- Execute this in Supabase SQL Editor
 
--- 1. Enable pgvector extension
-CREATE EXTENSION IF NOT EXISTS vector;
+-- 1. Enable pg_trgm for fuzzy text matching
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- 2. Enable Supabase AI (gte-small embedding model)
-CREATE EXTENSION IF NOT EXISTS supabase_ai;
+-- 2. GIN index on content for trigram similarity search
+CREATE INDEX IF NOT EXISTS idx_knowledge_content_trgm
+  ON knowledge_items USING gin (content gin_trgm_ops);
 
--- 3. Add embedding column (384 dimensions for gte-small)
-ALTER TABLE knowledge_items ADD COLUMN IF NOT EXISTS embedding VECTOR(384);
+-- 3. Add tsvector column for full-text search
+ALTER TABLE knowledge_items ADD COLUMN IF NOT EXISTS content_tsv TSVECTOR;
 
--- 4. Create HNSW index for fast similarity search
-CREATE INDEX IF NOT EXISTS idx_knowledge_embedding
-  ON knowledge_items USING hnsw (embedding vector_cosine_ops)
-  WITH (m = 16, ef_construction = 64);
+-- 4. GIN index on tsvector
+CREATE INDEX IF NOT EXISTS idx_knowledge_content_tsv
+  ON knowledge_items USING gin (content_tsv);
 
--- 5. RPC: generate embedding for a single text
-CREATE OR REPLACE FUNCTION generate_embedding(input_text TEXT)
-RETURNS VECTOR(384)
-LANGUAGE plpgsql
-AS $$
+-- 5. Trigger to auto-update tsvector on insert/update
+CREATE OR REPLACE FUNCTION knowledge_items_tsv_trigger()
+RETURNS TRIGGER AS $$
 BEGIN
-  RETURN supabase_ai.embed(input_text, 384);
+  NEW.content_tsv := to_tsvector('simple', COALESCE(NEW.content, '') || ' ' || COALESCE(NEW.industry, '') || ' ' || COALESCE(NEW.knowledge_type, ''));
+  RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql;
 
--- 6. RPC: semantic search
-CREATE OR REPLACE FUNCTION match_knowledge(
-  query_embedding VECTOR(384),
-  match_count INT DEFAULT 10,
-  match_threshold FLOAT DEFAULT 0.3,
+DROP TRIGGER IF EXISTS tsvector_update ON knowledge_items;
+CREATE TRIGGER tsvector_update
+  BEFORE INSERT OR UPDATE ON knowledge_items
+  FOR EACH ROW EXECUTE FUNCTION knowledge_items_tsv_trigger();
+
+-- 6. Composite index for common filter patterns
+CREATE INDEX IF NOT EXISTS idx_knowledge_status_industry
+  ON knowledge_items (status, industry, weight DESC);
+
+-- 7. Update existing rows' tsvector
+UPDATE knowledge_items SET content_tsv = to_tsvector('simple', COALESCE(content, '') || ' ' || COALESCE(industry, '') || ' ' || COALESCE(knowledge_type, ''))
+WHERE content_tsv IS NULL;
+
+-- 8. Coarse retrieval RPC: trigram + full-text + metadata filters
+CREATE OR REPLACE FUNCTION search_knowledge(
+  search_text TEXT,
+  match_count INT DEFAULT 30,
   filter_industry TEXT DEFAULT NULL,
   filter_user_id UUID DEFAULT NULL
 )
@@ -46,7 +57,8 @@ RETURNS TABLE (
   scenario TEXT,
   customer_voice TEXT,
   psychology_tags TEXT[],
-  similarity FLOAT
+  trigram_score FLOAT,
+  fts_rank FLOAT
 )
 LANGUAGE plpgsql
 AS $$
@@ -56,48 +68,22 @@ BEGIN
     ki.id, ki.content, ki.source, ki.source_url,
     ki.industry, ki.knowledge_type, ki.tags, ki.weight,
     ki.response_example, ki.scenario, ki.customer_voice, ki.psychology_tags,
-    1 - (ki.embedding <=> query_embedding) AS similarity
+    similarity(ki.content, search_text) AS trigram_score,
+    COALESCE(ts_rank(ki.content_tsv, plainto_tsquery('simple', search_text)), 0) AS fts_rank
   FROM knowledge_items ki
   WHERE ki.status = 'ACTIVE'
-    AND ki.embedding IS NOT NULL
-    AND (1 - (ki.embedding <=> query_embedding)) > match_threshold
+    AND ki.content IS NOT NULL
+    AND (
+      similarity(ki.content, search_text) > 0.05
+      OR (ki.content_tsv @@ plainto_tsquery('simple', search_text))
+      OR ki.industry = filter_industry
+    )
     AND (filter_industry IS NULL OR ki.industry = filter_industry OR ki.industry = '通用')
     AND (filter_user_id IS NULL OR ki.user_id = filter_user_id OR ki.user_id IS NULL)
-  ORDER BY ki.embedding <=> query_embedding
+  ORDER BY
+    (similarity(ki.content, search_text) * 0.4
+     + COALESCE(ts_rank(ki.content_tsv, plainto_tsquery('simple', search_text)), 0) * 0.3
+     + ki.weight * 0.3) DESC
   LIMIT match_count;
-END;
-$$;
-
--- 7. RPC: batch generate embeddings for items without embedding
-CREATE OR REPLACE FUNCTION backfill_embeddings(batch_size INT DEFAULT 50)
-RETURNS INT
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  item RECORD;
-  updated_count INT := 0;
-BEGIN
-  FOR item IN
-    SELECT id, content, industry, knowledge_type, source
-    FROM knowledge_items
-    WHERE embedding IS NULL
-      AND status = 'ACTIVE'
-    ORDER BY created_at DESC
-    LIMIT batch_size
-  LOOP
-    DECLARE
-      enhanced_text TEXT;
-    BEGIN
-      enhanced_text := COALESCE(item.industry, '') || ' ' ||
-                       COALESCE(item.knowledge_type, '') || ' ' ||
-                       COALESCE(item.source, '') || ' ' ||
-                       COALESCE(item.content, '');
-      UPDATE knowledge_items
-      SET embedding = supabase_ai.embed(enhanced_text, 384)
-      WHERE id = item.id;
-      updated_count := updated_count + 1;
-    END;
-  END LOOP;
-  RETURN updated_count;
 END;
 $$;
