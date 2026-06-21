@@ -114,31 +114,6 @@ async function sbQuery(table, params) {
 }
 
 // ============================================================
-// Embedding via Supabase AI (gte-small, 384 dimensions)
-// ============================================================
-async function sbRpc(fnName, params = {}) {
-  const url = `${SUPABASE_URL}/rest/v1/rpc/${fnName}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-    body: JSON.stringify(params),
-  });
-  if (!resp.ok) { const e = await resp.text(); throw new Error(`SB rpc ${fnName}: ${resp.status} ${e}`); }
-  return resp.json();
-}
-
-// Call Supabase backfill_embeddings RPC to batch-generate embeddings for items without them
-async function backfillEmbeddings(batchSize = 50) {
-  try {
-    const result = await sbRpc('backfill_embeddings', { batch_size: batchSize });
-    return Array.isArray(result) ? result[0] : result;
-  } catch (e) {
-    console.error('backfillEmbeddings error:', e.message.slice(0, 100));
-    return 0;
-  }
-}
-
-// ============================================================
 // 合规配置
 // ============================================================
 const COMPLIANCE = {
@@ -452,7 +427,7 @@ async function main() {
   }
   console.log(`  To insert: ${toInsert.length} (skipped ${skipped} duplicates)`);
 
-  // 4c. 插入（不含 embedding，后面批量回填）
+  // 4c. 插入
   for (const item of toInsert) {
     try {
       await sbInsert('knowledge_items', {
@@ -475,20 +450,6 @@ async function main() {
       failed++;
       if (failed <= 3) console.error(`  Insert failed: ${e.message.slice(0, 80)}`);
     }
-  }
-
-  // 4d. 批量回填 embedding（Supabase AI gte-small）
-  if (inserted > 0) {
-    console.log(`  Backfilling embeddings via Supabase AI...`);
-    let totalBackfilled = 0;
-    // 分批回填，每次 50 条
-    for (let round = 0; round < 10; round++) {
-      const count = await backfillEmbeddings(50);
-      totalBackfilled += count;
-      if (count === 0) break;
-      console.log(`    Backfilled: ${totalBackfilled} embeddings`);
-    }
-    console.log(`  Embeddings backfilled: ${totalBackfilled}`);
   }
 
   console.log(`\n=== DONE ===`);

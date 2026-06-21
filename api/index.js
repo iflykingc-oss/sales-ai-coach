@@ -617,18 +617,145 @@ async function callAIStream(messages, options = {}) {
   return resp; // caller reads the stream
 }
 
-// ==================== EMBEDDING (Supabase AI gte-small) ====================
-// Generate embedding via Supabase RPC — no external API needed
-async function generateEmbedding(text) {
-  try {
-    // Prepend metadata for better Chinese semantic quality
-    const result = await sbRpc('generate_embedding', { input_text: text.slice(0, 2000) });
-    // sbRpc returns the vector as an array
-    return Array.isArray(result) ? result[0] : result;
-  } catch (e) {
-    console.error('generateEmbedding error:', e.message.slice(0, 100));
-    return null;
+// ==================== KNOWLEDGE RETRIEVAL (coarse → BM25 → LLM rerank) ====================
+const bm25 = require('wink-bm25-text-search');
+const winkTokenizer = require('wink-tokenizer');
+const nlp = require('wink-nlp-utils');
+
+// BM25 引擎初始化
+let bm25Engine = null;
+let bm25Ready = false;
+
+function initBM25(docs) {
+  const engine = bm25();
+  const tokenizer = winkTokenizer();
+  const defineConfig = {
+    fldWeights: { content: 1, industry: 0.5, knowledge_type: 0.3 },
+    bm25Params: { k1: 1.2, b: 0.75, k: 1 },
+  };
+  engine.defineConfig(defineConfig);
+  engine.definePrepTasks([
+    nlp.string.lowerCase,
+    (text) => tokenizer.tokenize(text).map(t => t.value),
+  ]);
+
+  for (const doc of docs) {
+    engine.addDoc({
+      content: doc.content || '',
+      industry: doc.industry || '',
+      knowledge_type: doc.knowledge_type || '',
+    }, doc.id);
   }
+  engine.consolidate();
+  return engine;
+}
+
+/**
+ * 粗筛层：pg_trgm + tsvector + 行业过滤 → Top-30
+ */
+async function coarseRetrieval(query, industry, userId) {
+  try {
+    const results = await sbRpc('search_knowledge', {
+      search_text: query.slice(0, 500),
+      match_count: 30,
+      filter_industry: industry || null,
+      filter_user_id: userId || null,
+    });
+    if (results && results.length > 0) {
+      console.log(`Coarse: ${results.length} candidates from DB (trigram+fts)`);
+      return results;
+    }
+  } catch (e) {
+    console.log('Coarse RPC failed, using fallback:', e.message.slice(0, 80));
+  }
+
+  // Fallback: 简单查询
+  const items = await sbSafeQuery('knowledge_items', {
+    select: 'id,content,source,source_url,industry,knowledge_type,tags,weight,response_example,scenario,customer_voice,psychology_tags',
+    eq: { status: 'ACTIVE' },
+    order: 'weight.desc', limit: 30,
+  });
+  return (items || []).filter(k => !industry || k.industry === industry || k.industry === '通用');
+}
+
+/**
+ * BM25 精排层：本地 BM25 重排序 → Top-10
+ */
+function bm25Rerank(query, candidates, topK = 10) {
+  if (candidates.length <= topK) return candidates;
+  try {
+    const engine = initBM25(candidates);
+    const results = engine.search(query, topK);
+    const ranked = results.map(([id, score]) => {
+      const item = candidates.find(c => c.id === id);
+      return item ? { ...item, bm25_score: score } : null;
+    }).filter(Boolean);
+
+    // BM25 结果不够时，补上未匹配的
+    if (ranked.length < topK) {
+      const rankedIds = new Set(ranked.map(r => r.id));
+      for (const c of candidates) {
+        if (!rankedIds.has(c.id)) { ranked.push(c); if (ranked.length >= topK) break; }
+      }
+    }
+    console.log(`BM25 rerank: ${ranked.length} items`);
+    return ranked;
+  } catch (e) {
+    console.log('BM25 rerank error:', e.message.slice(0, 80));
+    return candidates.slice(0, topK);
+  }
+}
+
+/**
+ * LLM 精排层：对 BM25 结果做语义重排序 → Top-K
+ */
+async function llmRerank(query, candidates, industry, topK = 5) {
+  if (candidates.length <= topK) return candidates;
+
+  const candidateList = candidates.map((k, i) =>
+    `[${i}] [${k.knowledge_type || '通用'}][${k.industry || '通用'}] ${(k.content || '').slice(0, 120)}`
+  ).join('\n');
+
+  const prompt = `你是销售知识检索排序器。用户场景："${query}"${industry ? `，行业：${industry}` : ''}
+
+候选知识（编号从0开始）：
+${candidateList}
+
+选出和用户场景最相关的 ${topK} 条，返回 JSON 数组（如 [3,0,7,1,5]），不要其他内容。`;
+
+  try {
+    const result = await callAI([{ role: 'user', content: prompt }], { max_tokens: 80, temperature: 0.1 });
+    if (result) {
+      const indices = JSON.parse(result.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+      if (Array.isArray(indices)) {
+        const reranked = indices.filter(i => i >= 0 && i < candidates.length).slice(0, topK).map(i => candidates[i]);
+        if (reranked.length > 0) {
+          console.log(`LLM rerank: selected ${reranked.length}/${candidates.length}`);
+          return reranked;
+        }
+      }
+    }
+  } catch (e) {
+    console.log('LLM rerank failed:', e.message.slice(0, 80));
+  }
+  return candidates.slice(0, topK);
+}
+
+/**
+ * 完整检索：粗筛 → BM25 → LLM rerank
+ */
+async function retrieveKnowledge(query, industry, userId) {
+  // 1. 粗筛：pg_trgm + tsvector + 行业过滤
+  const coarse = await coarseRetrieval(query, industry, userId);
+  if (coarse.length === 0) return [];
+
+  // 2. BM25 精排
+  const bm25Ranked = bm25Rerank(query, coarse, 10);
+
+  // 3. LLM 精排
+  const final = await llmRerank(query, bm25Ranked, industry, 5);
+
+  return final;
 }
 
 // ==================== AI FALLBACK ====================
@@ -1421,57 +1548,23 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
     try {
       const detectedInd = detectedIndustry || '';
       const queryText = `${scenarioName} ${detectedInd} ${input || ''}`.slice(0, 500);
-      let allKnowledge = [];
 
-      // 尝试向量检索
-      try {
-        const queryEmbedding = await generateEmbedding(queryText);
-        if (queryEmbedding) {
-          const ragResults = await sbRpc('match_knowledge', {
-            query_embedding: queryEmbedding,
-            match_count: 10,
-            match_threshold: 0.25,
-            filter_industry: detectedInd || null,
-            filter_user_id: jwt.userId,
-          });
-          if (ragResults && ragResults.length > 0) {
-            allKnowledge = ragResults;
-            console.log(`RAG: Found ${ragResults.length} semantically similar items (top similarity: ${ragResults[0].similarity?.toFixed(3)})`);
-          }
-        }
-      } catch (e) { console.log('RAG search failed, falling back to keyword:', e.message.slice(0, 80)); }
-
-      // Fallback: 关键词检索（向量不可用或无结果时）
-      if (allKnowledge.length === 0) {
-        console.log('Knowledge: Using keyword fallback');
-        const userKnowledge = await sbSafeQuery('knowledge_items', {
-          select: 'content,tags,industry,weight,knowledge_type,response_example',
-          eq: { user_id: jwt.userId, status: 'ACTIVE' },
-          order: 'weight.desc', limit: 5,
-        });
-        const publicKnowledge = await sbSafeQuery('knowledge_items', {
-          select: 'content,tags,industry,weight,knowledge_type,response_example',
-          eq: { status: 'ACTIVE' },
-          order: 'weight.desc', limit: 50,
-        });
-        const industryMatch = publicKnowledge.filter(k => !k.user_id && (k.industry === detectedInd || k.industry === '通用'));
-        const otherPublic = publicKnowledge.filter(k => !k.user_id && k.industry !== detectedInd && k.industry !== '通用');
-        allKnowledge = [...(userKnowledge || []), ...industryMatch.slice(0, 8), ...otherPublic.slice(0, 3)].slice(0, 12);
-      }
+      // 混合检索：粗筛(pg_trgm+tsvector) → BM25 → LLM rerank
+      const allKnowledge = await retrieveKnowledge(queryText, detectedInd, jwt.userId);
 
       if (allKnowledge.length > 0) {
         const knowledgeLabel = {
-          zh: '销售知识库参考（语义匹配最相关的知识）',
-          en: 'Sales Knowledge Base (Semantically matched)',
+          zh: '销售知识库参考（混合检索最相关）',
+          en: 'Sales Knowledge Base (Hybrid matched)',
         };
         knowledgeContext = `\n\n${knowledgeLabel[lang] || knowledgeLabel.zh}:\n` + allKnowledge
           .map((k, i) => {
             let item = `${i + 1}. [${k.knowledge_type || '通用'}] ${(k.content || '').slice(0, 200)}`;
             if (k.response_example) item += `\n   参考话术：${k.response_example.slice(0, 150)}`;
-            if (k.similarity) item += ` (相似度: ${(k.similarity * 100).toFixed(0)}%)`;
             return item;
           })
           .join('\n');
+        console.log(`Knowledge: ${allKnowledge.length} items injected via hybrid retrieval`);
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
 
@@ -1691,20 +1784,16 @@ ${knowledgeContext}`,
       // Auto-save to knowledge base if confidence score is high
       if (scriptData.confidenceScore >= 0.8 && scriptData.speechStyles[0]?.content) {
         try {
-          const autoContent = `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`;
-          const autoEmbedding = await generateEmbedding(autoContent.slice(0, 2000)).catch(() => null);
-          const autoData = {
+          await sbInsert('knowledge_items', {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI自动生成',
-            content: autoContent,
+            content: `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`,
             tags: [scenarioName, styleName, 'AI生成'],
             industry: industry || null,
             weight: scriptData.confidenceScore,
             status: 'ACTIVE',
             created_at: new Date().toISOString()
-          };
-          if (autoEmbedding) autoData.embedding = autoEmbedding;
-          await sbInsert('knowledge_items', autoData);
+          });
           console.log('Auto-saved high-quality script to knowledge base');
         } catch (e) { console.error('Knowledge auto-save error:', e.message); }
       }
@@ -1755,21 +1844,17 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
           });
 
           if (!existing || existing.length === 0) {
-            const fbContent = script.content || '';
-            const fbEmbedding = await generateEmbedding(fbContent.slice(0, 2000)).catch(() => null);
-            const fbData = {
+            await sbInsert('knowledge_items', {
               id: crypto.randomUUID(),
               user_id: jwt.userId,
               source: `script:${scriptId}`,
-              content: fbContent,
+              content: script.content || '',
               tags: script.tags || [],
               industry: script.industry || null,
               weight: Math.min(10, 5 + upCount),
               status: 'ACTIVE',
               created_at: new Date().toISOString()
-            };
-            if (fbEmbedding) fbData.embedding = fbEmbedding;
-            await sbInsert('knowledge_items', fbData);
+            });
             console.log(`Auto-archived script ${scriptId} to knowledge base (${upCount} positive feedback)`);
           }
         }
@@ -2173,20 +2258,16 @@ routes['POST /api/practices/save'] = async (req, res) => {
             .slice(0, 5)
             .map(t => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`)
             .join('\n');
-          const practiceContent = `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`;
-          const practiceEmbedding = await generateEmbedding(practiceContent.slice(0, 2000)).catch(() => null);
-          const practiceData = {
+          await sbInsert('knowledge_items', {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI陪练自动生成',
-            content: practiceContent,
+            content: `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`,
             tags: [scenario || '通用', '高分练习', 'AI生成'],
             industry: industry || null,
             weight: score / 100,
             status: 'ACTIVE',
             created_at: new Date().toISOString()
-          };
-          if (practiceEmbedding) practiceData.embedding = practiceEmbedding;
-          await sbInsert('knowledge_items', practiceData);
+          });
           console.log('Auto-saved high-scoring practice to knowledge base');
         } catch (e) { console.error('Knowledge auto-save error:', e.message); }
       }
@@ -2303,15 +2384,11 @@ routes['POST /api/knowledge'] = async (req, res) => {
     const jwt = requireAuth(req);
     const { content, source, industry, weight, tags } = await parseBody(req);
     if (!content) return sendJson(res, 400, { success: false, error: 'content required' });
-    // Generate embedding
-    const embedding = await generateEmbedding(content.slice(0, 2000)).catch(() => null);
-    const insertData = {
+    const item = await sbInsert('knowledge_items', {
       id: crypto.randomUUID(), user_id: jwt.userId, source: source || 'manual',
       content, tags: tags || [], industry: industry || null,
       weight: weight || 1.0, status: 'ACTIVE', created_at: new Date().toISOString()
-    };
-    if (embedding) insertData.embedding = embedding;
-    const item = await sbInsert('knowledge_items', insertData);
+    });
     sendJson(res, 201, { data: item });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
@@ -2354,15 +2431,11 @@ routes['POST /api/knowledge/import'] = async (req, res) => {
     const items = body.items || [];
     const created = [];
     for (const item of items.slice(0, 50)) {
-      const content = item.content || '';
-      const embedding = content.length > 10 ? await generateEmbedding(content).catch(() => null) : null;
-      const insertData = {
+      const result = await sbSafeInsert('knowledge_items', {
         id: crypto.randomUUID(), user_id: jwt.userId, source: item.source || 'import',
-        content, tags: item.tags || [], industry: item.industry || null,
+        content: item.content || '', tags: item.tags || [], industry: item.industry || null,
         weight: 1.0, status: 'ACTIVE', created_at: new Date().toISOString()
-      };
-      if (embedding) insertData.embedding = embedding;
-      const result = await sbSafeInsert('knowledge_items', insertData);
+      });
       created.push(result);
     }
     sendJson(res, 201, { data: created });
