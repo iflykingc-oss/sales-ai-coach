@@ -251,14 +251,20 @@ async function main() {
 
   const page = await context.newPage();
 
-  // Phase 1: 搜索
-  console.log(`\nPhase 1: Searching (${QUERIES.length} queries)...`);
+  // Phase 1: 搜索（随机排序 + cache busting）
+  const shuffled = [...QUERIES].sort(() => Math.random() - 0.5);
+  const today = new Date().toISOString().split('T')[0];
+  console.log(`\nPhase 1: Searching (${shuffled.length} queries, date: ${today})...`);
   const allResults = [];
-  for (let i = 0; i < QUERIES.length; i++) {
-    process.stdout.write(`[${i + 1}/${QUERIES.length}] ${QUERIES[i].slice(0, 20)}...`);
+  for (let i = 0; i < shuffled.length; i++) {
+    const q = shuffled[i];
+    process.stdout.write(`[${i + 1}/${shuffled.length}] ${q.slice(0, 20)}...`);
     try {
-      await page.goto(`https://www.google.com/search?q=${encodeURIComponent(QUERIES[i])}&hl=zh-CN&num=5`, { waitUntil: 'networkidle', timeout: 25000 });
-      await page.waitForTimeout(1200);
+      // 加 tbs=qdr:d 参数按天去重，加随机 token 防缓存
+      const rand = Math.random().toString(36).slice(2, 8);
+      const url = `https://www.google.com/search?q=${encodeURIComponent(q)}&hl=zh-CN&num=5&tbs=qdr:w&sei=${rand}`;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 25000 });
+      await page.waitForTimeout(1200 + Math.random() * 800);
       const results = await page.evaluate(() => {
         const items = [];
         document.querySelectorAll('.g, .tF2Cxc').forEach(el => {
@@ -269,7 +275,7 @@ async function main() {
         });
         return items.slice(0, 3);
       });
-      allResults.push(...results.map(r => ({ ...r, query: QUERIES[i] })));
+      allResults.push(...results.map(r => ({ ...r, query: q })));
       console.log(` ${results.length}`);
     } catch (e) {
       console.log(' err');
@@ -389,19 +395,40 @@ async function main() {
   console.log('By type:', JSON.stringify(byType));
   console.log('By industry:', JSON.stringify(byInd));
 
-  // Phase 4: 直接入库（Supabase REST API）
-  console.log('\nPhase 4: Inserting into Supabase...');
+  // Phase 4: 去重 + 入库（Supabase REST API）
+  console.log('\nPhase 4: Dedup + Inserting into Supabase...');
+
+  // 4a. 拉取已有的 source_url，用于去重
+  const existingUrls = new Set();
+  const existingContents = new Set();
+  try {
+    const existing = await sbQuery('knowledge_items', { select: 'source_url,content', limit: 10000 });
+    for (const row of existing) {
+      if (row.source_url) existingUrls.add(row.source_url);
+      if (row.content) existingContents.add(row.content.slice(0, 100));
+    }
+    console.log(`  Existing records: ${existingUrls.size} URLs, ${existingContents.size} content hashes`);
+  } catch (e) {
+    console.error(`  Warning: Could not fetch existing records: ${e.message}`);
+  }
 
   let inserted = 0;
+  let skipped = 0;
   let failed = 0;
 
   for (const item of items) {
+    // 去重：URL 相同 or 内容前 100 字相同
+    const url = (item.source_url || '').slice(0, 500);
+    const contentKey = (item.content || '').slice(0, 100);
+    if (url && existingUrls.has(url)) { skipped++; continue; }
+    if (contentKey && existingContents.has(contentKey)) { skipped++; continue; }
+
     try {
       await sbInsert('knowledge_items', {
         id: crypto.randomUUID(),
         user_id: null,
         source: (item.source || '').slice(0, 200),
-        source_url: (item.source_url || '').slice(0, 500),
+        source_url: url,
         content: (item.content || '').slice(0, 500),
         tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
         industry: item.industry || '通用',
@@ -412,7 +439,7 @@ async function main() {
         created_at: new Date().toISOString(),
       });
       inserted++;
-      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${items.length}`);
+      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${items.length - skipped}`);
     } catch (e) {
       failed++;
       if (failed <= 3) console.error(`  Insert failed: ${e.message.slice(0, 80)}`);
@@ -421,6 +448,7 @@ async function main() {
 
   console.log(`\n=== DONE ===`);
   console.log(`Inserted: ${inserted}`);
+  console.log(`Skipped: ${skipped}`);
   console.log(`Failed: ${failed}`);
 
   await browser.close();
