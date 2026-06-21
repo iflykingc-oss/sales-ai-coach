@@ -42,6 +42,7 @@ jobs:
           # 解析结果（只取最后一行匹配）
           LOG="crawl-output.log"
           ADDED=$(grep 'Inserted:' "$LOG" | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
+          SKIPPED=$(grep 'Skipped:' "$LOG" | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
           FAILED=$(grep 'Failed:' "$LOG" | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
           FETCHED=$(grep 'Fetched:' "$LOG" | tail -1 | grep -oP '\d+' || echo "0")
           EXTRACTED=$(grep 'Extracted:' "$LOG" | tail -1 | grep -oP '\d+' || echo "0")
@@ -78,7 +79,7 @@ jobs:
                   \"tag\": \"div\",
                   \"text\": {
                     \"tag\": \"lark_md\",
-                    \"content\": \"**🕐 时间**: $BJ_TIME (北京时间)\n**🔍 搜索关键词**: 91 个\n**🌐 搜索结果**: $URLS 个 URL\n**📄 抓取文章**: $FETCHED 篇\n**🧠 提取知识**: $EXTRACTED 条\n**✅ 成功入库**: $ADDED 条\n**❌ 失败**: $FAILED 条\"
+                    \"content\": \"**🕐 时间**: $BJ_TIME (北京时间)\n**🔍 搜索关键词**: 91 个\n**🌐 搜索结果**: $URLS 个 URL\n**📄 抓取文章**: $FETCHED 篇\n**🧠 提取知识**: $EXTRACTED 条\n**✅ 新增入库**: $ADDED 条\n**⏭️ 去重跳过**: $SKIPPED 条\n**❌ 失败**: $FAILED 条\"
                   }
                 }]
               }
