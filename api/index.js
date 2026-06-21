@@ -617,95 +617,17 @@ async function callAIStream(messages, options = {}) {
   return resp; // caller reads the stream
 }
 
-// ==================== EMBEDDING API ====================
-async function callEmbedding(text) {
-  const model = await getActiveModel();
-  if (!model) return null;
-
-  const provider = (model.provider || '').toLowerCase();
-  const apiKey = model.api_key;
-  const baseUrl = model.base_url || '';
-
-  if (!apiKey) return null;
-
-  // Embedding model: use configured model or default
-  const embeddingModel = process.env.EMBEDDING_MODEL || 'text-embedding-v3';
-
+// ==================== EMBEDDING (Supabase AI gte-small) ====================
+// Generate embedding via Supabase RPC — no external API needed
+async function generateEmbedding(text) {
   try {
-    let url = (baseUrl || '').replace(/\/+$/, '');
-    if (url.startsWith('http://')) url = url.replace('http://', 'https://');
-
-    // Build embeddings endpoint URL
-    if (!url) {
-      url = provider === 'anthropic'
-        ? 'https://api.anthropic.com/v1/embeddings'
-        : 'https://api.openai.com/v1/embeddings';
-    } else if (url.includes('/embeddings')) {
-      // already a full embeddings URL
-    } else if (url.endsWith('/v1') || url.endsWith('/v3')) {
-      url += '/embeddings';
-    } else {
-      url += '/v1/embeddings';
-    }
-
-    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-    const body = JSON.stringify({ model: embeddingModel, input: text, encoding_format: 'float' });
-
-    const resp = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(30000) });
-    if (!resp.ok) {
-      console.error('Embedding API error:', resp.status, await resp.text().catch(() => ''));
-      return null;
-    }
-
-    const data = await resp.json();
-    return data.data?.[0]?.embedding || null;
+    // Prepend metadata for better Chinese semantic quality
+    const result = await sbRpc('generate_embedding', { input_text: text.slice(0, 2000) });
+    // sbRpc returns the vector as an array
+    return Array.isArray(result) ? result[0] : result;
   } catch (e) {
-    console.error('callEmbedding error:', e.message);
+    console.error('generateEmbedding error:', e.message.slice(0, 100));
     return null;
-  }
-}
-
-// Batch embedding: returns array of embeddings
-async function callEmbeddings(texts) {
-  const model = await getActiveModel();
-  if (!model) return texts.map(() => null);
-
-  const provider = (model.provider || '').toLowerCase();
-  const apiKey = model.api_key;
-  const baseUrl = model.base_url || '';
-
-  if (!apiKey) return texts.map(() => null);
-
-  const embeddingModel = process.env.EMBEDDING_MODEL || 'text-embedding-v3';
-
-  try {
-    let url = (baseUrl || '').replace(/\/+$/, '');
-    if (url.startsWith('http://')) url = url.replace('http://', 'https://');
-    if (!url) {
-      url = 'https://api.openai.com/v1/embeddings';
-    } else if (!url.includes('/embeddings')) {
-      url += (url.endsWith('/v1') || url.endsWith('/v3')) ? '/embeddings' : '/v1/embeddings';
-    }
-
-    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-    const body = JSON.stringify({ model: embeddingModel, input: texts, encoding_format: 'float' });
-
-    const resp = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(60000) });
-    if (!resp.ok) {
-      console.error('Batch embedding API error:', resp.status);
-      return texts.map(() => null);
-    }
-
-    const data = await resp.json();
-    // Response is ordered by input index
-    const results = new Array(texts.length).fill(null);
-    for (const item of (data.data || [])) {
-      results[item.index] = item.embedding;
-    }
-    return results;
-  } catch (e) {
-    console.error('callEmbeddings error:', e.message);
-    return texts.map(() => null);
   }
 }
 
@@ -1503,7 +1425,7 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
 
       // 尝试向量检索
       try {
-        const queryEmbedding = await callEmbedding(queryText);
+        const queryEmbedding = await generateEmbedding(queryText);
         if (queryEmbedding) {
           const ragResults = await sbRpc('match_knowledge', {
             query_embedding: queryEmbedding,
@@ -1770,7 +1692,7 @@ ${knowledgeContext}`,
       if (scriptData.confidenceScore >= 0.8 && scriptData.speechStyles[0]?.content) {
         try {
           const autoContent = `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`;
-          const autoEmbedding = await callEmbedding(autoContent.slice(0, 2000)).catch(() => null);
+          const autoEmbedding = await generateEmbedding(autoContent.slice(0, 2000)).catch(() => null);
           const autoData = {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI自动生成',
@@ -1834,7 +1756,7 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
 
           if (!existing || existing.length === 0) {
             const fbContent = script.content || '';
-            const fbEmbedding = await callEmbedding(fbContent.slice(0, 2000)).catch(() => null);
+            const fbEmbedding = await generateEmbedding(fbContent.slice(0, 2000)).catch(() => null);
             const fbData = {
               id: crypto.randomUUID(),
               user_id: jwt.userId,
@@ -2252,7 +2174,7 @@ routes['POST /api/practices/save'] = async (req, res) => {
             .map(t => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`)
             .join('\n');
           const practiceContent = `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`;
-          const practiceEmbedding = await callEmbedding(practiceContent.slice(0, 2000)).catch(() => null);
+          const practiceEmbedding = await generateEmbedding(practiceContent.slice(0, 2000)).catch(() => null);
           const practiceData = {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI陪练自动生成',
@@ -2382,7 +2304,7 @@ routes['POST /api/knowledge'] = async (req, res) => {
     const { content, source, industry, weight, tags } = await parseBody(req);
     if (!content) return sendJson(res, 400, { success: false, error: 'content required' });
     // Generate embedding
-    const embedding = await callEmbedding(content.slice(0, 2000)).catch(() => null);
+    const embedding = await generateEmbedding(content.slice(0, 2000)).catch(() => null);
     const insertData = {
       id: crypto.randomUUID(), user_id: jwt.userId, source: source || 'manual',
       content, tags: tags || [], industry: industry || null,
@@ -2430,18 +2352,16 @@ routes['POST /api/knowledge/import'] = async (req, res) => {
     const jwt = requireAuth(req);
     const body = await parseBody(req);
     const items = body.items || [];
-    const sliced = items.slice(0, 50);
-    // Batch generate embeddings
-    const embeddings = await callEmbeddings(sliced.map(i => (i.content || '').slice(0, 2000))).catch(() => sliced.map(() => null));
     const created = [];
-    for (let idx = 0; idx < sliced.length; idx++) {
-      const item = sliced[idx];
+    for (const item of items.slice(0, 50)) {
+      const content = item.content || '';
+      const embedding = content.length > 10 ? await generateEmbedding(content).catch(() => null) : null;
       const insertData = {
         id: crypto.randomUUID(), user_id: jwt.userId, source: item.source || 'import',
-        content: item.content || '', tags: item.tags || [], industry: item.industry || null,
+        content, tags: item.tags || [], industry: item.industry || null,
         weight: 1.0, status: 'ACTIVE', created_at: new Date().toISOString()
       };
-      if (embeddings[idx]) insertData.embedding = embeddings[idx];
+      if (embedding) insertData.embedding = embedding;
       const result = await sbSafeInsert('knowledge_items', insertData);
       created.push(result);
     }
