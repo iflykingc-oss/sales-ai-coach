@@ -2418,7 +2418,7 @@ routes['POST /api/knowledge'] = async (req, res) => {
       content, tags: tags || [], industry: industry || null, style,
       weight: weight || 1.0, status: 'ACTIVE', created_at: new Date().toISOString()
     });
-    sendJson(res, 201, { data: item });
+    sendJson(res, 201, { success: true, data: item });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
