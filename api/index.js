@@ -617,42 +617,84 @@ async function callAIStream(messages, options = {}) {
   return resp; // caller reads the stream
 }
 
-// ==================== KNOWLEDGE RETRIEVAL (coarse → BM25 → LLM rerank) ====================
-const bm25 = require('wink-bm25-text-search');
-const winkTokenizer = require('wink-tokenizer');
-const nlp = require('wink-nlp-utils');
+// ==================== KNOWLEDGE RETRIEVAL (coarse → jieba BM25 → style grouping) ====================
+const { cut } = require('@node-rs/jieba');
 
-// BM25 引擎初始化
-let bm25Engine = null;
-let bm25Ready = false;
-
-function initBM25(docs) {
-  const engine = bm25();
-  const tokenizer = winkTokenizer();
-  const defineConfig = {
-    fldWeights: { content: 1, industry: 0.5, knowledge_type: 0.3 },
-    bm25Params: { k1: 1.2, b: 0.75, k: 1 },
-  };
-  engine.defineConfig(defineConfig);
-  engine.definePrepTasks([
-    nlp.string.lowerCase,
-    (text) => tokenizer.tokenize(text).map(t => t.value),
-  ]);
-
-  for (const doc of docs) {
-    engine.addDoc({
-      content: doc.content || '',
-      industry: doc.industry || '',
-      knowledge_type: doc.knowledge_type || '',
-    }, doc.id);
-  }
-  engine.consolidate();
-  return engine;
+// ---- Chinese BM25 with jieba ----
+function tokenizeChinese(text) {
+  if (!text) return [];
+  // jieba 分词 + 过滤停用词和单字
+  const stopwords = new Set(['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这']);
+  return cut(text, true)
+    .filter(w => w.length > 1 && !stopwords.has(w))
+    .map(w => w.toLowerCase());
 }
 
-/**
- * 粗筛层：pg_trgm + tsvector + 行业过滤 → Top-30
- */
+function bm25Score(queryTokens, docTokens, avgDl, k1 = 1.5, b = 0.75) {
+  const dl = docTokens.length;
+  const tf = {};
+  for (const t of docTokens) tf[t] = (tf[t] || 0) + 1;
+
+  let score = 0;
+  for (const qt of queryTokens) {
+    if (!tf[qt]) continue;
+    const termFreq = tf[qt];
+    const idf = Math.log((1000 - dl + 0.5) / (dl + 0.5) + 1); // simplified IDF
+    const tfNorm = (termFreq * (k1 + 1)) / (termFreq + k1 * (1 - b + b * dl / avgDl));
+    score += idf * tfNorm;
+  }
+  return score;
+}
+
+function jiebaBM25Rerank(query, candidates, topK = 10) {
+  if (candidates.length <= topK) return candidates;
+  try {
+    const queryTokens = tokenizeChinese(query);
+    const docTokensList = candidates.map(c => tokenizeChinese(`${c.content || ''} ${c.industry || ''} ${c.knowledge_type || ''}`));
+    const avgDl = docTokensList.reduce((s, t) => s + t.length, 0) / docTokensList.length || 1;
+
+    const scored = candidates.map((c, i) => ({
+      ...c,
+      bm25_score: bm25Score(queryTokens, docTokensList[i], avgDl)
+    }));
+
+    scored.sort((a, b) => b.bm25_score - a.bm25_score);
+    const result = scored.slice(0, topK);
+    console.log(`Jieba BM25: ${result.length} items (top score: ${result[0]?.bm25_score?.toFixed(3)})`);
+    return result;
+  } catch (e) {
+    console.log('Jieba BM25 error:', e.message.slice(0, 80));
+    return candidates.slice(0, topK);
+  }
+}
+
+// ---- Knowledge usage logging ----
+async function logKnowledgeUsage(knowledgeIds, userId, action, context) {
+  for (const kid of knowledgeIds) {
+    try {
+      await sbRpc('log_knowledge_usage', {
+        p_knowledge_id: kid,
+        p_user_id: userId || null,
+        p_action: action,
+        p_context: context || null,
+      });
+    } catch (e) { /* silent */ }
+  }
+}
+
+// ---- Style-based grouping ----
+// 矛盾知识不删除，按 style 分组返回，让 LLM 选择合适策略
+function groupByStyle(items) {
+  const groups = {};
+  for (const item of items) {
+    const style = item.style || 'general';
+    if (!groups[style]) groups[style] = [];
+    groups[style].push(item);
+  }
+  return groups;
+}
+
+// ---- Coarse retrieval ----
 async function coarseRetrieval(query, industry, userId) {
   try {
     const results = await sbRpc('search_knowledge', {
@@ -662,100 +704,82 @@ async function coarseRetrieval(query, industry, userId) {
       filter_user_id: userId || null,
     });
     if (results && results.length > 0) {
-      console.log(`Coarse: ${results.length} candidates from DB (trigram+fts)`);
+      console.log(`Coarse: ${results.length} candidates from DB`);
       return results;
     }
   } catch (e) {
-    console.log('Coarse RPC failed, using fallback:', e.message.slice(0, 80));
+    console.log('Coarse RPC failed:', e.message.slice(0, 80));
   }
-
-  // Fallback: 简单查询
   const items = await sbSafeQuery('knowledge_items', {
-    select: 'id,content,source,source_url,industry,knowledge_type,tags,weight,response_example,scenario,customer_voice,psychology_tags',
+    select: 'id,content,source,source_url,industry,knowledge_type,style,tags,weight,response_example,scenario,customer_voice,psychology_tags',
     eq: { status: 'ACTIVE' },
     order: 'weight.desc', limit: 30,
   });
   return (items || []).filter(k => !industry || k.industry === industry || k.industry === '通用');
 }
 
-/**
- * BM25 精排层：本地 BM25 重排序 → Top-10
- */
-function bm25Rerank(query, candidates, topK = 10) {
-  if (candidates.length <= topK) return candidates;
-  try {
-    const engine = initBM25(candidates);
-    const results = engine.search(query, topK);
-    const ranked = results.map(([id, score]) => {
-      const item = candidates.find(c => c.id === id);
-      return item ? { ...item, bm25_score: score } : null;
-    }).filter(Boolean);
-
-    // BM25 结果不够时，补上未匹配的
-    if (ranked.length < topK) {
-      const rankedIds = new Set(ranked.map(r => r.id));
-      for (const c of candidates) {
-        if (!rankedIds.has(c.id)) { ranked.push(c); if (ranked.length >= topK) break; }
-      }
-    }
-    console.log(`BM25 rerank: ${ranked.length} items`);
-    return ranked;
-  } catch (e) {
-    console.log('BM25 rerank error:', e.message.slice(0, 80));
-    return candidates.slice(0, topK);
-  }
-}
-
-/**
- * LLM 精排层：对 BM25 结果做语义重排序 → Top-K
- */
-async function llmRerank(query, candidates, industry, topK = 5) {
-  if (candidates.length <= topK) return candidates;
-
-  const candidateList = candidates.map((k, i) =>
-    `[${i}] [${k.knowledge_type || '通用'}][${k.industry || '通用'}] ${(k.content || '').slice(0, 120)}`
-  ).join('\n');
-
-  const prompt = `你是销售知识检索排序器。用户场景："${query}"${industry ? `，行业：${industry}` : ''}
-
-候选知识（编号从0开始）：
-${candidateList}
-
-选出和用户场景最相关的 ${topK} 条，返回 JSON 数组（如 [3,0,7,1,5]），不要其他内容。`;
-
-  try {
-    const result = await callAI([{ role: 'user', content: prompt }], { max_tokens: 80, temperature: 0.1 });
-    if (result) {
-      const indices = JSON.parse(result.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
-      if (Array.isArray(indices)) {
-        const reranked = indices.filter(i => i >= 0 && i < candidates.length).slice(0, topK).map(i => candidates[i]);
-        if (reranked.length > 0) {
-          console.log(`LLM rerank: selected ${reranked.length}/${candidates.length}`);
-          return reranked;
-        }
-      }
-    }
-  } catch (e) {
-    console.log('LLM rerank failed:', e.message.slice(0, 80));
-  }
-  return candidates.slice(0, topK);
-}
-
-/**
- * 完整检索：粗筛 → BM25 → LLM rerank
- */
+// ---- Complete retrieval pipeline ----
 async function retrieveKnowledge(query, industry, userId) {
-  // 1. 粗筛：pg_trgm + tsvector + 行业过滤
+  // 1. 粗筛
   const coarse = await coarseRetrieval(query, industry, userId);
   if (coarse.length === 0) return [];
 
-  // 2. BM25 精排
-  const bm25Ranked = bm25Rerank(query, coarse, 10);
+  // 2. jieba BM25 精排
+  const bm25Ranked = jiebaBM25Rerank(query, coarse, 10);
 
-  // 3. LLM 精排
-  const final = await llmRerank(query, bm25Ranked, industry, 5);
+  // 3. 按 style 分组，每组取 top，保证多视角
+  const groups = groupByStyle(bm25Ranked);
+  const final = [];
+  const styles = Object.keys(groups);
+  // 每个 style 最多取 2 条，总共最多 5 条
+  const perStyle = Math.max(1, Math.floor(5 / styles.length));
+  for (const style of styles) {
+    final.push(...groups[style].slice(0, perStyle));
+  }
+  // 补足到 5 条
+  if (final.length < 5) {
+    const finalIds = new Set(final.map(f => f.id));
+    for (const item of bm25Ranked) {
+      if (!finalIds.has(item.id)) { final.push(item); if (final.length >= 5) break; }
+    }
+  }
 
-  return final;
+  console.log(`Retrieval: ${coarse.length} → ${bm25Ranked.length} → ${final.length} (${styles.length} styles: ${styles.join(',')})`);
+
+  // 4. 记录知识被引用
+  if (userId && final.length > 0) {
+    logKnowledgeUsage(final.map(f => f.id), userId, 'script_ref', query.slice(0, 100));
+  }
+
+  return final.slice(0, 5);
+}
+
+// ---- Style detection for knowledge items ----
+function detectKnowledgeStyle(content, knowledgeType) {
+  const text = (content || '').toLowerCase();
+  const type = (knowledgeType || '').toLowerCase();
+
+  // 共情型: 包含共情、理解、感受等词
+  if (text.includes('共情') || text.includes('理解您') || text.includes('我理解') ||
+      text.includes('感受') || text.includes('没关系') || text.includes('确实')) {
+    return 'empathetic';
+  }
+  // 直爽型: 包含数据、直接、算账等词
+  if (text.includes('直接') || text.includes('算账') || text.includes('数据') ||
+      text.includes('roi') || text.includes('效率') || text.includes('成本')) {
+    return 'direct';
+  }
+  // 专业型: 包含专业、分析、方案等词
+  if (text.includes('专业') || text.includes('方案') || text.includes('分析') ||
+      text.includes('建议') || text.includes('规划') || text.includes('策略')) {
+    return 'professional';
+  }
+  // 激进型: 包含促成、逼单、紧迫等词
+  if (text.includes('逼单') || text.includes('促成') || text.includes('紧迫') ||
+      text.includes('限时') || text.includes('最后') || text.includes('机会')) {
+    return 'aggressive';
+  }
+  return null; // 通用型
 }
 
 // ==================== AI FALLBACK ====================
@@ -1784,12 +1808,14 @@ ${knowledgeContext}`,
       // Auto-save to knowledge base if confidence score is high
       if (scriptData.confidenceScore >= 0.8 && scriptData.speechStyles[0]?.content) {
         try {
+          const autoContent = `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`;
           await sbInsert('knowledge_items', {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI自动生成',
-            content: `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`,
+            content: autoContent,
             tags: [scenarioName, styleName, 'AI生成'],
             industry: industry || null,
+            style: detectKnowledgeStyle(autoContent, 'objection_handling'),
             weight: scriptData.confidenceScore,
             status: 'ACTIVE',
             created_at: new Date().toISOString()
@@ -2258,12 +2284,14 @@ routes['POST /api/practices/save'] = async (req, res) => {
             .slice(0, 5)
             .map(t => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`)
             .join('\n');
+          const practiceContent = `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`;
           await sbInsert('knowledge_items', {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI陪练自动生成',
-            content: `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`,
+            content: practiceContent,
             tags: [scenario || '通用', '高分练习', 'AI生成'],
             industry: industry || null,
+            style: detectKnowledgeStyle(practiceContent, ''),
             weight: score / 100,
             status: 'ACTIVE',
             created_at: new Date().toISOString()
@@ -2382,11 +2410,12 @@ routes['GET /api/knowledge'] = async (req, res) => {
 routes['POST /api/knowledge'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const { content, source, industry, weight, tags } = await parseBody(req);
+    const { content, source, industry, weight, tags, knowledge_type } = await parseBody(req);
     if (!content) return sendJson(res, 400, { success: false, error: 'content required' });
+    const style = detectKnowledgeStyle(content, knowledge_type);
     const item = await sbInsert('knowledge_items', {
       id: crypto.randomUUID(), user_id: jwt.userId, source: source || 'manual',
-      content, tags: tags || [], industry: industry || null,
+      content, tags: tags || [], industry: industry || null, style,
       weight: weight || 1.0, status: 'ACTIVE', created_at: new Date().toISOString()
     });
     sendJson(res, 201, { data: item });

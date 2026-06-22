@@ -35,10 +35,10 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@node-rs/jieba": "^2.0.1",
     "@sentry/node": "^10.57.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
-    "rebrowser-playwright": "^1.52.0",
-    "wink-bm25-text-search": "^3.1.2"
+    "rebrowser-playwright": "^1.52.0"
   }
 }
