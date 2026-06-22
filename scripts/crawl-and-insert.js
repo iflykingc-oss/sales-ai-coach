@@ -8,16 +8,6 @@
 const { chromium } = require('playwright');
 const crypto = require('crypto');
 
-// Style detection
-function detectStyle(content, knowledgeType) {
-  const text = (content || '').toLowerCase();
-  if (text.includes('共情') || text.includes('理解您') || text.includes('我理解') || text.includes('感受') || text.includes('没关系')) return 'empathetic';
-  if (text.includes('直接') || text.includes('算账') || text.includes('数据') || text.includes('roi') || text.includes('效率')) return 'direct';
-  if (text.includes('专业') || text.includes('方案') || text.includes('分析') || text.includes('建议') || text.includes('规划')) return 'professional';
-  if (text.includes('逼单') || text.includes('促成') || text.includes('紧迫') || text.includes('限时') || text.includes('最后')) return 'aggressive';
-  return null;
-}
-
 // Supabase 配置
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://doqcopkqbfpstuavfjsa.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -448,7 +438,6 @@ async function main() {
         content: (item.content || '').slice(0, 500),
         tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
         industry: item.industry || '通用',
-        style: detectStyle(item.content, item.knowledge_type),
         weight: 0.7,
         status: 'ACTIVE',
         knowledge_type: item.knowledge_type || 'general',

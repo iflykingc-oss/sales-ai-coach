@@ -349,41 +349,33 @@ async function trackUsage(userId, action) {
 }
 
 // ==================== AI QUALITY GATE ====================
-function validateScriptOutput(parsed, lang) {
-  // Check required fields exist
+function validateScriptOutput(parsed, lang, scenario) {
   if (!parsed || typeof parsed !== 'object') return { valid: false, reason: 'Invalid response format' };
-  // Support both old format (speechStyles) and new format (tacticalExecutionPaths)
+
   const hasSpeechStyles = parsed.speechStyles && Array.isArray(parsed.speechStyles) && parsed.speechStyles.length > 0;
   const hasTacticalPaths = parsed.tacticalExecutionPaths && Array.isArray(parsed.tacticalExecutionPaths) && parsed.tacticalExecutionPaths.length > 0;
+  if (!hasSpeechStyles && !hasTacticalPaths) return { valid: false, reason: 'Missing speech styles or tactical execution paths' };
 
-  if (!hasSpeechStyles && !hasTacticalPaths) {
-    return { valid: false, reason: 'Missing speech styles or tactical execution paths' };
-  }
-
-  // Get main content from either format
   let content = '';
-  if (hasTacticalPaths) {
-    content = parsed.tacticalExecutionPaths[0]?.verbalScript || '';
-  } else if (hasSpeechStyles) {
-    content = parsed.speechStyles[0]?.content || '';
-  }
+  if (hasTacticalPaths) content = parsed.tacticalExecutionPaths[0]?.verbalScript || '';
+  else if (hasSpeechStyles) content = parsed.speechStyles[0]?.content || '';
 
-  if (content.length < 50) {
-    return { valid: false, reason: 'Script too short' };
-  }
+  // 长度检查
+  if (content.length < 100) return { valid: false, reason: 'Script too short (min 100 chars)' };
 
-  // Check for key sections (language-aware)
-  const hasOpening = content.includes('开场') || content.includes('Opening') || content.includes('เปิด') || content.includes('Mở đầu') || content.includes('Pembuka');
-  const hasDiscovery = content.includes('需求') || content.includes('Need') || content.includes('ความต้องการ') || content.includes('nhu cầu') || content.includes('kebutuhan');
-  const hasValue = content.includes('价值') || content.includes('Value') || content.includes('คุณค่า') || content.includes('giá trị') || content.includes('nilai');
+  // 不能有占位符
+  if (/XX|xx|某某|TODO|TBD/.test(content)) return { valid: false, reason: 'Contains placeholder text (XX/某某)' };
 
-  if (!hasOpening && !hasDiscovery && !hasValue) {
-    return { valid: false, reason: 'Missing key sales sections' };
-  }
+  // 必须有具体数字
+  if (!/\d+/.test(content)) return { valid: false, reason: 'Missing specific numbers' };
 
-  // Check confidence score
-  if (parsed.confidenceScore && parsed.confidenceScore < 0.5) {
-    return { valid: false, reason: 'Low confidence score' };
+  // 关键结构检查
+  const hasOpening = content.includes('开场') || content.includes('您好') || content.includes('感谢');
+  const hasValue = content.includes('价值') || content.includes('优势') || content.includes('好处');
+  if (!hasOpening && !hasValue) return { valid: false, reason: 'Missing key sales sections' };
+
+  // 置信度检查
+  if (parsed.confidenceScore && parsed.confidenceScore < 0.5) return { valid: false, reason: 'Low confidence score' };
   }
 
   return { valid: true };
@@ -617,29 +609,58 @@ async function callAIStream(messages, options = {}) {
   return resp; // caller reads the stream
 }
 
-// ==================== KNOWLEDGE RETRIEVAL (coarse → jieba BM25 → style grouping) ====================
+// ==================== KNOWLEDGE RETRIEVAL (图谱 + BM25 + Style) ====================
 const { cut } = require('@node-rs/jieba');
+
+// ---- 异议类型标准化 ----
+const OBJECTION_KEYWORDS = {
+  '价格异议': ['太贵', '价格贵', '价格高', '便宜', '优惠', '折扣', '打折', '降价'],
+  '竞品对比': ['对比', '比较', '竞品', '其他家', '别家', '对手'],
+  '决策权异议': ['领导', '商量', '家人', '老公', '老婆', '老板', '回去想想'],
+  '犹豫拖延': ['犹豫', '再看看', '考虑', '想想', '不急', '以后再说'],
+  '需求异议': ['不需要', '没兴趣', '用不上', '已经有了'],
+  '信任异议': ['不信任', '骗人', '假的', '不靠谱', '之前被骗'],
+  '风险顾虑': ['怕亏', '怕跌', '风险', '不安全', '担心'],
+  '效果顾虑': ['效果', '没用', '不行', '不好'],
+};
+
+function detectObjection(input) {
+  const text = (input || '').toLowerCase();
+  for (const [type, keywords] of Object.entries(OBJECTION_KEYWORDS)) {
+    if (keywords.some(k => text.includes(k))) return type;
+  }
+  return null;
+}
+
+// ---- 角色推断（从上下文推断，不从人口统计学假设）----
+function inferPersona(input) {
+  if (!input) return null;
+  const text = input.toLowerCase();
+  if (text.includes('企业主') || text.includes('老板') || text.includes('创始人')) return '企业主';
+  if (text.includes('高管') || text.includes('总监') || text.includes('vp')) return '高管';
+  if (text.includes('有小孩') || text.includes('有孩子') || text.includes('宝妈')) return '有孩家长';
+  if (text.includes('预算有限') || text.includes('预算少') || text.includes('钱不多')) return '预算敏感型';
+  if (text.includes('首次') || text.includes('第一次') || text.includes('新手')) return '首次购买者';
+  if (text.includes('老客户') || text.includes('续费') || text.includes('复购')) return '老客户';
+  return null;
+}
 
 // ---- Chinese BM25 with jieba ----
 function tokenizeChinese(text) {
   if (!text) return [];
-  // jieba 分词 + 过滤停用词和单字
   const stopwords = new Set(['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这']);
-  return cut(text, true)
-    .filter(w => w.length > 1 && !stopwords.has(w))
-    .map(w => w.toLowerCase());
+  return cut(text, true).filter(w => w.length > 1 && !stopwords.has(w)).map(w => w.toLowerCase());
 }
 
 function bm25Score(queryTokens, docTokens, avgDl, k1 = 1.5, b = 0.75) {
   const dl = docTokens.length;
   const tf = {};
   for (const t of docTokens) tf[t] = (tf[t] || 0) + 1;
-
   let score = 0;
   for (const qt of queryTokens) {
     if (!tf[qt]) continue;
     const termFreq = tf[qt];
-    const idf = Math.log((1000 - dl + 0.5) / (dl + 0.5) + 1); // simplified IDF
+    const idf = Math.log((1000 - dl + 0.5) / (dl + 0.5) + 1);
     const tfNorm = (termFreq * (k1 + 1)) / (termFreq + k1 * (1 - b + b * dl / avgDl));
     score += idf * tfNorm;
   }
@@ -652,38 +673,15 @@ function jiebaBM25Rerank(query, candidates, topK = 10) {
     const queryTokens = tokenizeChinese(query);
     const docTokensList = candidates.map(c => tokenizeChinese(`${c.content || ''} ${c.industry || ''} ${c.knowledge_type || ''}`));
     const avgDl = docTokensList.reduce((s, t) => s + t.length, 0) / docTokensList.length || 1;
-
-    const scored = candidates.map((c, i) => ({
-      ...c,
-      bm25_score: bm25Score(queryTokens, docTokensList[i], avgDl)
-    }));
-
+    const scored = candidates.map((c, i) => ({ ...c, bm25_score: bm25Score(queryTokens, docTokensList[i], avgDl) }));
     scored.sort((a, b) => b.bm25_score - a.bm25_score);
-    const result = scored.slice(0, topK);
-    console.log(`Jieba BM25: ${result.length} items (top score: ${result[0]?.bm25_score?.toFixed(3)})`);
-    return result;
+    return scored.slice(0, topK);
   } catch (e) {
-    console.log('Jieba BM25 error:', e.message.slice(0, 80));
     return candidates.slice(0, topK);
   }
 }
 
-// ---- Knowledge usage logging ----
-async function logKnowledgeUsage(knowledgeIds, userId, action, context) {
-  for (const kid of knowledgeIds) {
-    try {
-      await sbRpc('log_knowledge_usage', {
-        p_knowledge_id: kid,
-        p_user_id: userId || null,
-        p_action: action,
-        p_context: context || null,
-      });
-    } catch (e) { /* silent */ }
-  }
-}
-
 // ---- Style-based grouping ----
-// 矛盾知识不删除，按 style 分组返回，让 LLM 选择合适策略
 function groupByStyle(items) {
   const groups = {};
   for (const item of items) {
@@ -694,49 +692,99 @@ function groupByStyle(items) {
   return groups;
 }
 
-// ---- Coarse retrieval ----
-async function coarseRetrieval(query, industry, userId) {
+// ---- Knowledge usage logging ----
+async function logKnowledgeUsage(knowledgeIds, userId, action, context) {
+  for (const kid of knowledgeIds) {
+    try {
+      await sbRpc('log_knowledge_usage', { p_knowledge_id: kid, p_user_id: userId || null, p_action: action, p_context: context || null });
+    } catch (e) { /* silent */ }
+  }
+}
+
+// ---- 图谱检索 ----
+async function graphSearch(industry, objection, persona) {
   try {
-    const results = await sbRpc('search_knowledge', {
-      search_text: query.slice(0, 500),
-      match_count: 30,
-      filter_industry: industry || null,
-      filter_user_id: userId || null,
+    const results = await sbRpc('kg_search', {
+      p_industry: industry,
+      p_objection: objection,
+      p_persona: persona,
+      match_count: 5,
     });
     if (results && results.length > 0) {
-      console.log(`Coarse: ${results.length} candidates from DB`);
+      console.log(`Graph: ${results.length} strategies (top: ${results[0].strategy_name}, score: ${results[0].effectiveness?.toFixed(3)})`);
       return results;
     }
   } catch (e) {
-    console.log('Coarse RPC failed:', e.message.slice(0, 80));
+    console.log('Graph search failed:', e.message.slice(0, 80));
   }
-  const items = await sbSafeQuery('knowledge_items', {
-    select: 'id,content,source,source_url,industry,knowledge_type,style,tags,weight,response_example,scenario,customer_voice,psychology_tags',
-    eq: { status: 'ACTIVE' },
-    order: 'weight.desc', limit: 30,
-  });
-  return (items || []).filter(k => !industry || k.industry === industry || k.industry === '通用');
+  return [];
 }
 
-// ---- Complete retrieval pipeline ----
+// ---- 完整检索 pipeline ----
 async function retrieveKnowledge(query, industry, userId) {
-  // 1. 粗筛
-  const coarse = await coarseRetrieval(query, industry, userId);
-  if (coarse.length === 0) return [];
+  // 1. 检测异议类型和角色
+  const objection = detectObjection(query);
+  const persona = inferPersona(query);
+  console.log(`Retrieval: industry=${industry}, objection=${objection}, persona=${persona}`);
 
-  // 2. jieba BM25 精排
-  const bm25Ranked = jiebaBM25Rerank(query, coarse, 10);
+  // 2. 图谱检索（优先）
+  let graphResults = [];
+  if (industry && objection) {
+    graphResults = await graphSearch(industry, objection, persona);
+  }
 
-  // 3. 按 style 分组，每组取 top，保证多视角
+  // 3. 知识库检索（补充）
+  let kbResults = [];
+  try {
+    kbResults = await sbRpc('search_knowledge', {
+      search_text: query.slice(0, 500),
+      match_count: 20,
+      filter_industry: industry || null,
+      filter_user_id: userId || null,
+    });
+  } catch (e) {
+    console.log('KB search failed:', e.message.slice(0, 80));
+  }
+
+  // 4. 合并：图谱结果优先，知识库补充
+  const graphIds = new Set(graphResults.map(r => r.knowledge_id).filter(Boolean));
+  const merged = [];
+
+  // 图谱策略 → 知识条目
+  for (const gr of graphResults) {
+    if (gr.knowledge_content) {
+      merged.push({
+        id: gr.knowledge_id || gr.strategy_id,
+        content: gr.knowledge_content,
+        source: 'knowledge_graph',
+        industry: industry,
+        knowledge_type: 'objection_handling',
+        weight: gr.effectiveness * 2,
+        graph_score: gr.effectiveness,
+      });
+    }
+  }
+
+  // 知识库补充（去重）
+  for (const kr of (kbResults || [])) {
+    if (!graphIds.has(kr.id)) {
+      merged.push({ ...kr, graph_score: 0 });
+    }
+  }
+
+  if (merged.length === 0) return [];
+
+  // 5. BM25 精排
+  const bm25Ranked = jiebaBM25Rerank(query, merged, 10);
+
+  // 6. 按 style 分组，保证多视角
   const groups = groupByStyle(bm25Ranked);
   const final = [];
   const styles = Object.keys(groups);
-  // 每个 style 最多取 2 条，总共最多 5 条
   const perStyle = Math.max(1, Math.floor(5 / styles.length));
   for (const style of styles) {
     final.push(...groups[style].slice(0, perStyle));
   }
-  // 补足到 5 条
   if (final.length < 5) {
     const finalIds = new Set(final.map(f => f.id));
     for (const item of bm25Ranked) {
@@ -744,9 +792,9 @@ async function retrieveKnowledge(query, industry, userId) {
     }
   }
 
-  console.log(`Retrieval: ${coarse.length} → ${bm25Ranked.length} → ${final.length} (${styles.length} styles: ${styles.join(',')})`);
+  console.log(`Retrieval: graph=${graphResults.length} kb=${kbResults?.length || 0} → final=${final.length} (${styles.length} styles)`);
 
-  // 4. 记录知识被引用
+  // 7. 记录使用
   if (userId && final.length > 0) {
     logKnowledgeUsage(final.map(f => f.id), userId, 'script_ref', query.slice(0, 100));
   }
@@ -1648,59 +1696,40 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
 
 ${industryContextPrompt}
 
-【优秀话术示范】（你的输出必须达到这个质量水平）
+【强制框架】（每套话术必须包含以下结构，缺一不可）
 
-场景：客户说"太贵了"
-共情版话术：
-"张姐，您说贵，我特别理解。我跟您说实话，我第一次听到这个价格的时候，也觉得不便宜。但是后来我自己算了一笔账——您现在每个月在XX上花多少钱？两千？三千？一年下来就是三四万。而我们这个方案，一年只要一万二，每天不到33块钱。您喝杯奶茶都要20块，这33块钱能解决您未来十年的XX问题。您觉得这笔账划不划算？"
+1. 共情句（1-2句）：先认同客户感受，不能直接反驳
+2. 数据支撑（2-3个具体数字）：用真实数字说服，不能用"很多""一些""XX"
+3. 价值呈现（2-3个卖点）：把产品优势转化为客户利益
+4. 促成动作（1句）：给客户一个立即行动的理由
+5. 预留退路（1句）：降低客户压力，不逼太紧
 
-直爽版话术：
-"王总，我直接跟您说——贵不贵，不是看价格，是看回报。您现在用的方案，每个月隐性成本是多少？我帮您算过：人工成本XX，效率损失XX，加起来每月XXXX。我们的方案每月只要XXXX，但能帮您省掉那XXXX的隐性成本。这不是花钱，是省钱。您要不信，我给您看三个和您同行业的客户，他们用了之后的ROI数据。"
+【话术质量红线】（违反任何一条直接不合格）
 
-专业版话术：
-"李经理，从投资回报的角度来看，这个价格其实是非常合理的。我给您拆解一下：第一，我们的方案能帮您减少XX%的人工成本，按照您团队5个人、平均薪资8000来算，每月节省4000；第二，效率提升带来的产能增加，按照行业平均数据是30%；第三，风险降低带来的隐性收益。三项加起来，年化ROI超过300%。您要我做个详细的ROI分析报告吗？"
+- ❌ 不能用"XX"占位符：必须用具体数字
+- ❌ 不能用书面语：必须是口语化对话
+- ❌ 不能泛泛而谈：必须有具体场景和案例
+- ❌ 三版不能雷同：必须从不同角度切入
+- ❌ 不能超过500字：简洁有力，不啰嗦
 
-【话术质量标准】（你的输出必须满足以下每一条）
-
-1. 必须有具体数字：不能写"很多客户"，要写"37个客户"；不能写"省很多钱"，要写"每月省4000"
-2. 必须有真实场景：不能写"假设您遇到一个问题"，要写"上个月一个客户，他也是做XX行业的，遇到了和您一模一样的情况"
-3. 必须有对话节奏：不是一段话从头说到尾，而是有来有回——你说了什么，客户可能怎么回应，你接着怎么说
-4. 必须有口语感：用"说白了""其实咱们看""不瞒您说""我跟您交个底"这种真实销售会说的话，不能用书面语
-5. 必须有心理学应用：不是提"损失厌恶"这个名字，而是用具体的话术体现——比如把年费拆成日费，让客户觉得"每天才XX块"
-6. 三版必须完全不同：不能只是换几个词，必须是从完全不同的角度切入
-
-【输出格式】
-返回JSON，verbalScript字段是完整的话术文本（300字以上），可以直接复制给销售使用。
+【输出格式】返回JSON：
 
 {
-  "detectedBusinessMode": "B2C",
-  "salesLifecycleStage": "异议博弈",
-  "buyerPersonaAnalysis": {
-    "targetStakeholder": "客户是谁",
-    "hiddenDriver": "客户真正担心什么（不是表面说的）"
-  },
   "tacticalExecutionPaths": [
     {
       "pathType": "共情版",
-      "strategicLever": "用什么打动客户（具体到哪句话用什么心理学）",
-      "verbalScript": "完整话术，300字以上，可直接使用",
-      "coachingDirectives": {
-        "pacingAndTone": "具体到：这句话用什么语气，哪里停顿，哪里加重",
-        "microBehaviors": "具体到：说什么的时候做什么动作"
-      }
+      "verbalScript": "完整话术（200-500字，可直接复制使用）"
     },
-    { "pathType": "直爽版", "strategicLever": "...", "verbalScript": "...", "coachingDirectives": {...} },
-    { "pathType": "专业版", "strategicLever": "...", "verbalScript": "...", "coachingDirectives": {...} }
+    {
+      "pathType": "直爽版",
+      "verbalScript": "完整话术（200-500字，可直接复制使用）"
+    },
+    {
+      "pathType": "专业版",
+      "verbalScript": "完整话术（200-500字，可直接复制使用）"
+    }
   ],
-  "multiStageSimulation": {
-    "expectedPushback": "客户会怎么反驳（原话）",
-    "counterStrategy": "怎么应对（完整话术）",
-    "nextProgressiveMove": "下一步推什么"
-  },
-  "reasoning": ["为什么这个话术有效"],
-  "pitfalls": [{"action": "不要做什么", "reason": "会导致什么后果"}],
-  "knowledgeSource": "引用了什么",
-  "confidenceScore": 0.9
+  "confidenceScore": 0.85
 }
 
 ${knowledgeContext || ''}
@@ -1841,13 +1870,39 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
     const jwt = requireAuth(req);
     const { parts } = safeId(req);
     const scriptId = parts[3];
-    const { type, reason } = await parseBody(req);
+    const { type, reason, industry, scenario } = await parseBody(req);
 
     // Save feedback
     const feedback = await sbSafeInsert('script_feedbacks', {
       id: crypto.randomUUID(), user_id: jwt.userId, script_id: scriptId,
       type: type || 'up', reason: reason || null, created_at: new Date().toISOString()
     });
+
+    // 更新知识图谱权重（反馈循环）
+    try {
+      const delta = type === 'up' ? 0.05 : type === 'down' ? -0.10 : 0;
+      if (delta !== 0 && industry) {
+        // 找到相关的图谱边并更新权重
+        const objection = detectObjection(scenario || reason || '');
+        if (objection) {
+          const strategies = await sbRpc('kg_search', {
+            p_industry: industry,
+            p_objection: objection,
+            match_count: 3,
+          });
+          for (const s of (strategies || [])) {
+            // 记录反馈到图谱
+            await sbRpc('kg_log_feedback', {
+              p_edge_id: crypto.randomUUID(), // 简化：实际应关联到具体边
+              p_knowledge_id: s.knowledge_id || null,
+              p_user_id: jwt.userId,
+              p_feedback_type: type,
+              p_context: JSON.stringify({ industry, objection, scenario }),
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch (e) { console.log('Graph feedback update error:', e.message.slice(0, 60)); }
 
     // Get the script to potentially archive to knowledge base
     try {
