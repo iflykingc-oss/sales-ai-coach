@@ -416,19 +416,25 @@ async function main() {
   let skipped = 0;
   let failed = 0;
 
+  // 4b. 过滤出需要插入的新项
+  const toInsert = [];
   for (const item of items) {
-    // 去重：URL 相同 or 内容前 100 字相同
     const url = (item.source_url || '').slice(0, 500);
     const contentKey = (item.content || '').slice(0, 100);
     if (url && existingUrls.has(url)) { skipped++; continue; }
     if (contentKey && existingContents.has(contentKey)) { skipped++; continue; }
+    toInsert.push(item);
+  }
+  console.log(`  To insert: ${toInsert.length} (skipped ${skipped} duplicates)`);
 
+  // 4c. 插入
+  for (const item of toInsert) {
     try {
       await sbInsert('knowledge_items', {
         id: crypto.randomUUID(),
         user_id: null,
         source: (item.source || '').slice(0, 200),
-        source_url: url,
+        source_url: (item.source_url || '').slice(0, 500),
         content: (item.content || '').slice(0, 500),
         tags: [item.industry, item.knowledge_type, item.language, ...item.matchedKeywords.slice(0, 3)].filter(Boolean),
         industry: item.industry || '通用',
@@ -439,7 +445,7 @@ async function main() {
         created_at: new Date().toISOString(),
       });
       inserted++;
-      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${items.length - skipped}`);
+      if (inserted % 50 === 0) console.log(`  Inserted: ${inserted}/${toInsert.length}`);
     } catch (e) {
       failed++;
       if (failed <= 3) console.error(`  Insert failed: ${e.message.slice(0, 80)}`);

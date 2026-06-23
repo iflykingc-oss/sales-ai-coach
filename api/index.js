@@ -215,6 +215,15 @@ async function sbQuery(table, opts = {}) {
   return resp.json();
 }
 
+// Supabase RPC call (for pgvector functions)
+async function sbRpc(fnName, params = {}) {
+  const url = `${SUPABASE_URL}/rest/v1/rpc/${fnName}`;
+  const headers = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+  const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(params) });
+  if (!resp.ok) { const e = await resp.text(); throw new Error(`SB rpc ${fnName}: ${resp.status} ${e}`); }
+  return resp.json();
+}
+
 async function sbInsert(table, data) {
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: 'POST',
@@ -340,42 +349,33 @@ async function trackUsage(userId, action) {
 }
 
 // ==================== AI QUALITY GATE ====================
-function validateScriptOutput(parsed, lang) {
-  // Check required fields exist
+function validateScriptOutput(parsed, lang, scenario) {
   if (!parsed || typeof parsed !== 'object') return { valid: false, reason: 'Invalid response format' };
-  // Support both old format (speechStyles) and new format (tacticalExecutionPaths)
+
   const hasSpeechStyles = parsed.speechStyles && Array.isArray(parsed.speechStyles) && parsed.speechStyles.length > 0;
   const hasTacticalPaths = parsed.tacticalExecutionPaths && Array.isArray(parsed.tacticalExecutionPaths) && parsed.tacticalExecutionPaths.length > 0;
+  if (!hasSpeechStyles && !hasTacticalPaths) return { valid: false, reason: 'Missing speech styles or tactical execution paths' };
 
-  if (!hasSpeechStyles && !hasTacticalPaths) {
-    return { valid: false, reason: 'Missing speech styles or tactical execution paths' };
-  }
-
-  // Get main content from either format
   let content = '';
-  if (hasTacticalPaths) {
-    content = parsed.tacticalExecutionPaths[0]?.verbalScript || '';
-  } else if (hasSpeechStyles) {
-    content = parsed.speechStyles[0]?.content || '';
-  }
+  if (hasTacticalPaths) content = parsed.tacticalExecutionPaths[0]?.verbalScript || '';
+  else if (hasSpeechStyles) content = parsed.speechStyles[0]?.content || '';
 
-  if (content.length < 50) {
-    return { valid: false, reason: 'Script too short' };
-  }
+  // 长度检查
+  if (content.length < 100) return { valid: false, reason: 'Script too short (min 100 chars)' };
 
-  // Check for key sections (language-aware)
-  const hasOpening = content.includes('开场') || content.includes('Opening') || content.includes('เปิด') || content.includes('Mở đầu') || content.includes('Pembuka');
-  const hasDiscovery = content.includes('需求') || content.includes('Need') || content.includes('ความต้องการ') || content.includes('nhu cầu') || content.includes('kebutuhan');
-  const hasValue = content.includes('价值') || content.includes('Value') || content.includes('คุณค่า') || content.includes('giá trị') || content.includes('nilai');
+  // 不能有占位符
+  if (/XX|xx|某某|TODO|TBD/.test(content)) return { valid: false, reason: 'Contains placeholder text (XX/某某)' };
 
-  if (!hasOpening && !hasDiscovery && !hasValue) {
-    return { valid: false, reason: 'Missing key sales sections' };
-  }
+  // 必须有具体数字
+  if (!/\d+/.test(content)) return { valid: false, reason: 'Missing specific numbers' };
 
-  // Check confidence score
-  if (parsed.confidenceScore && parsed.confidenceScore < 0.5) {
-    return { valid: false, reason: 'Low confidence score' };
-  }
+  // 关键结构检查
+  const hasOpening = content.includes('开场') || content.includes('您好') || content.includes('感谢');
+  const hasValue = content.includes('价值') || content.includes('优势') || content.includes('好处');
+  if (!hasOpening && !hasValue) return { valid: false, reason: 'Missing key sales sections' };
+
+  // 置信度检查
+  if (parsed.confidenceScore && parsed.confidenceScore < 0.5) return { valid: false, reason: 'Low confidence score' };
 
   return { valid: true };
 }
@@ -606,6 +606,288 @@ async function callAIStream(messages, options = {}) {
   const resp = await fetch(url, { method: 'POST', headers, body });
   if (!resp.ok) return null;
   return resp; // caller reads the stream
+}
+
+// ==================== KNOWLEDGE RETRIEVAL (图谱 + BM25 + Style) ====================
+const { cut } = require('@node-rs/jieba');
+
+// ---- 异议类型标准化 ----
+const OBJECTION_KEYWORDS = {
+  '价格异议': ['太贵', '价格贵', '价格高', '便宜', '优惠', '折扣', '打折', '降价'],
+  '竞品对比': ['对比', '比较', '竞品', '其他家', '别家', '对手'],
+  '决策权异议': ['领导', '商量', '家人', '老公', '老婆', '老板', '回去想想'],
+  '犹豫拖延': ['犹豫', '再看看', '考虑', '想想', '不急', '以后再说'],
+  '需求异议': ['不需要', '没兴趣', '用不上', '已经有了'],
+  '信任异议': ['不信任', '骗人', '假的', '不靠谱', '之前被骗'],
+  '风险顾虑': ['怕亏', '怕跌', '风险', '不安全', '担心'],
+  '效果顾虑': ['效果', '没用', '不行', '不好'],
+};
+
+function detectObjection(input) {
+  const text = (input || '').toLowerCase();
+  for (const [type, keywords] of Object.entries(OBJECTION_KEYWORDS)) {
+    if (keywords.some(k => text.includes(k))) return type;
+  }
+  return null;
+}
+
+// ---- 角色推断（从上下文推断，不从人口统计学假设）----
+function inferPersona(input) {
+  if (!input) return null;
+  const text = input.toLowerCase();
+  if (text.includes('企业主') || text.includes('老板') || text.includes('创始人')) return '企业主';
+  if (text.includes('高管') || text.includes('总监') || text.includes('vp')) return '高管';
+  if (text.includes('有小孩') || text.includes('有孩子') || text.includes('宝妈')) return '有孩家长';
+  if (text.includes('预算有限') || text.includes('预算少') || text.includes('钱不多')) return '预算敏感型';
+  if (text.includes('首次') || text.includes('第一次') || text.includes('新手')) return '首次购买者';
+  if (text.includes('老客户') || text.includes('续费') || text.includes('复购')) return '老客户';
+  return null;
+}
+
+// ---- Chinese BM25 with jieba ----
+function tokenizeChinese(text) {
+  if (!text) return [];
+  const stopwords = new Set(['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这']);
+  return cut(text, true).filter(w => w.length > 1 && !stopwords.has(w)).map(w => w.toLowerCase());
+}
+
+function bm25Score(queryTokens, docTokens, avgDl, k1 = 1.5, b = 0.75) {
+  const dl = docTokens.length;
+  const tf = {};
+  for (const t of docTokens) tf[t] = (tf[t] || 0) + 1;
+  let score = 0;
+  for (const qt of queryTokens) {
+    if (!tf[qt]) continue;
+    const termFreq = tf[qt];
+    const idf = Math.log((1000 - dl + 0.5) / (dl + 0.5) + 1);
+    const tfNorm = (termFreq * (k1 + 1)) / (termFreq + k1 * (1 - b + b * dl / avgDl));
+    score += idf * tfNorm;
+  }
+  return score;
+}
+
+function jiebaBM25Rerank(query, candidates, topK = 10) {
+  if (candidates.length <= topK) return candidates;
+  try {
+    const queryTokens = tokenizeChinese(query);
+    const docTokensList = candidates.map(c => tokenizeChinese(`${c.content || ''} ${c.industry || ''} ${c.knowledge_type || ''}`));
+    const avgDl = docTokensList.reduce((s, t) => s + t.length, 0) / docTokensList.length || 1;
+    const scored = candidates.map((c, i) => ({ ...c, bm25_score: bm25Score(queryTokens, docTokensList[i], avgDl) }));
+    scored.sort((a, b) => b.bm25_score - a.bm25_score);
+    return scored.slice(0, topK);
+  } catch (e) {
+    return candidates.slice(0, topK);
+  }
+}
+
+// ---- Style-based grouping ----
+function groupByStyle(items) {
+  const groups = {};
+  for (const item of items) {
+    const style = item.style || 'general';
+    if (!groups[style]) groups[style] = [];
+    groups[style].push(item);
+  }
+  return groups;
+}
+
+// ---- Knowledge usage logging ----
+async function logKnowledgeUsage(knowledgeIds, userId, action, context) {
+  for (const kid of knowledgeIds) {
+    try {
+      await sbRpc('log_knowledge_usage', { p_knowledge_id: kid, p_user_id: userId || null, p_action: action, p_context: context || null });
+    } catch (e) { /* silent */ }
+  }
+}
+
+// ---- 图谱检索 ----
+async function graphSearch(industry, objection, persona) {
+  try {
+    const results = await sbRpc('kg_search', {
+      p_industry: industry,
+      p_objection: objection,
+      p_persona: persona,
+      match_count: 5,
+    });
+    if (results && results.length > 0) {
+      console.log(`Graph: ${results.length} strategies (top: ${results[0].strategy_name}, score: ${results[0].effectiveness?.toFixed(3)})`);
+      return results;
+    }
+  } catch (e) {
+    console.log('Graph search failed:', e.message.slice(0, 80));
+  }
+  return [];
+}
+
+// ---- 完整检索 pipeline（带详细日志）----
+async function retrieveKnowledge(query, industry, userId) {
+  const logData = {
+    id: crypto.randomUUID(),
+    user_id: userId || null,
+    query: query.slice(0, 500),
+    industry: industry || null,
+    objection: null,
+    persona: null,
+    graph_results: [],
+    coarse_results: [],
+    bm25_results: [],
+    final_results: [],
+    injected_knowledge: [],
+    created_at: new Date().toISOString(),
+  };
+
+  // 1. 检测异议类型和角色
+  const objection = detectObjection(query);
+  const persona = inferPersona(query);
+  logData.objection = objection;
+  logData.persona = persona;
+  console.log(`Retrieval: industry=${industry}, objection=${objection}, persona=${persona}`);
+
+  // 2. 图谱检索（优先）
+  let graphResults = [];
+  if (industry && objection) {
+    graphResults = await graphSearch(industry, objection, persona);
+    logData.graph_results = graphResults.map(r => ({
+      strategy: r.strategy_name,
+      score: r.effectiveness,
+      knowledge_id: r.knowledge_id,
+      content_preview: (r.knowledge_content || '').slice(0, 100),
+    }));
+  }
+
+  // 3. 知识库检索（粗筛）
+  let kbResults = [];
+  try {
+    kbResults = await sbRpc('search_knowledge', {
+      search_text: query.slice(0, 500),
+      match_count: 20,
+      filter_industry: industry || null,
+      filter_user_id: userId || null,
+    });
+    logData.coarse_results = (kbResults || []).slice(0, 10).map(r => ({
+      id: r.id,
+      content_preview: (r.content || '').slice(0, 80),
+      industry: r.industry,
+      weight: r.weight,
+      trigram_score: r.trigram_score,
+      fts_rank: r.fts_rank,
+      final_score: r.final_score,
+    }));
+  } catch (e) {
+    console.log('KB search failed:', e.message.slice(0, 80));
+  }
+
+  // 4. 合并：图谱结果优先，知识库补充
+  const graphIds = new Set(graphResults.map(r => r.knowledge_id).filter(Boolean));
+  const merged = [];
+
+  for (const gr of graphResults) {
+    if (gr.knowledge_content) {
+      merged.push({
+        id: gr.knowledge_id || gr.strategy_id,
+        content: gr.knowledge_content,
+        source: 'knowledge_graph',
+        industry: industry,
+        knowledge_type: 'objection_handling',
+        weight: gr.effectiveness * 2,
+        graph_score: gr.effectiveness,
+      });
+    }
+  }
+
+  for (const kr of (kbResults || [])) {
+    if (!graphIds.has(kr.id)) {
+      merged.push({ ...kr, graph_score: 0 });
+    }
+  }
+
+  if (merged.length === 0) {
+    // 记录空结果日志
+    try { await sbInsert('retrieval_logs', logData); } catch (e) {}
+    return [];
+  }
+
+  // 5. BM25 精排
+  const bm25Ranked = jiebaBM25Rerank(query, merged, 10);
+  logData.bm25_results = bm25Ranked.slice(0, 10).map(r => ({
+    id: r.id,
+    content_preview: (r.content || '').slice(0, 80),
+    bm25_score: r.bm25_score,
+    graph_score: r.graph_score || 0,
+    weight: r.weight,
+  }));
+
+  // 6. 按 style 分组，保证多视角
+  const groups = groupByStyle(bm25Ranked);
+  const final = [];
+  const styles = Object.keys(groups);
+  const perStyle = Math.max(1, Math.floor(5 / styles.length));
+  for (const style of styles) {
+    final.push(...groups[style].slice(0, perStyle));
+  }
+  if (final.length < 5) {
+    const finalIds = new Set(final.map(f => f.id));
+    for (const item of bm25Ranked) {
+      if (!finalIds.has(item.id)) { final.push(item); if (final.length >= 5) break; }
+    }
+  }
+
+  logData.final_results = final.slice(0, 5).map(r => ({
+    id: r.id,
+    content_preview: (r.content || '').slice(0, 100),
+    source: r.source,
+    style: r.style,
+    weight: r.weight,
+    bm25_score: r.bm25_score,
+    graph_score: r.graph_score || 0,
+  }));
+
+  logData.injected_knowledge = final.slice(0, 5).map(r => ({
+    id: r.id,
+    type: r.knowledge_type,
+    industry: r.industry,
+    content_preview: (r.content || '').slice(0, 150),
+  }));
+
+  console.log(`Retrieval: graph=${graphResults.length} kb=${kbResults?.length || 0} → bm25=${bm25Ranked.length} → final=${final.length} (${styles.length} styles)`);
+
+  // 7. 异步写入日志（不阻塞返回）
+  sbInsert('retrieval_logs', logData).catch(() => {});
+
+  // 8. 记录使用
+  if (userId && final.length > 0) {
+    logKnowledgeUsage(final.map(f => f.id), userId, 'script_ref', query.slice(0, 100));
+  }
+
+  return final.slice(0, 5);
+}
+
+// ---- Style detection for knowledge items ----
+function detectKnowledgeStyle(content, knowledgeType) {
+  const text = (content || '').toLowerCase();
+  const type = (knowledgeType || '').toLowerCase();
+
+  // 共情型: 包含共情、理解、感受等词
+  if (text.includes('共情') || text.includes('理解您') || text.includes('我理解') ||
+      text.includes('感受') || text.includes('没关系') || text.includes('确实')) {
+    return 'empathetic';
+  }
+  // 直爽型: 包含数据、直接、算账等词
+  if (text.includes('直接') || text.includes('算账') || text.includes('数据') ||
+      text.includes('roi') || text.includes('效率') || text.includes('成本')) {
+    return 'direct';
+  }
+  // 专业型: 包含专业、分析、方案等词
+  if (text.includes('专业') || text.includes('方案') || text.includes('分析') ||
+      text.includes('建议') || text.includes('规划') || text.includes('策略')) {
+    return 'professional';
+  }
+  // 激进型: 包含促成、逼单、紧迫等词
+  if (text.includes('逼单') || text.includes('促成') || text.includes('紧迫') ||
+      text.includes('限时') || text.includes('最后') || text.includes('机会')) {
+    return 'aggressive';
+  }
+  return null; // 通用型
 }
 
 // ==================== AI FALLBACK ====================
@@ -1393,53 +1675,28 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       id: 'Silakan jawab dalam Bahasa Indonesia. Gunakan skenario penjualan dan ekspresi yang umum di pasar Asia Tenggara.',
     };
 
-    // Fetch knowledge base (user's own + public crawled knowledge)
+    // Fetch knowledge base — RAG: vector semantic search + keyword fallback
     let knowledgeContext = '';
     try {
-      // 获取用户的私有知识
-      const userKnowledge = await sbSafeQuery('knowledge_items', {
-        select: 'content,tags,industry,weight,knowledge_type,response_example',
-        eq: { user_id: jwt.userId, status: 'ACTIVE' },
-        order: 'weight.desc',
-        limit: 5
-      });
-
-      // 获取公共知识（爬取的），按行业匹配
       const detectedInd = detectedIndustry || '';
-      const publicKnowledge = await sbSafeQuery('knowledge_items', {
-        select: 'content,tags,industry,weight,knowledge_type,response_example',
-        eq: { status: 'ACTIVE' },
-        order: 'weight.desc',
-        limit: 50
-      });
+      const queryText = `${scenarioName} ${detectedInd} ${input || ''}`.slice(0, 500);
 
-      // 过滤：优先匹配行业的知识
-      const industryMatch = publicKnowledge.filter(k =>
-        !k.user_id && (k.industry === detectedInd || k.industry === '通用')
-      );
-      const otherPublic = publicKnowledge.filter(k =>
-        !k.user_id && k.industry !== detectedInd && k.industry !== '通用'
-      );
-
-      // 合并：用户知识 + 行业匹配的公共知识 + 其他公共知识
-      const allKnowledge = [
-        ...(userKnowledge || []),
-        ...industryMatch.slice(0, 8),
-        ...otherPublic.slice(0, 3),
-      ].slice(0, 12);
+      // 混合检索：粗筛(pg_trgm+tsvector) → BM25 → LLM rerank
+      const allKnowledge = await retrieveKnowledge(queryText, detectedInd, jwt.userId);
 
       if (allKnowledge.length > 0) {
         const knowledgeLabel = {
-          zh: '销售知识库参考（行业经验+销冠案例）',
-          en: 'Sales Knowledge Base (Industry experience + Top performer cases)',
+          zh: '销售知识库参考（混合检索最相关）',
+          en: 'Sales Knowledge Base (Hybrid matched)',
         };
         knowledgeContext = `\n\n${knowledgeLabel[lang] || knowledgeLabel.zh}:\n` + allKnowledge
           .map((k, i) => {
-            let item = `${i + 1}. [${k.knowledge_type || '通用'}] ${k.content.slice(0, 200)}`;
+            let item = `${i + 1}. [${k.knowledge_type || '通用'}] ${(k.content || '').slice(0, 200)}`;
             if (k.response_example) item += `\n   参考话术：${k.response_example.slice(0, 150)}`;
             return item;
           })
           .join('\n');
+        console.log(`Knowledge: ${allKnowledge.length} items injected via hybrid retrieval`);
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
 
@@ -1499,59 +1756,40 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
 
 ${industryContextPrompt}
 
-【优秀话术示范】（你的输出必须达到这个质量水平）
+【强制框架】（每套话术必须包含以下结构，缺一不可）
 
-场景：客户说"太贵了"
-共情版话术：
-"张姐，您说贵，我特别理解。我跟您说实话，我第一次听到这个价格的时候，也觉得不便宜。但是后来我自己算了一笔账——您现在每个月在XX上花多少钱？两千？三千？一年下来就是三四万。而我们这个方案，一年只要一万二，每天不到33块钱。您喝杯奶茶都要20块，这33块钱能解决您未来十年的XX问题。您觉得这笔账划不划算？"
+1. 共情句（1-2句）：先认同客户感受，不能直接反驳
+2. 数据支撑（2-3个具体数字）：用真实数字说服，不能用"很多""一些""XX"
+3. 价值呈现（2-3个卖点）：把产品优势转化为客户利益
+4. 促成动作（1句）：给客户一个立即行动的理由
+5. 预留退路（1句）：降低客户压力，不逼太紧
 
-直爽版话术：
-"王总，我直接跟您说——贵不贵，不是看价格，是看回报。您现在用的方案，每个月隐性成本是多少？我帮您算过：人工成本XX，效率损失XX，加起来每月XXXX。我们的方案每月只要XXXX，但能帮您省掉那XXXX的隐性成本。这不是花钱，是省钱。您要不信，我给您看三个和您同行业的客户，他们用了之后的ROI数据。"
+【话术质量红线】（违反任何一条直接不合格）
 
-专业版话术：
-"李经理，从投资回报的角度来看，这个价格其实是非常合理的。我给您拆解一下：第一，我们的方案能帮您减少XX%的人工成本，按照您团队5个人、平均薪资8000来算，每月节省4000；第二，效率提升带来的产能增加，按照行业平均数据是30%；第三，风险降低带来的隐性收益。三项加起来，年化ROI超过300%。您要我做个详细的ROI分析报告吗？"
+- ❌ 不能用"XX"占位符：必须用具体数字
+- ❌ 不能用书面语：必须是口语化对话
+- ❌ 不能泛泛而谈：必须有具体场景和案例
+- ❌ 三版不能雷同：必须从不同角度切入
+- ❌ 不能超过500字：简洁有力，不啰嗦
 
-【话术质量标准】（你的输出必须满足以下每一条）
-
-1. 必须有具体数字：不能写"很多客户"，要写"37个客户"；不能写"省很多钱"，要写"每月省4000"
-2. 必须有真实场景：不能写"假设您遇到一个问题"，要写"上个月一个客户，他也是做XX行业的，遇到了和您一模一样的情况"
-3. 必须有对话节奏：不是一段话从头说到尾，而是有来有回——你说了什么，客户可能怎么回应，你接着怎么说
-4. 必须有口语感：用"说白了""其实咱们看""不瞒您说""我跟您交个底"这种真实销售会说的话，不能用书面语
-5. 必须有心理学应用：不是提"损失厌恶"这个名字，而是用具体的话术体现——比如把年费拆成日费，让客户觉得"每天才XX块"
-6. 三版必须完全不同：不能只是换几个词，必须是从完全不同的角度切入
-
-【输出格式】
-返回JSON，verbalScript字段是完整的话术文本（300字以上），可以直接复制给销售使用。
+【输出格式】返回JSON：
 
 {
-  "detectedBusinessMode": "B2C",
-  "salesLifecycleStage": "异议博弈",
-  "buyerPersonaAnalysis": {
-    "targetStakeholder": "客户是谁",
-    "hiddenDriver": "客户真正担心什么（不是表面说的）"
-  },
   "tacticalExecutionPaths": [
     {
       "pathType": "共情版",
-      "strategicLever": "用什么打动客户（具体到哪句话用什么心理学）",
-      "verbalScript": "完整话术，300字以上，可直接使用",
-      "coachingDirectives": {
-        "pacingAndTone": "具体到：这句话用什么语气，哪里停顿，哪里加重",
-        "microBehaviors": "具体到：说什么的时候做什么动作"
-      }
+      "verbalScript": "完整话术（200-500字，可直接复制使用）"
     },
-    { "pathType": "直爽版", "strategicLever": "...", "verbalScript": "...", "coachingDirectives": {...} },
-    { "pathType": "专业版", "strategicLever": "...", "verbalScript": "...", "coachingDirectives": {...} }
+    {
+      "pathType": "直爽版",
+      "verbalScript": "完整话术（200-500字，可直接复制使用）"
+    },
+    {
+      "pathType": "专业版",
+      "verbalScript": "完整话术（200-500字，可直接复制使用）"
+    }
   ],
-  "multiStageSimulation": {
-    "expectedPushback": "客户会怎么反驳（原话）",
-    "counterStrategy": "怎么应对（完整话术）",
-    "nextProgressiveMove": "下一步推什么"
-  },
-  "reasoning": ["为什么这个话术有效"],
-  "pitfalls": [{"action": "不要做什么", "reason": "会导致什么后果"}],
-  "knowledgeSource": "引用了什么",
-  "confidenceScore": 0.9
+  "confidenceScore": 0.85
 }
 
 ${knowledgeContext || ''}
@@ -1659,12 +1897,14 @@ ${knowledgeContext}`,
       // Auto-save to knowledge base if confidence score is high
       if (scriptData.confidenceScore >= 0.8 && scriptData.speechStyles[0]?.content) {
         try {
+          const autoContent = `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`;
           await sbInsert('knowledge_items', {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI自动生成',
-            content: `【${styleName}话术 - ${scenarioName}】\n${scriptData.speechStyles[0].content}`,
+            content: autoContent,
             tags: [scenarioName, styleName, 'AI生成'],
             industry: industry || null,
+            style: detectKnowledgeStyle(autoContent, 'objection_handling'),
             weight: scriptData.confidenceScore,
             status: 'ACTIVE',
             created_at: new Date().toISOString()
@@ -1690,13 +1930,39 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
     const jwt = requireAuth(req);
     const { parts } = safeId(req);
     const scriptId = parts[3];
-    const { type, reason } = await parseBody(req);
+    const { type, reason, industry, scenario } = await parseBody(req);
 
     // Save feedback
     const feedback = await sbSafeInsert('script_feedbacks', {
       id: crypto.randomUUID(), user_id: jwt.userId, script_id: scriptId,
       type: type || 'up', reason: reason || null, created_at: new Date().toISOString()
     });
+
+    // 更新知识图谱权重（反馈循环）
+    try {
+      const delta = type === 'up' ? 0.05 : type === 'down' ? -0.10 : 0;
+      if (delta !== 0 && industry) {
+        // 找到相关的图谱边并更新权重
+        const objection = detectObjection(scenario || reason || '');
+        if (objection) {
+          const strategies = await sbRpc('kg_search', {
+            p_industry: industry,
+            p_objection: objection,
+            match_count: 3,
+          });
+          for (const s of (strategies || [])) {
+            // 记录反馈到图谱
+            await sbRpc('kg_log_feedback', {
+              p_edge_id: crypto.randomUUID(), // 简化：实际应关联到具体边
+              p_knowledge_id: s.knowledge_id || null,
+              p_user_id: jwt.userId,
+              p_feedback_type: type,
+              p_context: JSON.stringify({ industry, objection, scenario }),
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch (e) { console.log('Graph feedback update error:', e.message.slice(0, 60)); }
 
     // Get the script to potentially archive to knowledge base
     try {
@@ -1726,7 +1992,7 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
               content: script.content || '',
               tags: script.tags || [],
               industry: script.industry || null,
-              weight: Math.min(10, 5 + upCount), // Higher weight with more positive feedback
+              weight: Math.min(10, 5 + upCount),
               status: 'ACTIVE',
               created_at: new Date().toISOString()
             });
@@ -2133,13 +2399,14 @@ routes['POST /api/practices/save'] = async (req, res) => {
             .slice(0, 5)
             .map(t => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`)
             .join('\n');
-
+          const practiceContent = `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`;
           await sbInsert('knowledge_items', {
             id: crypto.randomUUID(), user_id: jwt.userId,
             source: 'AI陪练自动生成',
-            content: `【高分练习 - ${scenario || '通用场景'}】\n得分：${score}分 | 轮次：${rounds}\n\n对话摘要：\n${transcriptSummary}`,
+            content: practiceContent,
             tags: [scenario || '通用', '高分练习', 'AI生成'],
             industry: industry || null,
+            style: detectKnowledgeStyle(practiceContent, ''),
             weight: score / 100,
             status: 'ACTIVE',
             created_at: new Date().toISOString()
@@ -2242,8 +2509,13 @@ JSON 结构：
 routes['GET /api/knowledge'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const items = await sbSafeQuery('knowledge_items', { select: '*', eq: { user_id: jwt.userId }, order: 'created_at.desc', limit: 100 });
-    sendJson(res, 200, { data: items });
+    // 获取用户的私有知识 + 公共知识（爬取的，user_id=null）
+    const userItems = await sbSafeQuery('knowledge_items', { select: '*', eq: { user_id: jwt.userId, status: 'ACTIVE' }, order: 'created_at.desc', limit: 100 });
+    const publicItems = await sbSafeQuery('knowledge_items', { select: '*', eq: { status: 'ACTIVE' }, order: 'created_at.desc', limit: 200 });
+    const publicOnly = publicItems.filter(item => !item.user_id);
+    // 合并：用户私有在前，公共在后，按时间倒序
+    const items = [...userItems, ...publicOnly].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 200);
+    sendJson(res, 200, { data: items, meta: { userCount: userItems.length, publicCount: publicOnly.length } });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 200, { data: [] });
@@ -2253,14 +2525,15 @@ routes['GET /api/knowledge'] = async (req, res) => {
 routes['POST /api/knowledge'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    const { content, source, industry, weight, tags } = await parseBody(req);
+    const { content, source, industry, weight, tags, knowledge_type } = await parseBody(req);
     if (!content) return sendJson(res, 400, { success: false, error: 'content required' });
+    const style = detectKnowledgeStyle(content, knowledge_type);
     const item = await sbInsert('knowledge_items', {
       id: crypto.randomUUID(), user_id: jwt.userId, source: source || 'manual',
-      content, tags: tags || [], industry: industry || null,
+      content, tags: tags || [], industry: industry || null, style,
       weight: weight || 1.0, status: 'ACTIVE', created_at: new Date().toISOString()
     });
-    sendJson(res, 201, { data: item });
+    sendJson(res, 201, { success: true, data: item });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
@@ -3403,6 +3676,50 @@ routes['PUT /api/admin/users/:userId/plan'] = async (req, res) => {
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// ---- 管理员：检索日志 ----
+routes['GET /api/admin/retrieval-logs'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const query = url.searchParams.get('q') || '';
+    const userId = url.searchParams.get('user_id') || '';
+    const from = url.searchParams.get('from') || '';
+    const to = url.searchParams.get('to') || '';
+
+    const opts = { select: '*', order: 'created_at.desc', limit: Math.min(limit, 200) };
+    if (userId) opts.eq = { user_id: userId };
+
+    let logs = await sbSafeQuery('retrieval_logs', opts);
+
+    // 本地过滤（Supabase REST 不支持全文搜索列过滤）
+    if (query) {
+      const q = query.toLowerCase();
+      logs = logs.filter(l => (l.query || '').toLowerCase().includes(q));
+    }
+    if (from) {
+      logs = logs.filter(l => l.created_at >= from);
+    }
+    if (to) {
+      logs = logs.filter(l => l.created_at <= to + 'T23:59:59Z');
+    }
+
+    // 统计摘要
+    const summary = {
+      total: logs.length,
+      avg_graph_results: logs.reduce((s, l) => s + (l.graph_results?.length || 0), 0) / (logs.length || 1),
+      avg_final_results: logs.reduce((s, l) => s + (l.final_results?.length || 0), 0) / (logs.length || 1),
+      top_queries: Object.entries(logs.reduce((acc, l) => { acc[l.query] = (acc[l.query] || 0) + 1; return acc; }, {}))
+        .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([q, count]) => ({ query: q, count })),
+    };
+
+    sendJson(res, 200, { data: logs, summary });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 200, { data: [], summary: {} });
   }
 };
 

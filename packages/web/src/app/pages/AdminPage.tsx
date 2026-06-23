@@ -9,6 +9,7 @@ import { AnnouncementAdmin } from '@/components/admin/AnnouncementAdmin';
 import { SyncManager } from '@/components/admin/SyncManager';
 import { SystemSettings } from '@/components/admin/SystemSettings';
 import { UserAdmin } from '@/components/admin/UserAdmin';
+import { RetrievalLogs } from '@/components/admin/RetrievalLogs';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
@@ -157,6 +158,7 @@ export default function AdminPage() {
             <TabsTrigger value="sync">数据同步</TabsTrigger>
             <TabsTrigger value="plugins">插件包管理</TabsTrigger>
             <TabsTrigger value="settings">系统设置</TabsTrigger>
+            <TabsTrigger value="retrieval-logs">检索日志</TabsTrigger>
           </TabsList>
 
           <TabsContent value="stats">
@@ -189,6 +191,10 @@ export default function AdminPage() {
 
           <TabsContent value="settings">
             <SystemSettings />
+          </TabsContent>
+
+          <TabsContent value="retrieval-logs">
+            <RetrievalLogs />
           </TabsContent>
         </Tabs>
       )}
