@@ -609,7 +609,17 @@ async function callAIStream(messages, options = {}) {
 }
 
 // ==================== KNOWLEDGE RETRIEVAL (图谱 + BM25 + Style) ====================
-const { cut } = require('@node-rs/jieba');
+let cut;
+try {
+  cut = require('@node-rs/jieba').cut;
+} catch (e) {
+  // Fallback: 简单分词（Vercel serverless 环境可能不支持原生模块）
+  cut = (text, hmm) => {
+    if (!text) return [];
+    // 简单按字符和标点分词
+    return text.match(/[一-鿿]+|[a-zA-Z0-9]+/g) || [];
+  };
+}
 
 // ---- 异议类型标准化 ----
 const OBJECTION_KEYWORDS = {
