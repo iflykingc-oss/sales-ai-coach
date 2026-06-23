@@ -5,6 +5,7 @@ from app.core.logging import logger
 from app.core.config import get_settings
 from app.core.exceptions import AIServiceError
 from app.routes import router
+from app.routes.im_webhook import router as im_router
 
 settings = get_settings()
 
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(im_router)
 
 
 @app.exception_handler(AIServiceError)
@@ -44,8 +46,14 @@ async def general_exception_handler(request, exc: Exception):
 @app.on_event("startup")
 async def startup():
     logger.info("AI Service starting up...")
+    # Start IM channels (Feishu/DingTalk) if configured
+    from app.im.manager import im_manager
+    await im_manager.start()
 
 
 @app.on_event("shutdown")
 async def shutdown():
     logger.info("AI Service shutting down...")
+    # Stop IM channels
+    from app.im.manager import im_manager
+    await im_manager.stop()

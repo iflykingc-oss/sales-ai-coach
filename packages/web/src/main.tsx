@@ -6,10 +6,33 @@ import { I18nProvider } from './i18n';
 import App from './App';
 import './index.css';
 
-// Register Service Worker
+// Register Service Worker with auto-update
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    navigator.serviceWorker.register('/sw.js').then((registration) => {
+      // Check for SW updates on every page load
+      registration.update();
+
+      // When a new SW takes over, reload to get fresh assets
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated') {
+              // New SW activated — reload once to pick up new chunks
+              // Use sessionStorage to prevent infinite reload loops
+              const reloadKey = 'sw-reload-pending';
+              if (!sessionStorage.getItem(reloadKey)) {
+                sessionStorage.setItem(reloadKey, '1');
+                window.location.reload();
+              } else {
+                sessionStorage.removeItem(reloadKey);
+              }
+            }
+          });
+        }
+      });
+    }).catch(() => {
       // SW registration failed, app continues normally
     });
   });

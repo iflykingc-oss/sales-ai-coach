@@ -108,12 +108,25 @@ class TaskExecutor:
                     self.fl.get_item(dep_id) and self.fl.get_item(dep_id).metadata.get("frameworks")
                     for dep_id in item.dependencies
                 )
+                has_knowledge = bool(item.metadata.get("knowledge_context", ""))
                 if has_framework_dep:
                     system_prompt = (
                         "你是一个专业的销售话术生成专家。请根据前置任务中的分析框架结果，"
                         "将分析结论有机融入话术生成。每种话术风格都要体现框架分析的洞察。"
                         "输出JSON格式：{\"speech_styles\": [...], \"reasoning\": [...], \"pitfalls\": [...], "
                         "以及将框架分析结果原样保留在对应key中（如swotAnalysis, scenario5w2h等）。"
+                    )
+                elif has_knowledge:
+                    system_prompt = (
+                        "你是一个专业的销售话术生成专家。你必须将知识库中的行业专属策略和话术示例"
+                        "融入生成的每一条话术中。禁止使用通用模板、XX占位符或空泛表述。\n\n"
+                        "三种话术风格的核心差异：\n"
+                        "- 共情版：用知识帮客户对比、避坑，站在客户立场\n"
+                        "- 直爽版：用知识中的数据和算账逻辑，直接给结论\n"
+                        "- 专业版：用知识中的行业数据和市场趋势做专业背书\n\n"
+                        "输出JSON格式：{\"speech_styles\": [{\"style\": \"共情\", \"content\": \"...\"}, "
+                        "{\"style\": \"直爽\", \"content\": \"...\"}, {\"style\": \"专业\", \"content\": \"...\"}], "
+                        "\"reasoning\": [...], \"pitfalls\": [...], \"knowledge_source\": \"引用的知识来源\"}"
                     )
 
             messages = [
@@ -160,6 +173,26 @@ class TaskExecutor:
                 f"请使用以下分析框架: {', '.join(frameworks)}。"
                 "输出JSON中，用框架ID作为key（如swotAnalysis, scenario5w2h等），"
                 "value为该框架的结构化分析结果。"
+            )
+
+        # 关键修复：注入知识库上下文，强制 LLM 使用
+        knowledge_context = item.metadata.get("knowledge_context", "")
+        if knowledge_context:
+            parts.append(
+                f"\n===== 行业知识库（必须参考） =====\n"
+                f"以下是从知识库中检索到的行业专属策略和话术示例。\n"
+                f"你必须将这些知识融入生成的话术中，不得使用通用模板或XX占位符。\n"
+                f"每条知识都要转化为具体可执行的话术表达。\n\n"
+                f"{knowledge_context}\n"
+                f"===== 知识库结束 =====\n\n"
+                f"重要指令：\n"
+                f"1. 将上述知识按话术环节分类使用：开场白、异议处理、价值呈现、促成\n"
+                f"2. 三种风格（共情/直爽/专业）必须体现知识的不同用法：\n"
+                f"   - 共情版：站在客户角度，用知识帮他避坑、做对比\n"
+                f"   - 直爽版：用知识中的数据和算账逻辑，直接算明白\n"
+                f"   - 专业版：用知识中的行业数据和市场趋势做专业背书\n"
+                f"3. 不得使用XX、某某等占位符，必须写具体话术\n"
+                f"4. 不得出现重复内容，三种风格必须有实质差异"
             )
 
         # Add dependency results as context

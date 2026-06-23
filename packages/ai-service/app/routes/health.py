@@ -52,12 +52,13 @@ async def harness_status():
 
     active_sessions = len(_sessions)
     active_details = []
-    for sid, harness in _sessions.items():
-        if harness.is_active:
+    for sid, session_data in _sessions.items():
+        harness = session_data.get("harness")
+        if harness and getattr(harness, "is_active", False):
             active_details.append({
                 "session_id": sid,
-                "rounds": harness.round_count,
-                "max_rounds": harness.max_rounds,
+                "rounds": getattr(harness, "round_count", 0),
+                "max_rounds": getattr(harness, "max_rounds", 0),
             })
 
     return HarnessStatusResponse(

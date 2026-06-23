@@ -190,6 +190,17 @@ class OutputEvaluator:
             f"- {s.get('style', '')}: {s.get('content', '')}" for s in styles
         )
 
+        # Pre-check: detect XX placeholders and generic templates
+        all_content = " ".join(s.get("content", "") for s in styles)
+        has_placeholder = any(p in all_content for p in ["XX", "某某", "某公司", "具体说明", "（具体"])
+        has_duplicate_styles = _check_style_duplication(styles)
+
+        placeholder_penalty = ""
+        if has_placeholder:
+            placeholder_penalty = "\n\n⚠️ 严重问题：话术中包含XX/某某等占位符，必须扣分。可执行性评分不得高于0.3。"
+        if has_duplicate_styles:
+            placeholder_penalty += "\n\n⚠️ 严重问题：三种风格内容高度重复，差异化评分不得高于0.3。"
+
         prompt = f"""评估以下销售话术质量。
 
 场景: {scenario}
@@ -199,10 +210,11 @@ class OutputEvaluator:
 
 评估标准:
 1. 相关性: 是否直接回应场景需求
-2. 可执行性: 是否具体、可直接使用
-3. 自然度: 语气是否自然，像真实对话
-4. 差异化: 三种风格是否有明显区别
+2. 可执行性: 是否具体、可直接使用（禁止XX占位符、禁止空泛表述如"综合成本更低"）
+3. 自然度: 语气是否自然，像真实对话（不是PPT模板）
+4. 差异化: 三种风格是否有实质区别（开场白、异议处理、价值呈现、促成都要不同）
 5. 专业性: 是否符合销售最佳实践
+{placeholder_penalty}
 
 请输出JSON: {{"overall_score": 0.85, "passed": true, "feedback": "...", "suggestions": []}}"""
 
@@ -234,3 +246,32 @@ class OutputEvaluator:
                 feedback="评估解析失败，默认不通过",
                 suggestions=[],
             )
+
+
+def _check_style_duplication(styles: list[dict]) -> bool:
+    """Check if the three script styles have significant content overlap.
+
+    Returns True if styles are too similar (>60% overlap).
+    """
+    if len(styles) < 2:
+        return False
+
+    contents = [s.get("content", "") for s in styles]
+    # Compare each pair
+    for i in range(len(contents)):
+        for j in range(i + 1, len(contents)):
+            # Simple bigram overlap
+            bigrams_a = set()
+            bigrams_b = set()
+            a, b = contents[i], contents[j]
+            for k in range(len(a) - 1):
+                bigrams_a.add(a[k:k+2])
+            for k in range(len(b) - 1):
+                bigrams_b.add(b[k:k+2])
+            if not bigrams_a or not bigrams_b:
+                continue
+            intersection = len(bigrams_a & bigrams_b)
+            union = len(bigrams_a | bigrams_b)
+            if union > 0 and intersection / union > 0.6:
+                return True
+    return False

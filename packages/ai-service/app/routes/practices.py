@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.services.practice_harness import PracticeHarness
 from app.core.logging import logger
+from app.core.config import get_settings
 
 router = APIRouter()
 
@@ -96,13 +97,25 @@ async def analyze_document(req: AnalyzeDocumentRequest):
 
 @router.post("/init", response_model=PracticeResponse)
 async def init_session(req: PracticeInitRequest):
-    """Initialize a new AI practice session with harness-powered persona generation."""
+    """Initialize a new AI practice session.
+
+    Uses LangGraph orchestrator when USE_LANGGRAPH_COACHING=true,
+    otherwise falls back to the legacy PracticeHarness.
+    """
     import uuid
+    settings = get_settings()
 
     session_id = req.sessionId or uuid.uuid4().hex[:12]
-    harness = PracticeHarness(session_id=session_id)
 
-    result = await harness.init_session(
+    if settings.use_langgraph_coaching:
+        # LangGraph multi-agent orchestrator
+        from app.graphs.orchestrator import PracticeOrchestrator
+        harness = PracticeOrchestrator(session_id=session_id)
+    else:
+        # Legacy single-agent harness
+        harness = PracticeHarness(session_id=session_id)
+
+    init_kwargs = dict(
         scenario=req.scenario,
         industry=req.industry,
         mode=req.mode,
@@ -111,9 +124,14 @@ async def init_session(req: PracticeInitRequest):
         knowledge_context=req.knowledgeContext,
     )
 
+    if settings.use_langgraph_coaching:
+        init_kwargs["logic_framework"] = req.logicFramework
+
+    result = await harness.init_session(**init_kwargs)
+
     _cleanup_sessions()
     _sessions[session_id] = {"harness": harness, "last_access": time.time()}
-    logger.info(f"Practice session initialized: {session_id}")
+    logger.info(f"Practice session initialized: {session_id} (langgraph={settings.use_langgraph_coaching})")
     return PracticeResponse(success=True, data=result)
 
 

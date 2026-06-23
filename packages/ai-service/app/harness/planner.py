@@ -191,10 +191,11 @@ class TaskPlanner:
         ctx_id = fl.add_item("分析用户输入场景，提取关键信息（行业特征、客户痛点、销售阶段）")
 
         # Step 2: Retrieve knowledge (depends on context analysis)
+        # 关键修复：将 knowledge_context 注入到 item metadata 中
         rag_id = fl.add_item(
             "检索相关知识点",
             dependencies=[ctx_id],
-            metadata={"industry": industry},
+            metadata={"industry": industry, "knowledge_context": knowledge_context},
         )
 
         # Step 2.5: Analytical framework analysis (SWOT/5W2H etc.)
@@ -214,7 +215,7 @@ class TaskPlanner:
         gen_id = fl.add_item(
             "生成3种不同风格的话术（共情/直爽/专业），附原因、避坑、引用来源",
             dependencies=gen_deps,
-            metadata={"input_type": input_type},
+            metadata={"input_type": input_type, "knowledge_context": knowledge_context},
         )
 
         # Step 4: Quality check

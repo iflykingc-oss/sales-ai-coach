@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # IM Integration (Feishu/DingTalk)
+    feishu_app_id: str = ""
+    feishu_app_secret: str = ""
+    feishu_verification_token: str = ""
+    feishu_encrypt_key: str = ""
+    dingtalk_client_id: str = ""
+    dingtalk_client_secret: str = ""
+
+    # Feature flags
+    use_langgraph_coaching: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

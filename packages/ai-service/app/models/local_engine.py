@@ -530,7 +530,7 @@ def _generate_feedback(
         if weakest_score < 0.5:
             return f'{weakest}维度需要加强，多练习这方面。'
         elif strongest_score > 0.7:
-            return f'{strongstrong}做得很好，继续保持。'
+            return f'{strongest}做得很好，继续保持。'
         else:
             return '整体表现不错，继续加油。'
 

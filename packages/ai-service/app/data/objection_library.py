@@ -185,6 +185,117 @@ OBJECTION_BANK: dict[str, dict] = {
             },
         ],
     },
+    # ===== 以下 5 种为 OpenClover 参照扩展（12 种异议原型） =====
+    "complexity": {
+        "name": "复杂度异议",
+        "psychology_root": "认知负荷 — 客户担心实施/使用过程过于复杂",
+        "common_phrases": ["太复杂了", "学不会", "实施周期太长", "员工适应不了", "系统太麻烦", "流程太繁琐"],
+        "disc_sensitivity": {"D": "low", "I": "high", "S": "high", "C": "medium"},
+        "response_strategies": [
+            {
+                "name": "简化叙事",
+                "framework": "fab-principle",
+                "psychology": "认知流畅性 — 简单的描述降低感知复杂度",
+                "template": "理解您的顾虑。实际操作只需要{simple_steps}，我们有{support_resource}全程陪跑，{time_estimate}就能上手。",
+                "example": "理解您的顾虑。实际操作只需要3步：导入数据、配置模板、开始使用。我们有专属客户成功经理全程陪跑，2天就能上手。",
+            },
+            {
+                "name": "分阶段承诺",
+                "framework": "closing-techniques",
+                "psychology": "登门槛效应 — 小步骤降低心理门槛",
+                "template": "不用一步到位。我们可以{phased_approach}，每个阶段都有{checkpoint}，确保您随时掌控进度。",
+                "example": "不用一步到位。我们可以先从最核心的功能开始，每个阶段都有验收节点，确保您随时掌控进度。",
+            },
+        ],
+    },
+    "urgency": {
+        "name": "紧迫性异议",
+        "psychology_root": "现状偏好 — 客户倾向于维持现状，不急于改变",
+        "common_phrases": ["不着急", "以后再说", "先等等", "下个季度吧", "现在还不到时候", "再观望一下"],
+        "disc_sensitivity": {"D": "low", "I": "medium", "S": "high", "C": "medium"},
+        "response_strategies": [
+            {
+                "name": "机会成本",
+                "framework": "aida-model",
+                "psychology": "损失厌恶 — 不行动的损失比行动的风险更可怕",
+                "template": "理解您想稳妥考虑。不过{opportunity_cost}，每延迟一个月大约{cost_quantified}。{urgency_reason}",
+                "example": "理解您想稳妥考虑。不过竞品已经在用类似方案了，每延迟一个月大约损失3%的市场份额。早一步行动就能早一步建立优势。",
+            },
+            {
+                "name": "低门槛启动",
+                "framework": "closing-techniques",
+                "psychology": "承诺一致性 — 先承诺小行动，再推动大决策",
+                "template": "完全理解。不如我们{low_commitment_action}，这样您可以{benefit}，不影响您现有安排。",
+                "example": "完全理解。不如我们先安排一次15分钟的演示，这样您可以直观了解方案，不影响您现有安排。",
+            },
+        ],
+    },
+    "social_proof": {
+        "name": "社会证明异议",
+        "psychology_root": "从众不确定性 — 客户不确定是否有足够的同行验证",
+        "common_phrases": ["有人用过吗", "有成功案例吗", "同行都在用吗", "效果谁来保证", "有没有口碑", "知名度不高"],
+        "disc_sensitivity": {"D": "medium", "I": "high", "S": "high", "C": "medium"},
+        "response_strategies": [
+            {
+                "name": "案例佐证",
+                "framework": "fab-principle",
+                "psychology": "社会认同 — 相似群体的成功经验降低不确定性",
+                "template": "目前{customer_count}家企业在用我们的方案，其中包括{famous_case}。{specific_result}。",
+                "example": "目前500+家企业在用我们的方案，其中包括行业前三的XX公司。他们使用后效率提升了40%，成本降低了25%。",
+            },
+            {
+                "name": "风险共担",
+                "framework": "objection-handling",
+                "psychology": "信任转移 — 用第三方背书建立信任",
+                "template": "除了客户案例，我们还{trust_signal}。{guarantee_statement}。",
+                "example": "除了客户案例，我们还获得了XX行业认证和XX投资机构背书。如果您试用后不满意，我们承诺全额退款。",
+            },
+        ],
+    },
+    "change_averse": {
+        "name": "变革抗拒",
+        "psychology_root": "现状偏差 — 人们对改变天然抵触，即使现状不理想",
+        "common_phrases": ["现在用得挺好的", "没必要换", "习惯了", "换系统太麻烦", "风险太大", "先这样吧"],
+        "disc_sensitivity": {"D": "low", "I": "medium", "S": "high", "C": "medium"},
+        "response_strategies": [
+            {
+                "name": "痛点放大",
+                "framework": "spin-selling",
+                "psychology": "损失厌恶 — 让客户意识到不改变的代价",
+                "template": "理解您现在的流程运转正常。不过我好奇，{pain_question}？如果持续下去，{implication}。",
+                "example": "理解您现在的流程运转正常。不过我好奇，目前手动处理数据大概占用团队多少时间？如果持续下去，这部分人力成本每年大约XX万。",
+            },
+            {
+                "name": "渐进迁移",
+                "framework": "closing-techniques",
+                "psychology": "最小阻力路径 — 降低改变的心理成本",
+                "template": "不需要大刀阔斧改变。我们可以{parallel_run}，新旧系统并行，等您完全适应后再切换。",
+                "example": "不需要大刀阔斧改变。我们可以先在某个部门试点，新旧系统并行，等您完全适应后再全面切换。",
+            },
+        ],
+    },
+    "budget_cycle": {
+        "name": "预算周期异议",
+        "psychology_root": "资源约束 — 客户受预算审批流程限制",
+        "common_phrases": ["今年预算用完了", "要等下个财年", "需要走审批", "预算已经分配了", "财务不允许", "要等预算批复"],
+        "disc_sensitivity": {"D": "medium", "I": "low", "S": "medium", "C": "high"},
+        "response_strategies": [
+            {
+                "name": "提前锁定",
+                "framework": "bant-qualification",
+                "psychology": "承诺一致性 — 提前承诺降低后续决策成本",
+                "template": "理解预算周期的限制。我们可以{pre_commitment}，等预算批复后{fast_track}，帮您抢占先机。",
+                "example": "理解预算周期的限制。我们可以先签订意向协议锁定当前价格，等预算批复后立即启动实施，帮您抢占先机。",
+            },
+            {
+                "name": "灵活方案",
+                "framework": "fab-principle",
+                "psychology": "框架效应 — 重新定义支付方式降低感知成本",
+                "template": "预算问题我们有灵活方案：{flexible_option}。这样{benefit}，不影响您现有预算分配。",
+                "example": "预算问题我们有灵活方案：可以按季度分期支付，首付仅需30%。这样您可以用现有预算启动，不影响其他项目。",
+            },
+        ],
+    },
 }
 
 

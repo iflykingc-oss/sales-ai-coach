@@ -1292,59 +1292,13 @@ class PracticeHarness:
     ) -> dict:
         """Generate the customer's response in the roleplay."""
 
-        # Build logic framework + stage context
-        framework_context = ""
-        if logic_framework:
-            stage_context = ""
-            if detected_stage:
-                stage_name = STAGE_DISPLAY_NAMES.get(detected_stage, detected_stage)
-                stage_context = f"""
-销售当前阶段: {stage_name}
-请根据你的角色和该阶段特点，做出自然的客户反应。"""
-
-            framework_context = f"""
-销售逻辑框架提示:
-当前销售正在使用「{logic_framework}」逻辑框架。{stage_context}
-请根据该框架的特点和销售的当前阶段做出合理反应。"""
-
-        system_prompt = f"""你正在扮演一个客户角色，与销售进行对话。
-
-客户画像:
-- 姓名: {persona.get('name', '王总')}
-- 职位: {persona.get('role', '采购负责人')}
-- 公司: {persona.get('company', '某公司')}
-- 性格: {persona.get('personality', '理性')}
-- 需求: {persona.get('needs', '待确认')}
-- 痛点: {persona.get('pain_points', '待确认')}
-- 态度: {persona.get('attitude', '观望')}
-- 异议风格: {persona.get('objection_style', '一般')}
-- 沟通方式: {getattr(self, 'archetype', {}).get('communication', '正常沟通')}
-
-当前情绪: {emotion}
-难度配置:
-- 异议频率: {self.difficulty_config['objection_frequency']*100:.0f}%（每轮有此概率提出异议）
-- 说服阻力: {self.difficulty_config['convince_resistance']*100:.0f}%（越高越难被说服）
-- 耐心轮数: {self.difficulty_config['patience_rounds']}轮（超过后情绪急转直下）
-- 情绪波动: {self.difficulty_config['emotion_volatility']*100:.0f}%（越高情绪变化越剧烈）
-{framework_context}
-
-要求:
-1. 保持角色一致性，像真实客户一样回复
-2. 回复简短自然，50-150字，像微信聊天
-3. 根据销售的话和你的情绪做出真实反应
-4. 识别销售使用的逻辑框架，做出符合该阶段的情绪反应
-5. 在回复末尾用 [emotion:情绪] 标记，情绪范围: 中立/共情/感兴趣/犹豫/抗拒/敷衍/满意/生气
-6. 如果销售表现很差，情绪会升级
-7. 如果销售表现很好，情绪会改善
-8. 情绪变化应遵循: 抗拒→犹豫→兴趣→共情 的正常路径
-9. 体现你的异议风格「{persona.get('objection_style', '一般')}」，按此风格提出异议
-10. 根据异议频率决定是否提出异议，不要每轮都提
-11. 说服阻力越高，销售需要越充分的理由才能打动你
-
-重要 - 对话阶段规则:
-- 如果销售只是打招呼（如"你好"、"您好"、"嗨"等），你应该礼貌回应，询问对方有什么事或介绍自己，不要主动提出异议或价格问题
-- 只有当销售开始介绍产品/服务、提出方案或试图推进销售流程时，才根据你的角色特点提出异议
-- 第一轮对话应该是自然的寒暄和破冰，不要过早进入谈判阶段"""
+        # Use the shared system prompt builder (avoids duplication)
+        system_prompt = self._build_customer_system_prompt(
+            persona=persona,
+            emotion=emotion,
+            logic_framework=logic_framework,
+            detected_stage=detected_stage,
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},

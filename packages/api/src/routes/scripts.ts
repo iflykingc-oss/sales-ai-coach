@@ -5,6 +5,22 @@ import { quotaMiddleware } from '../middleware/quota.js';
 import { prisma } from '../lib/prisma.js';
 import { generateScript } from '../services/ai.service.js';
 
+/**
+ * Simple character-level similarity (Jaccard on bigrams).
+ * Returns 0-1. Used for deduplicating knowledge items.
+ */
+function _similarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const bigramsA = new Set<string>();
+  const bigramsB = new Set<string>();
+  for (let i = 0; i < a.length - 1; i++) bigramsA.add(a.slice(i, i + 2));
+  for (let i = 0; i < b.length - 1; i++) bigramsB.add(b.slice(i, i + 2));
+  let intersection = 0;
+  for (const bg of bigramsA) if (bigramsB.has(bg)) intersection++;
+  const union = bigramsA.size + bigramsB.size - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+
 const router = Router();
 
 router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), async (req, res, next) => {
@@ -34,16 +50,35 @@ router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), 
             return { ...item, score: matchCount * weightBonus };
           })
           .filter((item) => item.score > 0)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 5);
+          .sort((a, b) => b.score - a.score);
 
-        if (scored.length > 0) {
-          const ragContent = scored
-            .map((item, i) => `[来源${i + 1}${item.source ? `: ${item.source}` : ''}]\n${item.content}`)
+        // Deduplicate: remove items with >80% content overlap
+        const deduped: typeof scored = [];
+        const seenContents = new Set<string>();
+        for (const item of scored) {
+          const normalized = item.content.replace(/\s+/g, '').slice(0, 100);
+          // Check if this content overlaps significantly with any already-seen content
+          let isDuplicate = false;
+          for (const seen of seenContents) {
+            if (_similarity(normalized, seen) > 0.8) {
+              isDuplicate = true;
+              break;
+            }
+          }
+          if (!isDuplicate) {
+            seenContents.add(normalized);
+            deduped.push(item);
+          }
+          if (deduped.length >= 5) break;
+        }
+
+        if (deduped.length > 0) {
+          const ragContent = deduped
+            .map((item, i) => `[知识${i + 1}${item.source ? ` (${item.source})` : ''}]\n${item.content}`)
             .join('\n\n---\n\n');
           knowledgeContext = knowledgeContext
-            ? `${knowledgeContext}\n\n=== 知识库参考 ===\n${ragContent}`
-            : `=== 知识库参考 ===\n${ragContent}`;
+            ? `${knowledgeContext}\n\n${ragContent}`
+            : ragContent;
         }
       }
     } catch (ragErr) {
