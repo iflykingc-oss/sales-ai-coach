@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, ChevronDown, ChevronRight, Clock, Zap, Database, Brain, Target } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, Clock, Zap, Database, Target } from 'lucide-react';
 import { api } from '@/services/api';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -51,7 +51,7 @@ export function RetrievalLogs() {
 
       const res = await api.get(`/admin/retrieval-logs?${params.toString()}`);
       setLogs(res.data || []);
-      setSummary(res.summary || null);
+      setSummary(res.data?.summary || null);
     } catch (e) {
       console.error('Failed to fetch logs:', e);
     } finally {
