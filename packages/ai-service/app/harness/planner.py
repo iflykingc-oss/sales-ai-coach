@@ -184,18 +184,26 @@ class TaskPlanner:
         knowledge_context: str = "",
         frameworks: list[str] | None = None,
     ) -> FeatureList:
-        """Specialized planner for sales script generation with RAG and analytical frameworks."""
+        """Specialized planner for sales script generation with RAG and analytical frameworks.
+
+        Builds a DAG: scene_analysis → rag_retrieve → [framework_analysis] → speech_generate → quality_check
+        Each node has node_type metadata for executor dispatch logic.
+        """
+        from app.config.speech_config import DEFAULT_CONFIG
+
         fl = FeatureList(goal=f"生成{industry or '通用'}行业销售话术")
 
         # Step 1: Analyze input context
-        ctx_id = fl.add_item("分析用户输入场景，提取关键信息（行业特征、客户痛点、销售阶段）")
+        ctx_id = fl.add_item(
+            "分析用户输入场景，提取关键信息（行业特征、客户痛点、销售阶段）",
+            metadata={"industry": industry, "node_type": "scene_analysis"},
+        )
 
         # Step 2: Retrieve knowledge (depends on context analysis)
-        # 关键修复：将 knowledge_context 注入到 item metadata 中
         rag_id = fl.add_item(
             "检索相关知识点",
             dependencies=[ctx_id],
-            metadata={"industry": industry, "knowledge_context": knowledge_context},
+            metadata={"industry": industry, "node_type": "rag_retrieve"},
         )
 
         # Step 2.5: Analytical framework analysis (SWOT/5W2H etc.)
@@ -205,7 +213,7 @@ class TaskPlanner:
             analysis_id = fl.add_item(
                 f"运用分析型框架进行场景拆解：{fw_names}。输出结构化分析结果作为话术生成的策略基础。",
                 dependencies=[ctx_id, rag_id],
-                metadata={"frameworks": frameworks},
+                metadata={"frameworks": frameworks, "node_type": "framework_analysis"},
             )
 
         # Step 3: Generate scripts (depends on knowledge retrieval + optional framework analysis)
@@ -215,13 +223,20 @@ class TaskPlanner:
         gen_id = fl.add_item(
             "生成3种不同风格的话术（共情/直爽/专业），附原因、避坑、引用来源",
             dependencies=gen_deps,
-            metadata={"input_type": input_type, "knowledge_context": knowledge_context},
+            metadata={
+                "input_type": input_type,
+                "industry": industry,
+                "knowledge_context": knowledge_context,
+                "node_type": "speech_generate",
+                "config": DEFAULT_CONFIG,
+            },
         )
 
         # Step 4: Quality check
         fl.add_item(
             "检查话术质量：是否具体可执行、无套路感、符合行业特征",
             dependencies=[gen_id],
+            metadata={"node_type": "quality_check"},
         )
 
         logger.info(f"Script generation plan created: task {fl.task_id}, frameworks={frameworks}")
