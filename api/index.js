@@ -376,7 +376,6 @@ function validateScriptOutput(parsed, lang, scenario) {
 
   // 置信度检查
   if (parsed.confidenceScore && parsed.confidenceScore < 0.5) return { valid: false, reason: 'Low confidence score' };
-  }
 
   return { valid: true };
 }
