@@ -3685,16 +3685,42 @@ routes['GET /api/admin/retrieval-logs'] = async (req, res) => {
   try {
     requireAdmin(req);
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const limit = parseInt(url.searchParams.get('limit') || '20');
-    const logs = await sbSafeQuery('retrieval_logs', {
-      select: '*',
-      order: 'created_at.desc',
-      limit: Math.min(limit, 100),
-    });
-    sendJson(res, 200, { data: logs });
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const query = url.searchParams.get('q') || '';
+    const userId = url.searchParams.get('user_id') || '';
+    const from = url.searchParams.get('from') || '';
+    const to = url.searchParams.get('to') || '';
+
+    const opts = { select: '*', order: 'created_at.desc', limit: Math.min(limit, 200) };
+    if (userId) opts.eq = { user_id: userId };
+
+    let logs = await sbSafeQuery('retrieval_logs', opts);
+
+    // 本地过滤（Supabase REST 不支持全文搜索列过滤）
+    if (query) {
+      const q = query.toLowerCase();
+      logs = logs.filter(l => (l.query || '').toLowerCase().includes(q));
+    }
+    if (from) {
+      logs = logs.filter(l => l.created_at >= from);
+    }
+    if (to) {
+      logs = logs.filter(l => l.created_at <= to + 'T23:59:59Z');
+    }
+
+    // 统计摘要
+    const summary = {
+      total: logs.length,
+      avg_graph_results: logs.reduce((s, l) => s + (l.graph_results?.length || 0), 0) / (logs.length || 1),
+      avg_final_results: logs.reduce((s, l) => s + (l.final_results?.length || 0), 0) / (logs.length || 1),
+      top_queries: Object.entries(logs.reduce((acc, l) => { acc[l.query] = (acc[l.query] || 0) + 1; return acc; }, {}))
+        .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([q, count]) => ({ query: q, count })),
+    };
+
+    sendJson(res, 200, { data: logs, summary });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 200, { data: [] });
+    sendJson(res, 200, { data: [], summary: {} });
   }
 };
 
