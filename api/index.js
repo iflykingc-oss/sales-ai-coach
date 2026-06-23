@@ -720,20 +720,43 @@ async function graphSearch(industry, objection, persona) {
   return [];
 }
 
-// ---- 完整检索 pipeline ----
+// ---- 完整检索 pipeline（带详细日志）----
 async function retrieveKnowledge(query, industry, userId) {
+  const logData = {
+    id: crypto.randomUUID(),
+    user_id: userId || null,
+    query: query.slice(0, 500),
+    industry: industry || null,
+    objection: null,
+    persona: null,
+    graph_results: [],
+    coarse_results: [],
+    bm25_results: [],
+    final_results: [],
+    injected_knowledge: [],
+    created_at: new Date().toISOString(),
+  };
+
   // 1. 检测异议类型和角色
   const objection = detectObjection(query);
   const persona = inferPersona(query);
+  logData.objection = objection;
+  logData.persona = persona;
   console.log(`Retrieval: industry=${industry}, objection=${objection}, persona=${persona}`);
 
   // 2. 图谱检索（优先）
   let graphResults = [];
   if (industry && objection) {
     graphResults = await graphSearch(industry, objection, persona);
+    logData.graph_results = graphResults.map(r => ({
+      strategy: r.strategy_name,
+      score: r.effectiveness,
+      knowledge_id: r.knowledge_id,
+      content_preview: (r.knowledge_content || '').slice(0, 100),
+    }));
   }
 
-  // 3. 知识库检索（补充）
+  // 3. 知识库检索（粗筛）
   let kbResults = [];
   try {
     kbResults = await sbRpc('search_knowledge', {
@@ -742,6 +765,15 @@ async function retrieveKnowledge(query, industry, userId) {
       filter_industry: industry || null,
       filter_user_id: userId || null,
     });
+    logData.coarse_results = (kbResults || []).slice(0, 10).map(r => ({
+      id: r.id,
+      content_preview: (r.content || '').slice(0, 80),
+      industry: r.industry,
+      weight: r.weight,
+      trigram_score: r.trigram_score,
+      fts_rank: r.fts_rank,
+      final_score: r.final_score,
+    }));
   } catch (e) {
     console.log('KB search failed:', e.message.slice(0, 80));
   }
@@ -750,7 +782,6 @@ async function retrieveKnowledge(query, industry, userId) {
   const graphIds = new Set(graphResults.map(r => r.knowledge_id).filter(Boolean));
   const merged = [];
 
-  // 图谱策略 → 知识条目
   for (const gr of graphResults) {
     if (gr.knowledge_content) {
       merged.push({
@@ -765,17 +796,27 @@ async function retrieveKnowledge(query, industry, userId) {
     }
   }
 
-  // 知识库补充（去重）
   for (const kr of (kbResults || [])) {
     if (!graphIds.has(kr.id)) {
       merged.push({ ...kr, graph_score: 0 });
     }
   }
 
-  if (merged.length === 0) return [];
+  if (merged.length === 0) {
+    // 记录空结果日志
+    try { await sbInsert('retrieval_logs', logData); } catch (e) {}
+    return [];
+  }
 
   // 5. BM25 精排
   const bm25Ranked = jiebaBM25Rerank(query, merged, 10);
+  logData.bm25_results = bm25Ranked.slice(0, 10).map(r => ({
+    id: r.id,
+    content_preview: (r.content || '').slice(0, 80),
+    bm25_score: r.bm25_score,
+    graph_score: r.graph_score || 0,
+    weight: r.weight,
+  }));
 
   // 6. 按 style 分组，保证多视角
   const groups = groupByStyle(bm25Ranked);
@@ -792,9 +833,29 @@ async function retrieveKnowledge(query, industry, userId) {
     }
   }
 
-  console.log(`Retrieval: graph=${graphResults.length} kb=${kbResults?.length || 0} → final=${final.length} (${styles.length} styles)`);
+  logData.final_results = final.slice(0, 5).map(r => ({
+    id: r.id,
+    content_preview: (r.content || '').slice(0, 100),
+    source: r.source,
+    style: r.style,
+    weight: r.weight,
+    bm25_score: r.bm25_score,
+    graph_score: r.graph_score || 0,
+  }));
 
-  // 7. 记录使用
+  logData.injected_knowledge = final.slice(0, 5).map(r => ({
+    id: r.id,
+    type: r.knowledge_type,
+    industry: r.industry,
+    content_preview: (r.content || '').slice(0, 150),
+  }));
+
+  console.log(`Retrieval: graph=${graphResults.length} kb=${kbResults?.length || 0} → bm25=${bm25Ranked.length} → final=${final.length} (${styles.length} styles)`);
+
+  // 7. 异步写入日志（不阻塞返回）
+  sbInsert('retrieval_logs', logData).catch(() => {});
+
+  // 8. 记录使用
   if (userId && final.length > 0) {
     logKnowledgeUsage(final.map(f => f.id), userId, 'script_ref', query.slice(0, 100));
   }
@@ -3616,6 +3677,24 @@ routes['PUT /api/admin/users/:userId/plan'] = async (req, res) => {
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 500, { success: false, error: 'Internal server error' });
+  }
+};
+
+// ---- 管理员：检索日志 ----
+routes['GET /api/admin/retrieval-logs'] = async (req, res) => {
+  try {
+    requireAdmin(req);
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const logs = await sbSafeQuery('retrieval_logs', {
+      select: '*',
+      order: 'created_at.desc',
+      limit: Math.min(limit, 100),
+    });
+    sendJson(res, 200, { data: logs });
+  } catch (err) {
+    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
+    sendJson(res, 200, { data: [] });
   }
 };
 
