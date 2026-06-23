@@ -31,10 +31,16 @@ async function initDatabase() {
     : { success: false, reason: 'tables_missing', missingTables: missing, message: '请在 Supabase SQL Editor 中执行建表 SQL' };
 }
 
-// 启动时自动同步行业数据（延迟 3 秒，等待数据库连接就绪）
-setTimeout(() => {
-  syncManager.startAutoSync(5 * 60 * 1000); // 每 5 分钟同步一次
-}, 3000);
+// 启动时自动同步行业数据（仅在非 serverless 环境）
+if (process.env.VERCEL !== '1') {
+  setTimeout(() => {
+    try {
+      syncManager.startAutoSync(5 * 60 * 1000);
+    } catch (e) {
+      console.log('Industry sync disabled:', e.message);
+    }
+  }, 3000);
+}
 
 // Initialize Sentry
 Sentry.init({
