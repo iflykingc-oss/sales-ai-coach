@@ -799,6 +799,13 @@ export default function ScriptDisplay() {
             </div>
           )}
 
+          {/* Price note - 价格示例提示 */}
+          {(currentScript as any).priceNote && (
+            <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+              <p className="text-xs text-yellow-700">⚠️ {(currentScript as any).priceNote}</p>
+            </div>
+          )}
+
           {/* Feedback — use the script ID matching the active style */}
           <div className="border-t border-gray-100 pt-3">
             {(() => {
