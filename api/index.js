@@ -489,11 +489,19 @@ const PLAN_LIMITS = {
 };
 
 async function checkUsageLimit(userId, action) {
-  // Get user's plan
-  const users = await sbSafeQuery('users', { select: 'plan', eq: { id: userId }, limit: 1 });
+  // Get user's plan and role
+  const users = await sbSafeQuery('users', { select: 'plan,role', eq: { id: userId }, limit: 1 });
   if (!users || users.length === 0) return { allowed: false, error: 'User not found' };
 
-  const plan = users[0].plan || 'FREE';
+  const user = users[0];
+  const plan = user.plan || 'FREE';
+  const role = user.role || 'USER';
+
+  // 管理员不受限制
+  if (role === 'ADMIN' || role === 'TEAM_OWNER') {
+    return { allowed: true, remaining: -1, plan, role };
+  }
+
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.FREE;
   const limit = limits[action];
 
