@@ -176,6 +176,13 @@ const QUERIES = [
   // 抖音 — 销售短视频的文字内容
   'site:douyin.com 销售话术 异议', 'site:douyin.com 销冠 经验分享',
 
+  // ========== 补充行业关键词 ==========
+  '医疗销售 异议处理', '医疗器械 销售技巧',
+  '旅游销售 话术', '健身房 销售话术',
+  '宠物店 销售技巧', '装修销售 异议处理',
+  '家电销售 价格异议', '珠宝销售 话术技巧',
+  '服装销售 连带销售', '餐饮招商 销售话术',
+
   // ========== 海外市场（英文）==========
   // LinkedIn — B2B sales insights
   'site:linkedin.com sales objection handling', 'site:linkedin.com B2B sales techniques',
@@ -188,29 +195,72 @@ const QUERIES = [
   'how to handle price objection sales', 'sales negotiation tactics',
   'cold call opening lines that work', 'sales follow up best practices',
   'SPIN selling examples', 'consultative selling techniques',
+  'value selling methodology', 'solution selling framework',
+  'sales qualification BANT MEDDIC', 'sales pipeline management',
+  'customer objection types', 'price objection scripts',
   // B2B SaaS
   'SaaS sales objection handling', 'B2B sales discovery questions',
   'enterprise sales techniques', 'SaaS pricing objection response',
   'demo to close conversion tips', 'B2B cold outreach templates',
+  'SaaS customer retention', 'upselling cross-selling techniques',
+  'B2B account based selling', 'sales engineering best practices',
   // Real estate
   'real estate sales objection handling', 'how to sell house when buyer says too expensive',
   'real estate agent negotiation tips', 'open house sales techniques',
+  'luxury home sales pitch', 'first time home buyer objections',
+  'real estate listing presentation', 'commercial property sales',
   // Insurance
   'insurance sales objection handling', 'how to sell insurance to millennials',
   'insurance closing techniques', 'life insurance sales scripts',
+  'health insurance sales pitch', 'auto insurance upselling',
+  'insurance needs analysis', 'whole life vs term objection',
   // Automotive
   'car sales objection handling', 'auto dealer negotiation tactics',
   'how to close car sales', 'test drive follow up techniques',
+  'electric vehicle sales pitch', 'lease vs buy objection handling',
+  'trade-in negotiation', 'F&I sales techniques',
   // Sales psychology
   'loss aversion in sales', 'anchoring effect pricing negotiation',
   'social proof sales techniques', 'reciprocity principle in selling',
-  'Cialdini principles sales application',
+  'Cialdini principles sales application', 'scarcity urgency closing',
+  'buyer decision making process', 'emotional buying triggers',
+  'cognitive bias in sales', 'persuasion techniques ethical',
   // Phone/remote sales
   'phone sales techniques objection handling', 'video call sales tips',
   'WhatsApp sales conversation tips', 'email follow up after no response',
+  'LinkedIn sales navigator tips', 'virtual demo best practices',
+  'cold email subject lines', 'sales cadence templates',
   // Southeast Asia
   'sales techniques Southeast Asia', 'insurance sales Thailand tips',
-  'real estate Vietnam sales', 'e-commerce Indonesia selling技巧',
+  'real estate Vietnam sales', 'e-commerce Indonesia selling',
+  'sales negotiation Philippines', 'Malaysia retail sales',
+  // Japan/Korea
+  'sales techniques Japan business', '韩国销售技巧',
+  // Middle East
+  'sales techniques Middle East', 'Dubai real estate sales',
+  // 拉美市场
+  'ventas técnicas objeciones', 'cómo cerrar ventas',
+  'ventas inmobiliarias consejos', 'ventas seguros técnicas',
+  'técnicas de negociación ventas',
+  // 补充通用
+  'sales coaching techniques', 'sales training programs',
+  'objection handling framework', 'sales objection prevention',
+  'customer pain point discovery', 'value proposition selling',
+  'competitive selling strategies', 'win-back sales techniques',
+  'sales presentation skills', 'storytelling in sales',
+  'referral selling techniques', 'networking for sales',
+  'time management for sales', 'sales KPI metrics',
+  'customer lifetime value', 'sales funnel optimization',
+  'objection handling role play', 'sales script examples',
+  'negotiation win-win strategies', 'closing techniques summary',
+  'sales motivation mindset', 'rejection handling resilience',
+  'digital selling transformation', 'omnichannel sales',
+  'AI sales tools', 'CRM best practices',
+  'sales automation', 'conversational selling',
+  'insight selling', 'provocative selling',
+  'challenger sale insights', 'customer centric selling',
+  'spin selling questions', 'SNAP selling',
+  'JOLT effect selling', 'gap selling methodology',
 ];
 
 // ============================================================
