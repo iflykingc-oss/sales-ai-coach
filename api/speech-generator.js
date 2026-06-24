@@ -1,11 +1,10 @@
 /**
- * 话术生成模块 V2
+ * 话术生成模块 V2.1
  *
- * 核心功能：
- * 1. 知识处理器：解析 → 过滤 → 去重
- * 2. Prompt 构建器：强约束 + 风格差异化
- * 3. 三级质控：格式 → 规则 → 语义匹配
- * 4. 自适应重试：温度衰减 + 靶向修正
+ * 修复：
+ * 1. 知识置顶 - 解决注意力衰减
+ * 2. 同义词扩展 - 减少误判
+ * 3. 重试指令强化 - 直接列出策略
  */
 
 // ==================== 知识处理器 ====================
@@ -62,36 +61,83 @@ function formatKnowledgeForPrompt(knowledgeList) {
   ).join('\n\n');
 }
 
-// ==================== Prompt 构建器 ====================
+// ==================== Prompt 构建器（知识置顶）====================
 
 function buildSpeechPromptV2(industry, knowledgeList) {
   const parts = [];
 
-  // 第一层：人设
-  parts.push(`你是资深${industry}行业销冠话术设计专家，拥有10年一线销售培训经验。\n输出的话术必须符合真实销售对话场景，自然口语化，禁止PPT式模板化表达。`);
-
-  // 第二层：知识强约束
+  // ★ 第一层：知识库置顶 + 最高优先级指令
   if (knowledgeList.length > 0) {
     const formatted = formatKnowledgeForPrompt(knowledgeList);
-    parts.push(`【最高优先级指令：必须强制使用知识库】\n以下是经过行业验证的专属销售策略，你必须将这些策略融入话术的异议处理、价值呈现环节。\n禁止脱离知识库凭空编造说服逻辑，禁止用通用套话替代知识策略。\n\n<知识库>\n${formatted}\n</知识库>\n\n要求：每条话术必须至少引用2条以上知识库策略，转化为自然口语表达。`);
+    parts.push(`【最高优先级指令，必须100%遵守】
+你所有话术必须严格基于下方的行业知识库生成，禁止脱离知识库编造通用套话。
+每条话术必须至少用到2条知识库策略，融入异议处理和价值呈现环节。
+禁止使用 XX、某某、相关优势 等任何占位符，没有具体数值时用行业通用合理值举例（比如教培单课时按80元左右举例）。
+
+<知识库>
+${formatted}
+</知识库>`);
   }
 
+  // 第二层：人设
+  parts.push(`你是资深${industry}行业销冠话术设计专家，拥有10年一线销售培训经验。
+输出的话术必须符合真实销售对话场景，自然口语化，禁止PPT式模板化表达。`);
+
   // 第三层：风格差异化
-  parts.push(`【核心要求：三种话术必须有本质区别】\n开场白、说服逻辑、促成方式必须完全不同，不能只是换几个语气词。\n\n各风格具体规则：\n\n◆ 共情版\n- 开场要求：必须用"我理解"、"确实"等共情类词汇开头\n- 知识用法：站在客户立场，用知识库中的算账方法、对比逻辑帮客户避坑\n- 语气要求：温和亲和，像朋友聊天，不说教\n- 示例开头："我完全理解您的想法，给娃报课确实要精打细算..."\n\n◆ 直爽版\n- 开场要求：必须用数据、算账公式或直接结论开头\n- 知识用法：直接用知识库中的单价对比、成本拆分公式给结论，不绕客套话\n- 语气要求：干脆利落，效率优先，不拖泥带水\n- 示例开头："咱们直接算笔账，单课时价格其实我们比同行更便宜..."\n\n◆ 专业版\n- 开场要求：必须用行业规律、效果保障或市场趋势开头\n- 知识用法：用知识库中的零风险策略、行业普遍规律做专业背书，体现顾问身份\n- 语气要求：理性客观，顾问式沟通，有说服力\n- 示例开头："其实家长选机构最核心看两点：单课时成本和效果保障..."`);
+  parts.push(`【核心要求：三种话术必须有本质区别】
+开场白、说服逻辑、促成方式必须完全不同，不能只是换几个语气词。
+
+各风格具体规则：
+
+◆ 共情版
+- 开场要求：必须用"我理解"、"确实"等共情类词汇开头
+- 知识用法：站在客户立场，用知识库中的算账方法、对比逻辑帮客户避坑
+- 语气要求：温和亲和，像朋友聊天，不说教
+- 示例开头："我完全理解您的想法，给娃报课确实要精打细算..."
+
+◆ 直爽版
+- 开场要求：必须用数据、算账公式或直接结论开头
+- 知识用法：直接用知识库中的单价对比、成本拆分公式给结论，不绕客套话
+- 语气要求：干脆利落，效率优先，不拖泥带水
+- 示例开头："咱们直接算笔账，单课时价格其实我们比同行更便宜..."
+
+◆ 专业版
+- 开场要求：必须用行业规律、效果保障或市场趋势开头
+- 知识用法：用知识库中的零风险策略、行业普遍规律做专业背书，体现顾问身份
+- 语气要求：理性客观，顾问式沟通，有说服力
+- 示例开头："其实家长选机构最核心看两点：单课时成本和效果保障..."`);
 
   // 第四层：结构要求
-  parts.push(`【每套话术必须包含4个环节，用小标题标注】\n1. 开场白（1-2句）：严格符合对应风格的开场要求\n2. 异议处理（2-3句）：必须用到知识库中的核心策略\n3. 价值呈现（2-3个卖点）：转化为客户的实际收益\n4. 促成动作（1句）：给客户明确的行动理由`);
+  parts.push(`【每套话术必须包含4个环节，用小标题标注】
+1. 开场白（1-2句）：严格符合对应风格的开场要求
+2. 异议处理（2-3句）：必须用到知识库中的核心策略
+3. 价值呈现（2-3个卖点）：转化为客户的实际收益
+4. 促成动作（1句）：给客户明确的行动理由`);
 
   // 第五层：质量红线
-  parts.push(`【质量红线 - 违反直接不合格】\n❌ 禁止使用 XX、某某、相关优势 等无意义占位符，必须用具体表述\n❌ 禁止书面语、官方话术，必须像真人说话一样口语化\n❌ 三套话术开场白绝对不能相同\n❌ 单套话术不得超过500字\n❌ 禁止脱离知识库编造销售策略`);
+  parts.push(`【质量红线 - 违反直接不合格】
+❌ 禁止使用 XX、某某、相关优势 等无意义占位符，必须用具体表述
+❌ 禁止书面语、官方话术，必须像真人说话一样口语化
+❌ 三套话术开场白绝对不能相同
+❌ 单套话术不得超过500字
+❌ 禁止脱离知识库编造销售策略`);
 
   // 第六层：输出格式
-  parts.push(`【输出格式】严格返回标准JSON，不要任何多余解释文字：\n{\n  "tacticalExecutionPaths": [\n    {"pathType": "共情版", "verbalScript": "完整话术内容"},\n    {"pathType": "直爽版", "verbalScript": "完整话术内容"},\n    {"pathType": "专业版", "verbalScript": "完整话术内容"}\n  ],\n  "confidenceScore": 0.85,\n  "knowledgeUsed": ["本次用到的知识ID和策略摘要"]\n}`);
+  parts.push(`【输出格式】严格返回标准JSON，不要任何多余解释文字：
+{
+  "tacticalExecutionPaths": [
+    {"pathType": "共情版", "verbalScript": "完整话术内容"},
+    {"pathType": "直爽版", "verbalScript": "完整话术内容"},
+    {"pathType": "专业版", "verbalScript": "完整话术内容"}
+  ],
+  "confidenceScore": 0.85,
+  "knowledgeUsed": ["本次用到的知识ID和策略摘要"]
+}`);
 
   return parts.join('\n\n');
 }
 
-// ==================== 三级质控评估器 ====================
+// ==================== 三级质控评估器（同义词扩展）====================
 
 function evaluateSpeech(result, knowledgeList) {
   // Level1: 格式校验
@@ -122,7 +168,7 @@ function evaluateSpeech(result, knowledgeList) {
     return { passed: false, level: 2, feedback: `风格相似度过高(${Math.max(sim01, sim12).toFixed(2)})，差异化不足`, suggestions: ['三种话术使用不同的知识策略切入'] };
   }
 
-  // 知识落地三层校验
+  // 知识落地检测（同义词扩展，只拦纯通用话术）
   if (knowledgeList.length > 0) {
     const totalLength = styles.reduce((sum, s) => sum + (s.verbalScript || '').length, 0);
     if (totalLength < 200) {
@@ -134,22 +180,68 @@ function evaluateSpeech(result, knowledgeList) {
       return { passed: false, level: 2, feedback: '未标注引用的知识库内容', suggestions: ['填写 knowledgeUsed 字段，标注用到的知识库策略'] };
     }
 
-    const strategyKeywords = new Set();
+    // ★ 同义词扩展：提取核心语义关键词组
+    const coreKeywords = new Set();
     knowledgeList.forEach(kn => {
-      const phrases = kn.strategy.match(/[一-龥]{2,}(?:价格|成本|效果|算|对比|便宜|试听|退费|课时)/g) || [];
-      phrases.forEach(p => strategyKeywords.add(p));
+      const strategy = kn.strategy || '';
+      if (strategy.includes('单课时') || strategy.includes('算价格') || strategy.includes('价格')) {
+        ['单课时', '课时费', '每节课', '单价', '一节课', '算下来', '价格', '费用'].forEach(w => coreKeywords.add(w));
+      }
+      if (strategy.includes('便宜') || strategy.includes('同行') || strategy.includes('对比')) {
+        ['便宜', '划算', '同行', '别家', '更低', '比周边', '对比', '比较'].forEach(w => coreKeywords.add(w));
+      }
+      if (strategy.includes('效果') || strategy.includes('试听') || strategy.includes('保障')) {
+        ['效果', '试听', '保障', '退费', '零风险', '免费', '体验'].forEach(w => coreKeywords.add(w));
+      }
+      if (strategy.includes('课时') || strategy.includes('课程')) {
+        ['课时', '课程', '上课', '学习', '培训'].forEach(w => coreKeywords.add(w));
+      }
     });
-    const contentWords = new Set(allContent.match(/[一-龥]{2,}/g) || []);
-    let overlap = 0;
-    strategyKeywords.forEach(k => { if (contentWords.has(k)) overlap++; });
-    const overlapRate = strategyKeywords.size > 0 ? overlap / strategyKeywords.size : 1;
 
-    if (strategyKeywords.size > 0 && overlapRate < 0.1) {
-      return { passed: false, level: 2, feedback: '话术未体现知识库核心策略，通用化严重', suggestions: ['将知识库的核心策略融入异议处理环节'] };
+    const contentWords = allContent.match(/[一-龥]{2,}/g) || [];
+    let hitCount = 0;
+    coreKeywords.forEach(k => {
+      if (contentWords.some(w => w.includes(k))) hitCount++;
+    });
+
+    // 命中至少2个核心语义组就算通过
+    if (coreKeywords.size > 0 && hitCount < 2) {
+      return { passed: false, level: 2, feedback: '话术未体现知识库核心策略，通用化严重', suggestions: ['将知识库的算账、对比等策略融入异议处理'] };
     }
   }
 
   return { passed: true, level: 3, overallScore: 0.85, feedback: '通过', suggestions: [] };
+}
+
+// ==================== 重试指令构建器（强化版）====================
+
+function buildRetryInstruction(feedback, suggestions, knowledgeList) {
+  let knowledgeTip = '';
+
+  // 针对知识库问题，直接列出策略
+  if (feedback.includes('知识库') || feedback.includes('通用化')) {
+    const strategies = knowledgeList.map((kn, i) => `${i + 1}. ${kn.strategy}`).join('\n');
+    knowledgeTip = `
+⚠️ 强制要求：你必须把以下知识库策略融入话术的异议处理环节，缺一不可：
+${strategies}
+禁止再输出空泛的"性价比高、服务好"之类的通用套话。`.trim();
+  }
+
+  // 针对占位符问题
+  if (feedback.includes('占位符') || feedback.includes('XX')) {
+    knowledgeTip += '\n⚠️ 禁止用XX代替数值，不知道具体数字就用行业通用值举例，比如单课时80元。';
+  }
+
+  return `
+【质量校验未通过，定向修正指令】
+问题：${feedback}
+
+${knowledgeTip}
+
+改进建议：
+${suggestions.map(s => `- ${s}`).join('\n')}
+
+要求：只修改问题点，保留原有结构，输出标准JSON。`.trim();
 }
 
 // ==================== 自适应重试引擎 ====================
@@ -168,8 +260,9 @@ async function generateSpeechWithRetry(industry, knowledgeList, userScene, lang,
     const temperature = Math.max(0.25, baseTemp - attempt * tempDecay);
     let currentUserPrompt = userPrompt;
 
+    // ★ 重试时使用强化版指令
     if (attempt > 0 && lastEval) {
-      currentUserPrompt += `\n\n【质量校验未通过，定向修正指令】\n上一版问题：${lastEval.feedback}\n\n修正要求：\n1. 保留原有框架，只修改问题点\n2. 三种话术开场白必须不同\n3. 必须使用知识库策略\n4. 必须填写 knowledgeUsed 字段\n\n改进建议：\n${lastEval.suggestions.map(s => `- ${s}`).join('\n')}`;
+      currentUserPrompt += '\n\n' + buildRetryInstruction(lastEval.feedback, lastEval.suggestions, knowledgeList);
     }
 
     try {
