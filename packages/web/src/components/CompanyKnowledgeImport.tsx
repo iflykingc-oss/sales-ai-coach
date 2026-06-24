@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Upload, Globe, FileSpreadsheet, Presentation, Edit3, X } from 'lucide-react';
+import { FileText, Upload, Globe, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import {
@@ -123,15 +123,15 @@ export function CompanyKnowledgeImport({ open, onOpenChange, onSuccess }: Compan
     setLoading(true);
     try {
       // 调用后端API进行网页抓取
-      const res = await api.post('/company-knowledge/scrape', { url: webUrl });
+      const res = await api.post('/company-knowledge/scrape', { url: webUrl }) as any;
 
-      if (res.success) {
+      if (res?.success) {
         toast.success('网页抓取成功');
         resetForm();
         onOpenChange(false);
         onSuccess();
       } else {
-        toast.error(res.error || '抓取失败');
+        toast.error(res?.error || '抓取失败');
       }
     } catch (err) {
       toast.error('网页抓取失败');

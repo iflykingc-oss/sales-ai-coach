@@ -13,7 +13,7 @@ export function KnowledgeList() {
   const {
     items, searchQuery, activeFilter,
     setSearchQuery, setActiveFilter,
-    setEditingItem, setIsFormOpen, setIsImportOpen, deleteItem,
+    setEditingItem, setIsFormOpen, deleteItem,
   } = useKnowledgeStore();
   const queryClient = useQueryClient();
 
