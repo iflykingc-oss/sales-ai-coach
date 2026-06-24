@@ -9,6 +9,7 @@ import { AnnouncementAdmin } from '@/components/admin/AnnouncementAdmin';
 import { SyncManager } from '@/components/admin/SyncManager';
 import { SystemSettings } from '@/components/admin/SystemSettings';
 import { UserAdmin } from '@/components/admin/UserAdmin';
+import { CompanyKnowledge } from '@/components/CompanyKnowledge';
 import { RetrievalLogs } from '@/components/admin/RetrievalLogs';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
@@ -153,6 +154,7 @@ export default function AdminPage() {
             <TabsTrigger value="stats">数据统计</TabsTrigger>
             <TabsTrigger value="users">用户管理</TabsTrigger>
             <TabsTrigger value="knowledge">知识库管理</TabsTrigger>
+            <TabsTrigger value="company-knowledge">公司知识</TabsTrigger>
             <TabsTrigger value="models">模型配置</TabsTrigger>
             <TabsTrigger value="announcements">公告管理</TabsTrigger>
             <TabsTrigger value="sync">数据同步</TabsTrigger>
@@ -171,6 +173,10 @@ export default function AdminPage() {
 
           <TabsContent value="knowledge">
             <KnowledgeAdmin />
+          </TabsContent>
+
+          <TabsContent value="company-knowledge">
+            <CompanyKnowledge />
           </TabsContent>
 
           <TabsContent value="models">
