@@ -6,6 +6,7 @@ const registry = require('./industry-context');
 const syncManager = require('./industry-sync');
 const { processKnowledge, generateSpeechWithRetry } = require('./speech-generator');
 const companyKnowledge = require('./company-knowledge');
+const teamManager = require('./team-manager');
 
 // 行业检测兼容函数（使用新的 L1 正则矩阵引擎）
 function detectIndustry(input, userIndustry) {
@@ -2474,7 +2475,7 @@ routes['POST /api/company-knowledge'] = companyKnowledge.createCompanyKnowledge;
 routes['PUT /api/company-knowledge/:id'] = companyKnowledge.updateCompanyKnowledge;
 routes['DELETE /api/company-knowledge/:id'] = companyKnowledge.deleteCompanyKnowledge;
 
-// --- Teams ---
+// --- Teams (新版本) ---
 routes['GET /api/teams/my'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
@@ -2507,106 +2508,28 @@ routes['POST /api/teams'] = async (req, res) => {
   }
 };
 
-routes['GET /api/teams/:id/stats'] = async (req, res) => {
-  try {
-    const jwt = requireAuth(req);
-    const { parts } = safeId(req);
-    const teamId = parts[3];
-    const members = await sbSafeQuery('users', { select: 'id,name,email,role,created_at', eq: { teamId: teamId } });
-    sendJson(res, 200, { data: {
-      members: members.map(m => ({ ...m, avatar: null, status: 'active', joinedAt: m.created_at, stats: { scriptsGenerated: 0, practiceScore: 0, sessionsCompleted: 0, growthTrend: 0 } })),
-      stats: { totalMembers: members.length, activeToday: 0, totalScriptsGenerated: 0, avgPracticeScore: 0 },
-      weakScenarios: []
-    }});
-  } catch (err) {
-    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 200, { data: { members: [], stats: { totalMembers: 0, activeToday: 0, totalScriptsGenerated: 0, avgPracticeScore: 0 }, weakScenarios: [] } });
-  }
-};
+// 团队成员管理
+routes['GET /api/teams/:teamId/members'] = teamManager.getTeamMembers;
+routes['POST /api/teams/:teamId/members'] = teamManager.createTeamMember;
+routes['DELETE /api/teams/:teamId/members/:memberId'] = teamManager.removeTeamMember;
 
-routes['GET /api/teams/:id/tasks'] = async (req, res) => {
-  try {
-    const jwt = requireAuth(req);
-    const { parts } = safeId(req);
-    const teamId = parts[3];
-    const tasks = await sbSafeQuery('team_tasks', { select: '*', eq: { team_id: teamId }, order: 'created_at.desc', limit: 50 });
-    sendJson(res, 200, { data: tasks });
-  } catch (err) {
-    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 200, { data: [] });
-  }
-};
+// 团队统计
+routes['GET /api/teams/:teamId/stats'] = teamManager.getTeamStats;
 
-routes['POST /api/teams/:id/tasks'] = async (req, res) => {
-  try {
-    const jwt = requireAuth(req);
-    const { parts } = safeId(req);
-    const teamId = parts[3];
-    const { type, assigneeId, deadline, scenario, description } = await parseBody(req);
-    const task = await sbSafeInsert('team_tasks', {
-      id: crypto.randomUUID(), team_id: teamId, assignee_id: assigneeId || jwt.userId,
-      type: type || 'practice', scenario: scenario || '通用场景',
-      deadline: deadline || new Date(Date.now() + 7*24*60*60*1000).toISOString(),
-      status: 'PENDING', created_at: new Date().toISOString()
-    });
-    sendJson(res, 201, { success: true, data: { id: task.id } });
-  } catch (err) {
-    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 500, { success: false, error: 'Internal server error' });
-  }
-};
+// 任务管理
+routes['GET /api/teams/:teamId/tasks'] = teamManager.getTasks;
+routes['POST /api/teams/:teamId/tasks'] = teamManager.createTask;
+routes['PATCH /api/teams/:teamId/tasks/:taskId'] = teamManager.updateTask;
 
-routes['PATCH /api/teams/:teamId/tasks/:taskId'] = async (req, res) => {
-  try {
-    const jwt = requireAuth(req);
-    const { parts } = safeId(req);
-    const taskId = parts[5];
-    const data = await parseBody(req);
-    const updated = await sbSafeUpdate('team_tasks', { id: taskId }, { ...data, updated_at: new Date().toISOString() });
-    sendJson(res, 200, { success: true, data: updated[0] || updated });
-  } catch (err) {
-    if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    sendJson(res, 500, { success: false, error: 'Internal server error' });
-  }
-};
+// 通知
+routes['GET /api/notifications'] = teamManager.getNotifications;
+routes['PATCH /api/notifications/:notificationId/read'] = teamManager.markNotificationRead;
 
-// --- Shared Scripts ---
-routes['GET /api/shared-scripts/:teamId'] = async (req, res) => {
-  try {
-    const jwt = requireAuth(req);
-    const { parts } = safeId(req);
-    const teamId = parts[2];
-    const scripts = await sbSafeQuery('shared_scripts', { select: '*', eq: { team_id: teamId }, order: 'created_at.desc', limit: 50 });
-    sendJson(res, 200, { data: scripts });
-  } catch (err) { sendJson(res, 200, { data: [] }); }
-};
-
-routes['POST /api/shared-scripts/:teamId'] = async (req, res) => {
-  try {
-    const jwt = requireAuth(req);
-    const { parts } = safeId(req);
-    const teamId = parts[2];
-    const { title, content } = await parseBody(req);
-    const script = await sbSafeInsert('shared_scripts', {
-      id: crypto.randomUUID(), team_id: teamId, author_id: jwt.userId,
-      title: title || '未命名', content: content || '',
-      likes: 0, approved: false, created_at: new Date().toISOString()
-    });
-    sendJson(res, 201, { success: true, data: script });
-  } catch (err) { sendJson(res, 500, { success: false, error: 'Internal server error' }); }
-};
-
-routes['POST /api/shared-scripts/:teamId/:scriptId/like'] = async (req, res) => {
-  try {
-    sendJson(res, 200, { success: true, data: { likes: 1 } });
-  } catch (err) { sendJson(res, 200, { success: true, data: { likes: 0 } }); }
-};
-
-routes['PATCH /api/shared-scripts/:teamId/:scriptId/approve'] = async (req, res) => {
-  try {
-    sendJson(res, 200, { success: true, data: { approved: true } });
-  } catch (err) { sendJson(res, 200, { success: true }); }
-};
+// 共享话术
+routes['GET /api/teams/:teamId/shared-scripts'] = teamManager.getSharedScripts;
+routes['POST /api/teams/:teamId/shared-scripts'] = teamManager.shareScript;
+routes['POST /api/teams/:teamId/shared-scripts/:scriptId/like'] = teamManager.likeScript;
+routes['PATCH /api/teams/:teamId/shared-scripts/:scriptId/approve'] = teamManager.approveScript;
 
 // --- Announcements ---
 // 获取已发布的公告（用户端）

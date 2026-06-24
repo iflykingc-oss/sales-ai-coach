@@ -4,6 +4,7 @@ import { TeamDashboard } from '@/components/team/TeamDashboard';
 import { MemberList } from '@/components/team/MemberList';
 import { TaskManager } from '@/components/team/TaskManager';
 import { ScriptSharing } from '@/components/team/ScriptSharing';
+import { CreateMemberDialog } from '@/components/team/CreateMemberDialog';
 import { useTeamStore } from '@/stores/teamStore';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
@@ -13,6 +14,7 @@ export default function TeamPage() {
   const user = useUserStore((s) => s.user);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [noTeam, setNoTeam] = useState(false);
+  const [showCreateMember, setShowCreateMember] = useState(false);
 
   const fetchTeamData = useCallback(async () => {
     setLoading(true);
@@ -124,7 +126,7 @@ export default function TeamPage() {
       ) : isOwner ? (
         <>
           <TeamDashboard />
-          <MemberList />
+          <MemberList onCreateMember={() => setShowCreateMember(true)} />
           <TaskManager teamId={teamId} />
           <ScriptSharing />
         </>
@@ -133,6 +135,16 @@ export default function TeamPage() {
           <p className="text-sm text-gray-500">团队管理功能仅对团队管理员开放</p>
           <p className="mt-2 text-xs text-gray-400">请联系团队管理员获取权限</p>
         </div>
+      )}
+
+      {/* 创建成员对话框 */}
+      {teamId && (
+        <CreateMemberDialog
+          open={showCreateMember}
+          onOpenChange={setShowCreateMember}
+          teamId={teamId}
+          onSuccess={fetchTeamData}
+        />
       )}
     </div>
   );
