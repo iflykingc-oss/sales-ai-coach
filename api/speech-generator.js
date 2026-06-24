@@ -147,10 +147,22 @@ function evaluateSpeech(result, knowledgeList) {
 
   const styles = result.tacticalExecutionPaths;
 
-  // ★ 自动替换 XX 占位符（教育行业默认值）
+  // ★ 自动替换 XX 占位符
+  // 优先从知识库提取实际价格，兜底用示例值并标注
+  let examplePrice = '80';
+  let isExamplePrice = true;
+  if (knowledgeList.length > 0) {
+    for (const kn of knowledgeList) {
+      const priceMatch = (kn.strategy || '').match(/(\d+)元/) || (kn.example || '').match(/(\d+)元/);
+      if (priceMatch) {
+        examplePrice = priceMatch[1];
+        isExamplePrice = false;
+        break;
+      }
+    }
+  }
+
   const defaultValues = {
-    'XX元': '80元',
-    'XX': '80',
     '某某': '我们',
     '某公司': '我们机构',
     '具体说明': '详细介绍一下',
@@ -160,11 +172,19 @@ function evaluateSpeech(result, knowledgeList) {
   };
   styles.forEach(style => {
     if (style.verbalScript) {
+      // 替换 XX 元为实际价格或示例价格
+      style.verbalScript = style.verbalScript.replace(/XX元?/g, examplePrice + '元');
+      // 其他占位符替换
       for (const [placeholder, replacement] of Object.entries(defaultValues)) {
         style.verbalScript = style.verbalScript.replaceAll(placeholder, replacement);
       }
     }
   });
+
+  // 如果用了示例价格，在结果中标注
+  if (isExamplePrice && allContent.includes('XX')) {
+    result._priceNote = '注：话术中的价格为行业示例值（约80元/课时），非实际价格，请根据实际情况调整。';
+  }
 
   const allContent = styles.map(s => s.verbalScript || '').join(' ');
 
@@ -230,7 +250,12 @@ function evaluateSpeech(result, knowledgeList) {
     }
   }
 
-  return { passed: true, level: 3, overallScore: 0.85, feedback: '通过', suggestions: [] };
+  const evalResult = { passed: true, level: 3, overallScore: 0.85, feedback: '通过', suggestions: [] };
+  // 如果有价格提示，附加到结果中
+  if (result._priceNote) {
+    evalResult.priceNote = result._priceNote;
+  }
+  return evalResult;
 }
 
 // ==================== 重试指令构建器（强化版）====================
@@ -307,7 +332,12 @@ async function generateSpeechWithRetry(industry, knowledgeList, userScene, lang,
 
     if (lastEval.passed) {
       console.info(`[SpeechGen] 第${attempt}轮通过`);
-      return { ...lastResult, meta: { retryAttempts: attempt, status: 'SUCCESS', knowledgeCount: knowledgeList.length } };
+      const response = { ...lastResult, meta: { retryAttempts: attempt, status: 'SUCCESS', knowledgeCount: knowledgeList.length } };
+      // 如果有价格提示，附加到响应中
+      if (lastEval.priceNote) {
+        response.priceNote = lastEval.priceNote;
+      }
+      return response;
     }
 
     console.info(`[SpeechGen] 第${attempt}轮未通过: ${lastEval.feedback}`);
