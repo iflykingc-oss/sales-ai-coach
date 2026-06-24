@@ -146,10 +146,30 @@ function evaluateSpeech(result, knowledgeList) {
   if (result.tacticalExecutionPaths.length !== 3) return { passed: false, level: 1, feedback: '话术风格数量不符合要求（需3种）', suggestions: [] };
 
   const styles = result.tacticalExecutionPaths;
+
+  // ★ 自动替换 XX 占位符（教育行业默认值）
+  const defaultValues = {
+    'XX元': '80元',
+    'XX': '80',
+    '某某': '我们',
+    '某公司': '我们机构',
+    '具体说明': '详细介绍一下',
+    '（具体': '(',
+    '相关优势': '核心优势',
+    '等方面': '等方面都有保障',
+  };
+  styles.forEach(style => {
+    if (style.verbalScript) {
+      for (const [placeholder, replacement] of Object.entries(defaultValues)) {
+        style.verbalScript = style.verbalScript.replaceAll(placeholder, replacement);
+      }
+    }
+  });
+
   const allContent = styles.map(s => s.verbalScript || '').join(' ');
 
-  // Level2: 规则校验
-  const forbidden = ['XX', '某某', '某公司', '具体说明', '（具体', '相关优势', '等方面'];
+  // Level2: 规则校验（只检查无法自动替换的占位符）
+  const forbidden = ['某某', '某公司'];
   for (const ph of forbidden) {
     if (allContent.includes(ph)) return { passed: false, level: 2, feedback: `检测到禁用占位符：${ph}`, suggestions: [`将 ${ph} 替换为具体表述`] };
   }
