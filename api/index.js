@@ -3794,7 +3794,7 @@ routes['GET /api/admin/models'] = async (req, res) => {
       temperature: m.temperature,
       maxTokens: m.max_tokens,
       repetitionPenalty: 1.1,
-      apiKey: m.api_key ? '****' : '',
+      apiKey: m.api_key ? '***' + m.api_key.slice(-4) : '',
       usageQuota: 10000,
       usageCurrent: 0,
       alertThreshold: 80,
@@ -3865,7 +3865,8 @@ routes['PUT /api/admin/models/:id'] = async (req, res) => {
     // 只更新非空、非占位符的字段
     if (data.temperature !== undefined) updateData.temperature = data.temperature;
     if (data.maxTokens !== undefined) updateData.max_tokens = data.maxTokens;
-    if (data.apiKey !== undefined && data.apiKey !== '' && data.apiKey !== '****') {
+    // Detect masked apiKey (starts with '***') — skip updating it
+    if (data.apiKey !== undefined && data.apiKey !== '' && !data.apiKey.startsWith('***')) {
       updateData.api_key = data.apiKey;
     }
     if (data.baseUrl !== undefined && data.baseUrl !== '') {
