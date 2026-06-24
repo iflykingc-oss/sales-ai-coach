@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Upload, Search, Filter, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Search, Filter, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -19,9 +18,9 @@ export function KnowledgeList() {
   const queryClient = useQueryClient();
 
   const { data: knowledgeItems, isLoading } = useQuery<KnowledgeItem[]>({
-    queryKey: ['knowledge'],
+    queryKey: ['knowledge', 'public'],
     queryFn: async () => {
-      const res = await api.get('/knowledge');
+      const res = await api.get('/knowledge?public_only=true');
       return Array.isArray(res) ? res : res.data || [];
     },
   });
@@ -81,14 +80,7 @@ export function KnowledgeList() {
               ))}
             </select>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setIsImportOpen(true)}>
-            <Upload className="mr-1.5 h-4 w-4" />
-            导入
-          </Button>
-          <Button size="sm" onClick={() => { setEditingItem(null); setIsFormOpen(true); }}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            新增
-          </Button>
+          {/* 通用知识由管理员维护，用户只能查看和搜索 */}
         </div>
       </div>
 
@@ -105,10 +97,8 @@ export function KnowledgeList() {
       ) : filteredItems.length === 0 ? (
         <EmptyState
           icon={<FileText className="h-6 w-6" />}
-          title="暂无知识条目"
-          description="点击「新增」或「导入」添加行业知识"
-          action={{ label: '新增知识', onClick: () => { setEditingItem(null); setIsFormOpen(true); } }}
-          shortcut="N"
+          title="暂无通用知识"
+          description="管理员尚未导入行业知识，请联系管理员"
         />
       ) : (
         <div className="space-y-3">

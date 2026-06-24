@@ -2389,13 +2389,28 @@ JSON 结构：
 routes['GET /api/knowledge'] = async (req, res) => {
   try {
     const jwt = requireAuth(req);
-    // 获取用户的私有知识 + 公共知识（爬取的，user_id=null）
-    const userItems = await sbSafeQuery('knowledge_items', { select: '*', eq: { user_id: jwt.userId, status: 'ACTIVE' }, order: 'created_at.desc', limit: 100 });
-    const publicItems = await sbSafeQuery('knowledge_items', { select: '*', eq: { status: 'ACTIVE' }, order: 'created_at.desc', limit: 200 });
-    const publicOnly = publicItems.filter(item => !item.user_id);
-    // 合并：用户私有在前，公共在后，按时间倒序
-    const items = [...userItems, ...publicOnly].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 200);
-    sendJson(res, 200, { data: items, meta: { userCount: userItems.length, publicCount: publicOnly.length } });
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const publicOnly = url.searchParams.get('public_only') === 'true';
+
+    if (publicOnly) {
+      // 只返回公共知识（管理员导入的，user_id=null）
+      const publicItems = await sbSafeQuery('knowledge_items', {
+        select: '*',
+        eq: { status: 'ACTIVE' },
+        order: 'created_at.desc',
+        limit: 200
+      });
+      const publicOnlyItems = publicItems.filter(item => !item.user_id);
+      sendJson(res, 200, { data: publicOnlyItems, meta: { publicCount: publicOnlyItems.length } });
+    } else {
+      // 返回用户的私有知识 + 公共知识
+      const userItems = await sbSafeQuery('knowledge_items', { select: '*', eq: { user_id: jwt.userId, status: 'ACTIVE' }, order: 'created_at.desc', limit: 100 });
+      const publicItems = await sbSafeQuery('knowledge_items', { select: '*', eq: { status: 'ACTIVE' }, order: 'created_at.desc', limit: 200 });
+      const publicOnlyItems = publicItems.filter(item => !item.user_id);
+      // 合并：用户私有在前，公共在后，按时间倒序
+      const items = [...userItems, ...publicOnlyItems].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 200);
+      sendJson(res, 200, { data: items, meta: { userCount: userItems.length, publicCount: publicOnlyItems.length } });
+    }
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
     sendJson(res, 200, { data: [] });

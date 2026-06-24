@@ -7,34 +7,34 @@ import { CompanyKnowledge } from '@/components/CompanyKnowledge';
 import { BookOpen, Building2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
-type TabType = 'personal' | 'company';
+type TabType = 'general' | 'company';
 
 export default function KnowledgePage() {
   const { isFormOpen, isImportOpen, setIsFormOpen, setIsImportOpen } = useKnowledgeStore();
-  const [activeTab, setActiveTab] = useState<TabType>('personal');
+  const [activeTab, setActiveTab] = useState<TabType>('general');
 
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900">知识库</h2>
         <p className="mt-1 text-sm text-gray-500">
-          管理你的销售知识资产，自动沉淀、智能检索、持续进化
+          管理销售知识资产，通用知识由管理员维护，公司知识由你配置
         </p>
       </div>
 
       {/* Tab 切换 */}
       <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1">
         <button
-          onClick={() => setActiveTab('personal')}
+          onClick={() => setActiveTab('general')}
           className={cn(
             'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-            activeTab === 'personal'
+            activeTab === 'general'
               ? 'bg-white text-gray-900 shadow-sm'
               : 'text-gray-600 hover:text-gray-900'
           )}
         >
           <BookOpen className="h-4 w-4" />
-          个人知识
+          通用知识
         </button>
         <button
           onClick={() => setActiveTab('company')}
@@ -51,8 +51,13 @@ export default function KnowledgePage() {
       </div>
 
       {/* 内容 */}
-      {activeTab === 'personal' ? (
+      {activeTab === 'general' ? (
         <>
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <p className="text-sm text-blue-700">
+              📚 通用知识由管理员统一维护，包含行业销售策略、异议处理方法论等，所有用户共享
+            </p>
+          </div>
           <KnowledgeList />
           <KnowledgeForm
             open={isFormOpen}
