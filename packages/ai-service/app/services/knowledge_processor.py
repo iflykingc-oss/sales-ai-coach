@@ -6,15 +6,19 @@ Features:
 2. Embedding-based semantic similarity (replaces broken Jaccard for Chinese)
 3. Weight optimization based on user feedback
 4. Auto-archiving of low-value knowledge
+5. Structured four-dimensional knowledge parsing (scene/strategy/example/id)
+6. Strategy-level semantic deduplication
 """
 
 from app.models.router import model_router
 from app.core.logging import logger
 from app.core.sanitization import wrap_user_input
 from app.utils.json_parser import extract_json
+from app.config.speech_config import SpeechGenConfig, DEFAULT_CONFIG
 import json
 import math
-from typing import Any
+import re
+from typing import Any, List
 
 
 KNOWLEDGE_TAG_PROMPT = """你是一个销售知识分类专家。请分析以下知识内容并自动打标。
@@ -239,3 +243,172 @@ def should_archive(weight: float, usage_count: int, days_since_update: int) -> b
     - Low usage count (< 3)
     """
     return weight < 0.3 and usage_count < 3 and days_since_update > 90
+
+
+# =============================================================================
+# Structured Knowledge Processing — four-dimensional parsing + strategy dedup
+# =============================================================================
+
+class KnowledgeItem:
+    """Structured knowledge entry with four-dimensional indexing."""
+
+    def __init__(
+        self,
+        kn_id: str,
+        industry: str,
+        scene: str,
+        strategy: str,
+        example: str,
+        score: float = 0.0,
+    ):
+        self.id = kn_id
+        self.industry = industry
+        self.scene = scene
+        self.strategy = strategy
+        self.example = example
+        self.score = score
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "industry": self.industry,
+            "scene": self.scene,
+            "strategy": self.strategy,
+            "example": self.example,
+            "score": self.score,
+        }
+
+    def __repr__(self) -> str:
+        return f"KnowledgeItem(id={self.id}, scene={self.scene}, strategy={self.strategy[:30]}...)"
+
+
+class KnowledgeProcessor:
+    """
+    Structured knowledge processing pipeline.
+
+    Pipeline: raw text → four-dimensional parse → strategy-level dedup → top-K selection
+    Uses existing embedding functions for semantic similarity, falls back to bigram.
+    """
+
+    def __init__(self, config: SpeechGenConfig = DEFAULT_CONFIG):
+        self.config = config
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        """Normalize text: remove whitespace, punctuation, unify format."""
+        return re.sub(
+            r'[\s，。！？、；：""\'\'（）\[\]【】\.,;:"\'()\n\r]',
+            '',
+            text,
+        ).lower()
+
+    @staticmethod
+    def _bigram_similarity(a: str, b: str) -> float:
+        """Bigram Jaccard similarity as fallback when embedding unavailable."""
+        a_norm = KnowledgeProcessor._normalize_text(a)
+        b_norm = KnowledgeProcessor._normalize_text(b)
+        if not a_norm or not b_norm:
+            return 0.0
+
+        bg_a = {a_norm[i:i + 2] for i in range(len(a_norm) - 1)}
+        bg_b = {b_norm[i:i + 2] for i in range(len(b_norm) - 1)}
+        intersection = len(bg_a & bg_b)
+        union = len(bg_a | bg_b)
+        return intersection / union if union > 0 else 0.0
+
+    async def _calc_similarity(self, text_a: str, text_b: str) -> float:
+        """
+        Two-tier similarity: prefer embedding, fall back to bigram.
+
+        Reuses existing get_text_embedding() and cosine_similarity() functions.
+        """
+        try:
+            emb_a = await get_text_embedding(text_a)
+            emb_b = await get_text_embedding(text_b)
+            return cosine_similarity(emb_a, emb_b)
+        except Exception as e:
+            logger.warning(f"Embedding similarity failed, falling back to bigram: {e}")
+            return self._bigram_similarity(text_a, text_b)
+
+    @staticmethod
+    def _parse_raw_item(raw_text: str, index: int, industry: str) -> KnowledgeItem:
+        """
+        Parse unstructured knowledge text into four-dimensional structure.
+
+        Adapted to existing knowledge base format. Handles multiple common patterns:
+        - 客户说"..." → scene
+        - 应对策略：... → strategy
+        - （"..."） → example
+        """
+        scene_match = re.search(r'客户说[““]([^””]+)[“”]', raw_text)
+        strategy_match = re.search(r'应对策略[：:]([^\n]+)', raw_text)
+        example_match = re.search(r'[（(][““]([^””]+)[“”][）)]', raw_text)
+
+        # Fallback patterns for different knowledge formats
+        if not scene_match:
+            scene_match = re.search(r'场景[：:]([^\n]+)', raw_text)
+        if not strategy_match:
+            strategy_match = re.search(r'策略[：:]([^\n]+)', raw_text)
+        if not example_match:
+            example_match = re.search(r'示例[：:]([^\n]+)', raw_text)
+
+        return KnowledgeItem(
+            kn_id=f"kn_{industry}_{index}_{abs(hash(raw_text)) % 10000:04d}",
+            industry=industry,
+            scene=scene_match.group(1).strip() if scene_match else "通用异议",
+            strategy=strategy_match.group(1).split('（')[0].strip() if strategy_match else raw_text[:100],
+            example=example_match.group(1).strip() if example_match else "",
+            score=0.0,
+        )
+
+    async def process(
+        self,
+        raw_knowledge_list: List[str],
+        industry: str,
+        top_k: int = 3,
+    ) -> List[KnowledgeItem]:
+        """
+        Knowledge processing pipeline: parse → strategy dedup → top-K.
+
+        Args:
+            raw_knowledge_list: Raw knowledge text entries
+            industry: Industry identifier
+            top_k: Number of items to return
+
+        Returns:
+            Deduplicated top-K KnowledgeItem list
+        """
+        if not raw_knowledge_list:
+            return []
+
+        # Step 1: Structured parsing
+        parsed_items = [
+            self._parse_raw_item(raw, idx, industry)
+            for idx, raw in enumerate(raw_knowledge_list)
+        ]
+
+        # Step 2: Strategy-level semantic dedup (core: prevent same strategy repeated)
+        deduped: List[KnowledgeItem] = []
+        seen_strategies: List[str] = []
+
+        for item in parsed_items:
+            is_dup = False
+            for seen in seen_strategies:
+                sim = await self._calc_similarity(item.strategy, seen)
+                if sim >= self.config.dedup_similarity_threshold:
+                    logger.info(
+                        f"Dedup: '{item.strategy[:30]}...' ~= '{seen[:30]}...' (sim={sim:.3f})"
+                    )
+                    is_dup = True
+                    break
+            if not is_dup:
+                seen_strategies.append(item.strategy)
+                deduped.append(item)
+
+        # Step 3: Return top-K
+        result = deduped[:top_k]
+        logger.info(
+            f"Knowledge processed: {len(raw_knowledge_list)} raw → "
+            f"{len(parsed_items)} parsed → {len(deduped)} deduped → {len(result)} returned"
+        )
+        return result

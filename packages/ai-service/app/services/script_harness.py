@@ -1,22 +1,27 @@
 """
 Harness-powered script generation service.
 
-Two-agent architecture:
+Full pipeline architecture:
 1. Planner: Decomposes script generation into analysis → RAG → generation → evaluation
-2. Executor: Executes each subtask with context
-3. Evaluator: Validates output quality, triggers rework if needed
+2. Executor: Executes each subtask with stacked prompts and temperature control
+3. KnowledgeProcessor: Structured four-dimensional knowledge parsing + dedup
+4. SpeechEvaluator: Three-level quality gate (format → rules → LLM)
+5. RetryEngine: Targeted retry with temperature decay and degradation fallback
 
 Quality gate:
-- Generation → Evaluation → (retry with feedback) → Final output
-- Maximum 2 retries
+- Generation → L1 Format → L2 Rules → L3 LLM → (targeted retry) → Final output
+- Maximum 3 retries with temperature decay
 """
 
 import json
 from app.harness.feature_list import FeatureList, ItemStatus
 from app.harness.planner import TaskPlanner
 from app.harness.executor import TaskExecutor
-from app.harness.evaluator import OutputEvaluator, EvalResult
+from app.harness.evaluator import SpeechEvaluator
+from app.harness.retry_engine import RetryEngine
 from app.harness.progress_tracker import ProgressTracker
+from app.services.knowledge_processor import KnowledgeProcessor, KnowledgeItem
+from app.config.speech_config import SpeechGenConfig, DEFAULT_CONFIG
 from app.models.router import model_router
 from app.core.logging import logger
 from app.utils.json_parser import extract_json
@@ -24,18 +29,22 @@ from app.utils.json_parser import extract_json
 
 class ScriptGenerationHarness:
     """
-    Orchestrates script generation using Harness patterns.
+    Orchestrates script generation using full harness pipeline.
 
     Pipeline:
-    1. Planner creates FeatureList for the generation task
-    2. Executor runs through analysis → RAG → generation
-    3. Evaluator checks quality
-    4. If quality insufficient, retry with evaluator feedback
-    5. Return final result + quality report
+    1. Planner creates FeatureList DAG for the generation task
+    2. KnowledgeProcessor parses and deduplicates knowledge
+    3. Executor runs through analysis → RAG → generation (with stacked prompts)
+    4. SpeechEvaluator applies three-level quality gate
+    5. RetryEngine handles targeted retry with temperature decay
+    6. Returns final result + quality report + execution metrics
     """
 
-    MAX_RETRIES = 2
-    QUALITY_THRESHOLD = 0.7
+    def __init__(self, config: SpeechGenConfig = DEFAULT_CONFIG):
+        self.config = config
+        self.knowledge_processor = KnowledgeProcessor(config)
+        self.evaluator = SpeechEvaluator(config)
+        self.retry_engine = RetryEngine(config)
 
     async def generate(
         self,
@@ -44,9 +53,20 @@ class ScriptGenerationHarness:
         industry: str = "",
         knowledge_context: str = "",
         frameworks: list[str] | None = None,
+        raw_knowledge_list: list[str] | None = None,
+        scene_type: str = "价格异议",
     ) -> dict:
         """
         Generate sales scripts with full harness pipeline.
+
+        Args:
+            input_text: User input / customer scenario
+            input_type: Type of input (objection, inquiry, etc.)
+            industry: Industry identifier
+            knowledge_context: Raw knowledge context string
+            frameworks: List of analytical framework IDs to apply
+            raw_knowledge_list: Raw knowledge entries for structured processing
+            scene_type: Scene type for section matching (e.g., "价格异议", "初步接洽")
 
         Returns:
             {
@@ -59,19 +79,34 @@ class ScriptGenerationHarness:
                     "score": float,
                     "feedback": str,
                     "passed": bool,
+                    "level": int,
                 },
                 "execution_report": {
                     "task_id": str,
                     "elapsed_seconds": float,
                     "retries": int,
+                    "status": str,
+                },
+                "meta_metrics": {
+                    "retry_attempts": int,
+                    "status": str,
                 }
             }
         """
         logger.info(
-            f"ScriptHarness.generate: input_type={input_type}, industry={industry}"
+            f"ScriptHarness.generate: input_type={input_type}, industry={industry}, "
+            f"scene_type={scene_type}"
         )
 
-        # Phase 1: Planning
+        # Phase 1: Knowledge processing (structured parse + dedup)
+        knowledge_items = []
+        if raw_knowledge_list:
+            knowledge_items = await self.knowledge_processor.process(
+                raw_knowledge_list, industry, top_k=3
+            )
+            logger.info(f"Knowledge processed: {len(knowledge_items)} items")
+
+        # Phase 2: Planning (build DAG)
         planner = TaskPlanner()
         fl = await planner.plan_script_generation(
             input_text=input_text,
@@ -81,97 +116,95 @@ class ScriptGenerationHarness:
             frameworks=frameworks,
         )
 
-        # Phase 2: Execution
-        executor = TaskExecutor(fl, max_retries=self.MAX_RETRIES)
+        # Phase 3: Execution with RetryEngine
         progress = ProgressTracker(fl)
         progress.start()
 
-        # Attach progress callbacks
-        executor.fl = fl  # Ensure executor uses our feature list
+        # Capture planner args for re-planning on retry
+        planner_args = {
+            "input_text": input_text,
+            "input_type": input_type,
+            "industry": industry,
+            "knowledge_context": knowledge_context,
+            "frameworks": frameworks,
+        }
 
-        fl = await executor.run()
+        # Define generate and eval functions for RetryEngine
+        async def generate_func(item, dep_results, user_input, attempt):
+            """Execute generation with attempt-based temperature decay.
+
+            On retry, re-creates FeatureList and Executor to reset state.
+            """
+            # Re-plan on retry to get fresh FeatureList
+            if attempt > 0:
+                planner_retry = TaskPlanner()
+                fl_retry = await planner_retry.plan_script_generation(**planner_args)
+                executor = TaskExecutor(fl_retry, max_retries=1)
+            else:
+                executor = TaskExecutor(fl, max_retries=1)
+
+            fl_exec = await executor.run(attempt=attempt)
+            script_result = executor.get_final_result()
+            return self._parse_script_result(script_result)
+
+        async def eval_func(result, scenario, knowledge_list, scene):
+            """Evaluate with three-level quality gate."""
+            return await self.evaluator.evaluate(
+                result, scenario, knowledge_list, scene
+            )
+
+        # Run with retry engine
+        # Build a temporary item for the retry engine
+        gen_item = fl.get_item(fl.items[-2].id) if len(fl.items) >= 2 else fl.items[0]
+        dep_results = {}
+
+        parsed = await self.retry_engine.run_with_retry(
+            generate_func=generate_func,
+            eval_func=eval_func,
+            user_input=input_text,
+            knowledge_list=knowledge_items,
+            item=gen_item,
+            dep_results=dep_results,
+            scene_type=scene_type,
+        )
+
         progress.complete()
 
-        # Phase 3: Extract generated script
-        script_result = executor.get_final_result()
-
-        # Phase 4: Parse and validate
-        parsed = self._parse_script_result(script_result)
-
-        # Phase 5: Quality evaluation
-        evaluator = OutputEvaluator(threshold=self.QUALITY_THRESHOLD)
-        eval_result = await evaluator.evaluate_script(parsed, input_text)
-
-        # Phase 6: Retry if quality insufficient
-        retries = 0
-        while not eval_result.passed and retries < self.MAX_RETRIES:
-            logger.info(
-                f"Script quality insufficient (score={eval_result.overall_score}), "
-                f"retrying with feedback: {eval_result.feedback}"
-            )
-            retries += 1
-
-            # Regenerate with evaluator feedback incorporated
-            fl_retry = await self._plan_retry(
-                input_text, input_type, industry, knowledge_context, eval_result, frameworks
-            )
-            executor = TaskExecutor(fl_retry, max_retries=1)
-            fl_retry = await executor.run()
-            script_result = executor.get_final_result()
-            parsed = self._parse_script_result(script_result)
-            eval_result = await evaluator.evaluate_script(parsed, input_text)
+        # Phase 4: Extract quality and execution info
+        quality_report = parsed.pop("evaluation", {})
+        meta_metrics = parsed.pop("meta_metrics", {})
+        warning = parsed.pop("warning", None)
 
         # Build final response
-        return {
+        result = {
             **parsed,
             "quality_report": {
-                "score": eval_result.overall_score,
-                "feedback": eval_result.feedback,
-                "passed": eval_result.passed,
-                "suggestions": eval_result.suggestions,
+                "score": quality_report.get("overall_score", 0),
+                "feedback": quality_report.get("feedback", ""),
+                "passed": quality_report.get("passed", False),
+                "level": quality_report.get("level", 0),
+                "suggestions": quality_report.get("suggestions", []),
             },
             "execution_report": {
                 "task_id": fl.task_id,
                 "elapsed_seconds": progress.get_progress().elapsed_seconds,
-                "retries": retries,
-                "total_items": fl.items,
+                "retries": meta_metrics.get("retry_attempts", 0),
+                "status": meta_metrics.get("status", "UNKNOWN"),
+                "total_items": len(fl.items),
                 "progress": progress.get_report(),
             },
         }
 
-    async def _plan_retry(
-        self,
-        input_text: str,
-        input_type: str,
-        industry: str,
-        knowledge_context: str,
-        eval_result: EvalResult,
-        frameworks: list[str] | None = None,
-    ) -> FeatureList:
-        """Create a retry plan that incorporates evaluator feedback."""
-        fl = FeatureList(goal=f"重新生成话术（质量改进）")
+        if warning:
+            result["warning"] = warning
 
-        feedback_context = f"""上次生成的质量评估:
-- 总体评分: {eval_result.overall_score}
-- 反馈: {eval_result.feedback}
-- 改进建议: {'; '.join(eval_result.suggestions)}
-
-请在重新生成时特别注意以上反馈。"""
-
-        fl.add_item(
-            f"分析质量评估反馈，确定需要改进的具体方面: {feedback_context}"
-        )
-        gen_id = fl.add_item(
-            "重新生成3种风格话术，针对评估反馈进行改进",
-            dependencies=[fl.items[0].id],
-            metadata={"temperature": 0.8},  # Slightly higher temperature for variation
-        )
-        fl.add_item(
-            "检查改进后的话术是否解决了评估反馈的问题",
-            dependencies=[gen_id],
+        logger.info(
+            f"ScriptHarness completed: status={meta_metrics.get('status')}, "
+            f"score={quality_report.get('overall_score', 0):.2f}, "
+            f"retries={meta_metrics.get('retry_attempts', 0)}"
         )
 
-        return fl
+        return result
 
     def _parse_script_result(self, result: str) -> dict:
         """Parse LLM output into structured script data."""
@@ -181,7 +214,7 @@ class ScriptGenerationHarness:
             if data is not None:
                 # Validate required fields
                 if "speech_styles" in data and isinstance(data["speech_styles"], list):
-                    result = {
+                    parsed = {
                         "speech_styles": data["speech_styles"],
                         "reasoning": data.get("reasoning", []),
                         "pitfalls": data.get("pitfalls", []),
@@ -194,7 +227,7 @@ class ScriptGenerationHarness:
                                      "journeyStage", "scqaNarrative", "challengerInsight",
                                      "frameworkAnalysis"):
                         if fw_field in data:
-                            result[fw_field] = data[fw_field]
+                            parsed[fw_field] = data[fw_field]
                     # Also check snake_case variants
                     for snake, camel in [
                         ("swot_analysis", "swotAnalysis"),
@@ -209,16 +242,16 @@ class ScriptGenerationHarness:
                         ("challenger_insight", "challengerInsight"),
                         ("framework_analysis", "frameworkAnalysis"),
                     ]:
-                        if snake in data and camel not in result:
-                            result[camel] = data[snake]
-                    return result
+                        if snake in data and camel not in parsed:
+                            parsed[camel] = data[snake]
+                    return parsed
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"Failed to parse script result: {e}")
 
         # Fallback: wrap raw content
         return {
             "speech_styles": [
-                {"style": "生成版", "content": result[:800]},
+                {"style": "生成版", "content": str(result)[:800]},
             ],
             "reasoning": ["话术生成成功，但格式解析失败"],
             "pitfalls": [{"action": "检查输入格式", "reason": "确保输入为清晰的场景描述"}],

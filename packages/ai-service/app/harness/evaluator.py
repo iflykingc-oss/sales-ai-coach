@@ -275,3 +275,165 @@ def _check_style_duplication(styles: list[dict]) -> bool:
             if union > 0 and intersection / union > 0.6:
                 return True
     return False
+
+
+# =============================================================================
+# Three-Level Quality Gate — L1 Format → L2 Rules → L3 LLM
+# =============================================================================
+
+import re as _re
+from typing import Tuple
+from app.config.speech_config import SpeechGenConfig, DEFAULT_CONFIG
+from app.services.knowledge_processor import KnowledgeItem
+
+
+class SpeechEvaluator:
+    """
+    Three-level quality gate for speech generation.
+
+    Level 1: Format validation (0 token cost)
+    Level 2: Business rule hard interception (0 token cost)
+    Level 3: LLM comprehensive evaluation (delegates to OutputEvaluator)
+    """
+
+    def __init__(self, config: SpeechGenConfig = DEFAULT_CONFIG):
+        self.config = config
+        self._llm_evaluator = OutputEvaluator(threshold=config.pass_score)
+
+    def _level1_format_check(self, result: dict) -> Tuple[bool, str]:
+        """Level 1: Format hard validation. Fail = immediate block."""
+        if not isinstance(result, dict) or result.get("error"):
+            return False, result.get("error", "JSON格式解析失败或非字典类型")
+        if "speech_styles" not in result:
+            return False, "缺少 speech_styles 字段"
+        if not isinstance(result["speech_styles"], list) or len(result["speech_styles"]) != 3:
+            return False, f"话术风格数量不符合要求（需3种，实际{len(result.get('speech_styles', []))}种）"
+        for style in result["speech_styles"]:
+            if not isinstance(style, dict):
+                return False, "speech_styles 元素必须为字典类型"
+            if "style" not in style or "content" not in style:
+                return False, f"话术字段缺失（需 style + content）"
+            if not style["content"] or len(style["content"]) < 20:
+                return False, f"{style.get('style', '?')}版话术内容过短（<20字）"
+        return True, "格式校验通过"
+
+    def _level2_rule_check(
+        self,
+        result: dict,
+        knowledge_list: List[KnowledgeItem],
+        scene_type: str,
+    ) -> Tuple[bool, str]:
+        """Level 2: Business rule hard interception. Fail = trigger targeted retry."""
+        styles = result["speech_styles"]
+        all_content = " ".join(s["content"] for s in styles)
+        required_sections = self.config.scene_sections.get(
+            scene_type, self.config.default_sections
+        )
+
+        # 1. Forbidden placeholder detection
+        for ph in self.config.forbidden_placeholders:
+            if ph in all_content:
+                return False, f"检测到禁用占位符：「{ph}」，必须转化为具体口语表达"
+
+        # 2. Speech section completeness check
+        for style in styles:
+            content = style["content"]
+            missing = [s for s in required_sections if s not in content]
+            if missing:
+                return False, f"{style['style']}版缺少必要环节：{', '.join(missing)}"
+
+        # 3. Style differentiation check (Jaccard word cluster)
+        def _jaccard_sim(a: str, b: str) -> float:
+            wa = set(_re.findall(r"[一-龥]{2,}", a))
+            wb = set(_re.findall(r"[一-龥]{2,}", b))
+            if not wa or not wb:
+                return 0.0
+            return len(wa & wb) / len(wa | wb)
+
+        sim01 = _jaccard_sim(styles[0]["content"], styles[1]["content"])
+        sim12 = _jaccard_sim(styles[1]["content"], styles[2]["content"])
+        max_sim = max(sim01, sim12)
+        if max_sim >= self.config.style_similarity_threshold:
+            return (
+                False,
+                f"三种风格内容相似度 {max_sim:.2f} 超过阈值 {self.config.style_similarity_threshold}，差异化不足",
+            )
+
+        # 4. Knowledge utilization check (when knowledge provided)
+        if knowledge_list:
+            strategy_words = set()
+            for kn in knowledge_list:
+                strategy_words.update(_re.findall(r"[一-龥]{2,}", kn.strategy))
+            content_words = set(_re.findall(r"[一-龥]{2,}", all_content))
+            if strategy_words:
+                overlap = len(strategy_words & content_words)
+                total = len(strategy_words)
+                overlap_rate = overlap / total
+                if overlap_rate < self.config.knowledge_overlap_threshold:
+                    return (
+                        False,
+                        f"知识落地度不足：策略关键词覆盖率 {overlap_rate:.2f} < 阈值 {self.config.knowledge_overlap_threshold}",
+                    )
+
+        return True, "规则校验通过"
+
+    async def _level3_llm_evaluate(self, result: dict, scenario: str) -> dict:
+        """Level 3: LLM comprehensive evaluation. Delegates to existing OutputEvaluator."""
+        eval_result = await self._llm_evaluator.evaluate_script(result, scenario)
+        return {
+            "overall_score": eval_result.overall_score,
+            "passed": eval_result.passed,
+            "feedback": eval_result.feedback,
+            "suggestions": eval_result.suggestions,
+        }
+
+    async def evaluate(
+        self,
+        result: dict,
+        scenario: str = "",
+        knowledge_list: List[KnowledgeItem] | None = None,
+        scene_type: str = "价格异议",
+    ) -> dict:
+        """
+        Three-level evaluation main entry.
+
+        Returns:
+            {
+                "overall_score": float,
+                "passed": bool,
+                "level": int (1/2/3),
+                "feedback": str,
+                "suggestions": list[str],
+            }
+        """
+        # Level 1: Format check
+        passed, msg = self._level1_format_check(result)
+        if not passed:
+            logger.warning(f"[Eval-L1] Failed: {msg}")
+            return {
+                "overall_score": 0.0,
+                "passed": False,
+                "level": 1,
+                "feedback": msg,
+                "suggestions": [msg],
+            }
+
+        # Level 2: Rule check
+        passed, msg = self._level2_rule_check(result, knowledge_list or [], scene_type)
+        if not passed:
+            logger.warning(f"[Eval-L2] Failed: {msg}")
+            return {
+                "overall_score": 0.3,
+                "passed": False,
+                "level": 2,
+                "feedback": msg,
+                "suggestions": [msg],
+            }
+
+        # Level 3: LLM evaluation
+        llm_result = await self._level3_llm_evaluate(result, scenario)
+        llm_result["level"] = 3
+        logger.info(
+            f"[Eval-L3] score={llm_result['overall_score']:.2f}, passed={llm_result['passed']}"
+        )
+        return llm_result
