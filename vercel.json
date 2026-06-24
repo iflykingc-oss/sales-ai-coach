@@ -17,6 +17,11 @@
       "schedule": "15 3 * * *"
     }
   ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "api/**"
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
