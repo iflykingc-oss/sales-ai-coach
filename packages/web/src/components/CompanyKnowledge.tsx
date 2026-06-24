@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, BookOpen, DollarSign, Award, Shield, FileText } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, Upload, BookOpen, DollarSign, Award, Shield, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { CompanyKnowledgeImport } from '@/components/CompanyKnowledgeImport';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 
@@ -29,6 +30,7 @@ export function CompanyKnowledge() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({ category: 'general', title: '', content: '' });
 
   useEffect(() => {
@@ -99,11 +101,24 @@ export function CompanyKnowledge() {
           <h3 className="text-lg font-semibold text-gray-900">公司专属知识</h3>
           <p className="text-sm text-gray-500">配置课程、价格、政策等公司信息，生成话术时会自动引用</p>
         </div>
-        <Button onClick={() => { setForm({ category: 'general', title: '', content: '' }); setEditingId(null); setShowAdd(true); }}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          添加知识
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowImport(true)}>
+            <Upload className="mr-1.5 h-4 w-4" />
+            导入
+          </Button>
+          <Button onClick={() => { setForm({ category: 'general', title: '', content: '' }); setEditingId(null); setShowAdd(true); }}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            添加知识
+          </Button>
+        </div>
       </div>
+
+      {/* 导入组件 */}
+      <CompanyKnowledgeImport
+        open={showImport}
+        onOpenChange={setShowImport}
+        onSuccess={fetchItems}
+      />
 
       {/* 知识列表 */}
       {items.length === 0 ? (
