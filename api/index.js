@@ -2499,7 +2499,7 @@ routes['POST /api/teams'] = async (req, res) => {
       id: crypto.randomUUID(), name, owner_id: jwt.userId, plan: 'TEAM',
       member_count: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
     });
-    await sbUpdate('users', { id: jwt.userId }, { team_id: team.id, plan: 'TEAM', updated_at: new Date().toISOString() });
+    await sbUpdate('users', { id: jwt.userId }, { teamId: team.id, plan: 'TEAM', updated_at: new Date().toISOString() });
     sendJson(res, 201, { success: true, data: team });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
@@ -2512,7 +2512,7 @@ routes['GET /api/teams/:id/stats'] = async (req, res) => {
     const jwt = requireAuth(req);
     const { parts } = safeId(req);
     const teamId = parts[3];
-    const members = await sbSafeQuery('users', { select: 'id,name,email,role,created_at', eq: { team_id: teamId } });
+    const members = await sbSafeQuery('users', { select: 'id,name,email,role,created_at', eq: { teamId: teamId } });
     sendJson(res, 200, { data: {
       members: members.map(m => ({ ...m, avatar: null, status: 'active', joinedAt: m.created_at, stats: { scriptsGenerated: 0, practiceScore: 0, sessionsCompleted: 0, growthTrend: 0 } })),
       stats: { totalMembers: members.length, activeToday: 0, totalScriptsGenerated: 0, avgPracticeScore: 0 },
