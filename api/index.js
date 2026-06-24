@@ -3921,7 +3921,19 @@ routes['POST /api/admin/models/test'] = async (req, res) => {
   try {
     requireAdmin(req);
     const data = await parseBody(req);
-    const { baseUrl, apiKey, modelId, provider } = data;
+    let { baseUrl, apiKey, modelId, provider } = data;
+
+    // 如果 apiKey 是掩码（以***开头），从数据库获取完整 key
+    if (apiKey && apiKey.startsWith('***')) {
+      const models = await sbSafeQuery('model_configs', {
+        select: 'api_key',
+        eq: { model_id: modelId },
+        limit: 1
+      });
+      if (models && models.length > 0 && models[0].api_key) {
+        apiKey = models[0].api_key;
+      }
+    }
 
     if (!apiKey || !modelId) {
       return sendJson(res, 400, { success: false, error: 'Missing required parameters' });
