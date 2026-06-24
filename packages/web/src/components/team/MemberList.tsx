@@ -91,7 +91,7 @@ export function MemberList({ onCreateMember }: MemberListProps) {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-400">{member.stats.scriptsGenerated}个话术</span>
-              <span className="text-xs text-gray-400">{member.stats.practicesCompleted}次练习</span>
+              <span className="text-xs text-gray-400">{member.stats.practiceScore}分</span>
               <Badge variant={roleVariants[member.role]}>{roleLabels[member.role]}</Badge>
               {member.role !== 'TEAM_OWNER' && (
                 <button

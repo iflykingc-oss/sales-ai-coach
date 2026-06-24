@@ -9,7 +9,6 @@ import { AnnouncementAdmin } from '@/components/admin/AnnouncementAdmin';
 import { SyncManager } from '@/components/admin/SyncManager';
 import { SystemSettings } from '@/components/admin/SystemSettings';
 import { UserAdmin } from '@/components/admin/UserAdmin';
-import { CompanyKnowledge } from '@/components/CompanyKnowledge';
 import { RetrievalLogs } from '@/components/admin/RetrievalLogs';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
