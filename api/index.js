@@ -208,7 +208,13 @@ async function generateSpeechWithRetry(industry, knowledgeList, userScene, lang)
       ], { max_tokens: 4096, temperature });
 
       if (aiResult) {
-        lastResult = JSON.parse(aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+        // 清除 <think> 标签（MiniMax 等模型的思考过程）和 markdown 代码块
+        const cleaned = aiResult
+          .replace(/<think>[\s\S]*?<\/think>/g, '')
+          .replace(/```json?\n?/g, '')
+          .replace(/```/g, '')
+          .trim();
+        lastResult = JSON.parse(cleaned);
       }
     } catch (err) {
       console.error(`[SpeechGen] 第${attempt}轮生成异常:`, err.message);
