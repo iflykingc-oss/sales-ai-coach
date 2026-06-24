@@ -163,9 +163,15 @@ async function deleteCompanyKnowledge(req, res) {
   }
 }
 
-module.exports = {
-  listCompanyKnowledge,
-  createCompanyKnowledge,
-  updateCompanyKnowledge,
-  deleteCompanyKnowledge
+// 默认导出函数（Vercel Serverless Function 要求）
+module.exports = async (req, res) => {
+  // 这个文件是被 index.js require 的，不是独立运行
+  // 如果被直接调用，返回 404
+  res.status(404).json({ error: 'This module should be accessed via /api/company-knowledge' });
 };
+
+// 命名导出（供 index.js 使用）
+module.exports.listCompanyKnowledge = listCompanyKnowledge;
+module.exports.createCompanyKnowledge = createCompanyKnowledge;
+module.exports.updateCompanyKnowledge = updateCompanyKnowledge;
+module.exports.deleteCompanyKnowledge = deleteCompanyKnowledge;

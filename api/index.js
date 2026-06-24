@@ -3734,7 +3734,12 @@ routes['POST /api/admin/models/test'] = async (req, res) => {
     const providerLower = (provider || '').toLowerCase();
 
     // 使用统一的 URL 构建函数
-    const testUrl = buildApiUrl(baseUrl, providerLower);
+    let testUrl = '';
+    try {
+      testUrl = buildApiUrl(baseUrl, providerLower);
+    } catch (e) {
+      testUrl = baseUrl || 'unknown';
+    }
     let headers = { 'Content-Type': 'application/json' };
     let body;
 

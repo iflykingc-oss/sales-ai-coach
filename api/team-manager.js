@@ -538,18 +538,24 @@ async function approveScript(req, res) {
   }
 }
 
-module.exports = {
-  getTeamMembers,
-  createTeamMember,
-  removeTeamMember,
-  getTeamStats,
-  createTask,
-  getTasks,
-  updateTask,
-  getNotifications,
-  markNotificationRead,
-  getSharedScripts,
-  shareScript,
-  likeScript,
-  approveScript
+// 默认导出函数（Vercel Serverless Function 要求）
+module.exports = async (req, res) => {
+  // 这个文件是被 index.js require 的，不是独立运行
+  // 如果被直接调用，返回 404
+  res.status(404).json({ error: 'This module should be accessed via /api/teams' });
 };
+
+// 命名导出（供 index.js 使用）
+module.exports.getTeamMembers = getTeamMembers;
+module.exports.createTeamMember = createTeamMember;
+module.exports.removeTeamMember = removeTeamMember;
+module.exports.getTeamStats = getTeamStats;
+module.exports.createTask = createTask;
+module.exports.getTasks = getTasks;
+module.exports.updateTask = updateTask;
+module.exports.getNotifications = getNotifications;
+module.exports.markNotificationRead = markNotificationRead;
+module.exports.getSharedScripts = getSharedScripts;
+module.exports.shareScript = shareScript;
+module.exports.likeScript = likeScript;
+module.exports.approveScript = approveScript;
