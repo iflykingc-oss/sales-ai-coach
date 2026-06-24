@@ -49,6 +49,190 @@ Sentry.init({
   tracesSampleRate: 0.1,
 });
 
+// ==================== SPEECH GENERATION V2 (方案二：全链路闭环) ====================
+
+// 知识处理器：解析 → 过滤 → 去重
+function processKnowledge(rawList, industry, targetObjection) {
+  if (!rawList?.length) return [];
+
+  // 文本归一化
+  const normalize = (text) => text.replace(/[\s，。！？、；：""''（）\[\]【】\.,;:"'()\n\r]/g, '').toLowerCase();
+
+  // Bigram 相似度
+  const bigramSim = (a, b) => {
+    const na = normalize(a), nb = normalize(b);
+    if (!na || !nb) return 0;
+    const getBg = (s) => { const set = new Set(); for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2)); return set; };
+    const bgA = getBg(na), bgB = getBg(nb);
+    let inter = 0; bgA.forEach(bg => { if (bgB.has(bg)) inter++; });
+    return (bgA.size + bgB.size - inter) > 0 ? inter / (bgA.size + bgB.size - inter) : 0;
+  };
+
+  // 结构化解析
+  const parsed = rawList.map((raw, idx) => {
+    const sceneMatch = raw.match(/客户说[""]([^""]+)[""]/);
+    const strategyMatch = raw.match(/应对策略[：:]([^\n]+)/);
+    const exampleMatch = raw.match(/（[""]([^""]+)[""]）/);
+    return {
+      id: `kn_${industry}_${idx}_${Math.abs(raw.split('').reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0)) % 10000}`,
+      industry,
+      scene: sceneMatch ? sceneMatch[1] : '通用异议',
+      strategy: strategyMatch ? strategyMatch[1].split('（')[0].trim() : raw.slice(0, 100),
+      example: exampleMatch ? exampleMatch[1] : ''
+    };
+  });
+
+  // 异议类型过滤
+  const normTarget = normalize(targetObjection);
+  const filtered = parsed.filter(item => bigramSim(normalize(item.scene), normTarget) > 0.3);
+  const source = filtered.length > 0 ? filtered : parsed;
+
+  // 策略去重
+  const deduped = [];
+  const seen = [];
+  for (const item of source) {
+    const ns = normalize(item.strategy);
+    let isDup = false;
+    for (const s of seen) {
+      if (bigramSim(ns, s) >= 0.78) { isDup = true; break; }
+    }
+    if (!isDup) { seen.push(ns); deduped.push(item); }
+  }
+
+  return deduped.slice(0, 3);
+}
+
+// 格式化知识为 Prompt 文本
+function formatKnowledgeForPrompt(knowledgeList) {
+  if (!knowledgeList.length) return '';
+  return knowledgeList.map((kn, i) =>
+    `${i + 1}. 知识ID: ${kn.id}\n   适用场景: 客户说"${kn.scene}"\n   核心策略: ${kn.strategy}\n   参考示例: ${kn.example || '无'}`
+  ).join('\n\n');
+}
+
+// 构建方案二的系统 Prompt
+function buildSpeechPromptV2(industry, knowledgeList) {
+  const parts = [];
+
+  // 第一层：人设
+  parts.push(`你是资深${industry}行业销冠话术设计专家，拥有10年一线销售培训经验。\n输出的话术必须符合真实销售对话场景，自然口语化，禁止PPT式模板化表达。`);
+
+  // 第二层：知识强约束
+  if (knowledgeList.length > 0) {
+    const formatted = formatKnowledgeForPrompt(knowledgeList);
+    parts.push(`【最高优先级指令：必须强制使用知识库】\n以下是经过行业验证的专属销售策略，你必须将这些策略融入话术的异议处理、价值呈现环节。\n禁止脱离知识库凭空编造说服逻辑，禁止用通用套话替代知识策略。\n\n<知识库>\n${formatted}\n</知识库>\n\n要求：每条话术必须至少引用2条以上知识库策略，转化为自然口语表达。`);
+  }
+
+  // 第三层：风格差异化
+  parts.push(`【核心要求：三种话术必须有本质区别】\n开场白、说服逻辑、促成方式必须完全不同，不能只是换几个语气词。\n\n各风格具体规则：\n\n◆ 共情版\n- 开场要求：必须用"我理解"、"确实"等共情类词汇开头\n- 知识用法：站在客户立场，用知识库中的算账方法、对比逻辑帮客户避坑\n- 语气要求：温和亲和，像朋友聊天，不说教\n- 示例开头："我完全理解您的想法，给娃报课确实要精打细算..."\n\n◆ 直爽版\n- 开场要求：必须用数据、算账公式或直接结论开头\n- 知识用法：直接用知识库中的单价对比、成本拆分公式给结论，不绕客套话\n- 语气要求：干脆利落，效率优先，不拖泥带水\n- 示例开头："咱们直接算笔账，单课时价格其实我们比同行更便宜..."\n\n◆ 专业版\n- 开场要求：必须用行业规律、效果保障或市场趋势开头\n- 知识用法：用知识库中的零风险策略、行业普遍规律做专业背书，体现顾问身份\n- 语气要求：理性客观，顾问式沟通，有说服力\n- 示例开头："其实家长选机构最核心看两点：单课时成本和效果保障..."`);
+
+  // 第四层：结构要求
+  parts.push(`【每套话术必须包含4个环节，用小标题标注】\n1. 开场白（1-2句）：严格符合对应风格的开场要求\n2. 异议处理（2-3句）：必须用到知识库中的核心策略\n3. 价值呈现（2-3个卖点）：转化为客户的实际收益\n4. 促成动作（1句）：给客户明确的行动理由`);
+
+  // 第五层：质量红线
+  parts.push(`【质量红线 - 违反直接不合格】\n❌ 禁止使用 XX、某某、相关优势 等无意义占位符，必须用具体表述\n❌ 禁止书面语、官方话术，必须像真人说话一样口语化\n❌ 三套话术开场白绝对不能相同\n❌ 单套话术不得超过500字\n❌ 禁止脱离知识库编造销售策略`);
+
+  // 第六层：输出格式
+  parts.push(`【输出格式】严格返回标准JSON，不要任何多余解释文字：\n{\n  "tacticalExecutionPaths": [\n    {"pathType": "共情版", "verbalScript": "完整话术内容"},\n    {"pathType": "直爽版", "verbalScript": "完整话术内容"},\n    {"pathType": "专业版", "verbalScript": "完整话术内容"}\n  ],\n  "confidenceScore": 0.85,\n  "knowledgeUsed": ["本次用到的知识ID和策略摘要"]\n}`);
+
+  return parts.join('\n\n');
+}
+
+// 三级质控评估器
+function evaluateSpeech(result, knowledgeList) {
+  // Level1: 格式校验
+  if (!result || typeof result !== 'object') return { passed: false, level: 1, feedback: '返回结果不是合法JSON对象', suggestions: [] };
+  if (!Array.isArray(result.tacticalExecutionPaths)) return { passed: false, level: 1, feedback: '缺少 tacticalExecutionPaths 字段', suggestions: [] };
+  if (result.tacticalExecutionPaths.length !== 3) return { passed: false, level: 1, feedback: '话术风格数量不符合要求（需3种）', suggestions: [] };
+
+  const styles = result.tacticalExecutionPaths;
+  const allContent = styles.map(s => s.verbalScript || '').join(' ');
+
+  // Level2: 规则校验
+  const forbidden = ['XX', '某某', '某公司', '具体说明', '（具体', '相关优势', '等方面'];
+  for (const ph of forbidden) {
+    if (allContent.includes(ph)) return { passed: false, level: 2, feedback: `检测到禁用占位符：${ph}`, suggestions: [`将 ${ph} 替换为具体表述`] };
+  }
+
+  // 风格差异化检测
+  const jaccard = (a, b) => {
+    const wa = new Set((a.match(/[一-龥]{2,}/g) || []));
+    const wb = new Set((b.match(/[一-龥]{2,}/g) || []));
+    if (wa.size === 0 || wb.size === 0) return 0;
+    let inter = 0; wa.forEach(w => { if (wb.has(w)) inter++; });
+    return inter / (wa.size + wb.size - inter);
+  };
+  const sim01 = jaccard(styles[0].verbalScript || '', styles[1].verbalScript || '');
+  const sim12 = jaccard(styles[1].verbalScript || '', styles[2].verbalScript || '');
+  if (sim01 >= 0.68 || sim12 >= 0.68) {
+    return { passed: false, level: 2, feedback: `风格相似度过高(${Math.max(sim01, sim12).toFixed(2)})，差异化不足`, suggestions: ['三种话术使用不同的知识策略切入'] };
+  }
+
+  // 知识落地检测
+  if (knowledgeList.length > 0) {
+    const strategyWords = new Set();
+    knowledgeList.forEach(kn => (kn.strategy.match(/[一-龥]{2,}/g) || []).forEach(w => strategyWords.add(w)));
+    const contentWords = new Set(allContent.match(/[一-龥]{2,}/g) || []);
+    let overlap = 0; strategyWords.forEach(w => { if (contentWords.has(w)) overlap++; });
+    const rate = strategyWords.size > 0 ? overlap / strategyWords.size : 0;
+    if (rate < 0.25) return { passed: false, level: 2, feedback: '话术未有效引用知识库', suggestions: ['将知识库策略融入异议处理环节'] };
+  }
+
+  return { passed: true, level: 3, overallScore: 0.85, feedback: '通过', suggestions: [] };
+}
+
+// 带重试的话术生成主流程
+async function generateSpeechWithRetry(industry, knowledgeList, userScene, lang) {
+  const systemPrompt = buildSpeechPromptV2(industry, knowledgeList);
+  const userPrompt = `请针对以下销售场景生成三套话术：\n${userScene}`;
+
+  const maxRetries = 3;
+  const baseTemp = 0.55;
+  const tempDecay = 0.1;
+  let lastResult = null;
+  let lastEval = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const temperature = Math.max(0.25, baseTemp - attempt * tempDecay);
+    let currentUserPrompt = userPrompt;
+
+    // 重试时追加修正指令
+    if (attempt > 0 && lastEval) {
+      currentUserPrompt += `\n\n【质量校验未通过，定向修正指令】\n上一版问题：${lastEval.feedback}\n\n修正要求：\n1. 保留原有框架，只修改问题点\n2. 三种话术开场白必须不同\n3. 必须使用知识库策略\n\n改进建议：\n${lastEval.suggestions.map(s => `- ${s}`).join('\n')}`;
+    }
+
+    try {
+      const aiResult = await callAI([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: currentUserPrompt }
+      ], { max_tokens: 4096, temperature });
+
+      if (aiResult) {
+        lastResult = JSON.parse(aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+      }
+    } catch (err) {
+      console.error(`[SpeechGen] 第${attempt}轮生成异常:`, err.message);
+    }
+
+    lastEval = evaluateSpeech(lastResult, knowledgeList);
+
+    if (lastEval.passed) {
+      console.info(`[SpeechGen] 第${attempt}轮通过`);
+      return { ...lastResult, meta: { retryAttempts: attempt, status: 'SUCCESS' } };
+    }
+
+    console.info(`[SpeechGen] 第${attempt}轮未通过: ${lastEval.feedback}`);
+  }
+
+  // 降级返回
+  console.warn('[SpeechGen] 重试耗尽，降级返回');
+  return {
+    ...lastResult,
+    meta: { retryAttempts: maxRetries, status: 'DEGRADED' },
+    error: lastEval?.feedback || '质量未达标'
+  };
+}
+
 // ==================== CONFIG ====================
 const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1692,7 +1876,7 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
     };
 
     // Fetch knowledge base — RAG: vector semantic search + keyword fallback
-    let knowledgeContext = '';
+    let rawKnowledgeList = [];
     try {
       const detectedInd = detectedIndustry || '';
       const queryText = `${scenarioName} ${detectedInd} ${input || ''}`.slice(0, 500);
@@ -1701,212 +1885,34 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       const allKnowledge = await retrieveKnowledge(queryText, detectedInd, jwt.userId);
 
       if (allKnowledge.length > 0) {
-        const knowledgeLabel = {
-          zh: '销售知识库参考（混合检索最相关）',
-          en: 'Sales Knowledge Base (Hybrid matched)',
-        };
-        knowledgeContext = `\n\n${knowledgeLabel[lang] || knowledgeLabel.zh}:\n` + allKnowledge
-          .map((k, i) => {
-            let item = `${i + 1}. [${k.knowledge_type || '通用'}] ${(k.content || '').slice(0, 200)}`;
-            if (k.response_example) item += `\n   参考话术：${k.response_example.slice(0, 150)}`;
-            return item;
-          })
-          .join('\n');
-        console.log(`Knowledge: ${allKnowledge.length} items injected via hybrid retrieval`);
+        rawKnowledgeList = allKnowledge.map(k => {
+          let item = `[${k.knowledge_type || '通用'}] ${k.content || ''}`;
+          if (k.response_example) item += ` （"${k.response_example}"）`;
+          return item;
+        });
+        console.log(`Knowledge: ${allKnowledge.length} items retrieved via hybrid retrieval`);
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
 
-    // Fetch session conversation context
-    let sessionContext = '';
-    if (sessionId) {
-      try {
-        const sessionMsgs = await sbSafeQuery('messages', {
-          select: 'role,content,created_at',
-          eq: { session_id: sessionId },
-          order: 'created_at.desc',
-          limit: 5
-        });
-        if (sessionMsgs.length > 0) {
-          sessionContext = '\n\n【对话上下文】\n' + sessionMsgs.reverse().map(m =>
-            `${m.role === 'USER' ? '用户' : '助手'}：${m.content.slice(0, 200)}`
-          ).join('\n');
-        }
-      } catch (e) { console.error('Session context fetch error:', e.message); }
-    }
+    // 使用方案二：知识清洗 + 强约束Prompt + 三级质控 + 自适应重试
+    const userScene = `销售场景：${scenarioName}\n${industry ? `行业：${industry}` : ''}\n${input ? `补充信息：${input}` : ''}`;
+    const detectedObj = scenarioName.includes('贵') ? '太贵了' :
+                        scenarioName.includes('时间') ? '没时间' :
+                        scenarioName.includes('效果') ? '怕没效果' : scenarioName;
 
-    // Fetch user weak dimensions from recent practice
-    let weakDimensionContext = '';
-    try {
-      const recentPractices = await sbSafeQuery('practice_sessions', {
-        select: 'radar_scores',
-        eq: { user_id: jwt.userId },
-        order: 'created_at.desc',
-        limit: 3
-      });
-      if (recentPractices.length > 0) {
-        const dimTotals = {};
-        let count = 0;
-        for (const p of recentPractices) {
-          const radar = typeof p.radar_scores === 'string' ? JSON.parse(p.radar_scores || '{}') : (p.radar_scores || {});
-          if (Object.keys(radar).length > 0) {
-            for (const [dim, score] of Object.entries(radar)) {
-              dimTotals[dim] = (dimTotals[dim] || 0) + score;
-            }
-            count++;
-          }
-        }
-        if (count > 0) {
-          const weakDims = Object.entries(dimTotals)
-            .map(([dim, total]) => [dim, Math.round(total / count)])
-            .sort((a, b) => a[1] - b[1])
-            .slice(0, 2);
-          if (weakDims.length > 0 && weakDims[0][1] < 70) {
-            weakDimensionContext = `\n\n【用户技能画像】该用户的薄弱维度：${weakDims.map(([d, s]) => `${d}(${s}分)`).join('、')}。生成话术时请特别注意强化这些维度的技巧。`;
-          }
-        }
-      }
-    } catch (e) { console.error('Weak dimension fetch error:', e.message); }
+    scriptData = await generateSpeechWithRetry(
+      detectedIndustry || industry || '通用',
+      processKnowledge(rawKnowledgeList, detectedIndustry || industry || '通用', detectedObj),
+      userScene,
+      lang
+    );
 
-    // Deep prompt - with strong differentiation requirements
-    const scriptPrompt = `你是销冠话术生成器。用户给你一个销售场景，你输出3套完全不同风格的话术。
-
-${industryContextPrompt}
-
-【核心要求 - 这是最重要的一条】
-三种话术必须有实质区别！开场白、说服策略、促成方式都要完全不同！
-
-【三种话术的具体要求】
-
-◆ 共情版（必须用"我理解"、"确实"等词开头）：
-- 开场：先认同客户感受，建立信任
-- 策略：站在客户立场，帮他对比、避坑
-- 语气：温和、亲和、像朋友聊天
-- 示例开头："我完全理解您的想法，买东西确实要货比三家..."
-
-◆ 直爽版（必须用数据或直接结论开头）：
-- 开场：直接给数据或算账，不绕客套话
-- 策略：用具体数字、算账公式让客户看清真相
-- 语气：干脆、直接、效率优先
-- 示例开头："咱们直接算笔账，单课时价格其实我们更便宜..."
-
-◆ 专业版（必须用行业洞察或趋势开头）：
-- 开场：引用行业数据或市场趋势
-- 策略：用权威背书、成功案例说服
-- 语气：理性、专业、顾问式
-- 示例开头："根据教育部最新数据，85%的家长选择..."
-
-【每套话术必须包含】
-1. 开场白（1-2句）：必须按上述风格要求
-2. 异议处理（2-3句）：用具体数据说服
-3. 价值呈现（2-3个卖点）：转化为客户利益
-4. 促成动作（1句）：给客户行动理由
-
-【质量红线】
-- ❌ 不能用"XX"占位符：必须用具体数字
-- ❌ 不能用书面语：必须口语化
-- ❌ 三版开场白不能相同！
-- ❌ 三版不能超过500字
-
-【输出格式】返回JSON：
-{
-  "tacticalExecutionPaths": [
-    {"pathType": "共情版", "verbalScript": "完整话术"},
-    {"pathType": "直爽版", "verbalScript": "完整话术"},
-    {"pathType": "专业版", "verbalScript": "完整话术"}
-  ],
-  "confidenceScore": 0.85
-}
-
-${knowledgeContext || ''}
-${sessionContext}${weakDimensionContext}`;
-
-    const userPrompts = {
-      zh: `销售场景：${scenarioName}
-${industry ? `行业：${industry}` : ''}
-${input ? `补充信息：${input}` : ''}
-
-根据这个场景，生成3套可以直接复制使用的话术（共情版、直爽版、专业版）。
-要求：
-- 每套话术300字以上
-- 必须包含具体数字（不能用XX代替）
-- 必须是口语化的对话，不是书面文章
-- 三套话术必须从完全不同的角度切入
-${knowledgeContext}${sessionContext}${weakDimensionContext}`,
-      en: `Sales scenario: ${scenarioName}
-${industry ? `Industry: ${industry}` : ''}
-${input ? `Additional context: ${input}` : ''}
-
-Generate 3 ready-to-use scripts (Empathy, Direct, Professional).
-Requirements:
-- Each script 300+ words
-- Must include specific numbers (no placeholders)
-- Must be conversational, not formal
-- Three scripts must approach from completely different angles
-
-${knowledgeContext}`,
-      th: `สร้างสคริปต์ขายสำหรับสถานการณ์ต่อไปนี้:\nสถานการณ์: ${scenarioName}\nอุตสาหกรรม: ${industry || 'ทั่วไป'}\n${input ? `ข้อมูลเพิ่มเติม: ${input}` : ''}\n${frameworks ? `กรอบ: ${frameworks.join(', ')}` : ''}\n⚠️ 3 สไตล์ต้องมีเนื้อหาที่แตกต่างกันอย่างชัดเจน!${knowledgeContext}`,
-      vi: `Tạo kịch bản bán hàng cho tình huống sau:\nTình huống: ${scenarioName}\nNgành: ${industry || 'Chung'}\n${input ? `Thông tin bổ sung: ${input}` : ''}\n${frameworks ? `Khung: ${frameworks.join(', ')}` : ''}\n⚠️ 3 phong cách phải có nội dung khác biệt rõ rệt!${knowledgeContext}`,
-      ms: `Jana skrip jualan untuk senario berikut:\nSenario: ${scenarioName}\nIndustri: ${industry || 'Am'}\n${input ? `Maklumat tambahan: ${input}` : ''}\n${frameworks ? `Rangka kerja: ${frameworks.join(', ')}` : ''}\n⚠️ 3 gaya mesti mempunyai kandungan yang berbeza!${knowledgeContext}`,
-      id: `Buat skrip penjualan untuk skenario berikut:\nSkenario: ${scenarioName}\nIndustri: ${industry || 'Umum'}\n${input ? `Info tambahan: ${input}` : ''}\n${frameworks ? `Framework: ${frameworks.join(', ')}` : ''}\n⚠️ 3 gaya harus memiliki konten yang berbeda secara substansial!${knowledgeContext}`,
-    };
-
-    const aiResult = await callAI([
-      { role: 'system', content: scriptPrompt },
-      { role: 'user', content: userPrompts[lang] || userPrompts.en }
-    ], { max_tokens: 4096, temperature: 0.7 });
-
-    if (aiResult) {
-      try {
-        const parsed = JSON.parse(aiResult.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
-        const validation = validateScriptOutput(parsed, lang);
-
-        if (validation.valid) {
-          scriptData = {
-            // New format fields (pass through from AI)
-            tacticalExecutionPaths: parsed.tacticalExecutionPaths || undefined,
-            detectedBusinessMode: parsed.detectedBusinessMode || undefined,
-            salesLifecycleStage: parsed.salesLifecycleStage || undefined,
-            buyerPersonaAnalysis: parsed.buyerPersonaAnalysis || undefined,
-            multiStageSimulation: parsed.multiStageSimulation || undefined,
-            // Legacy format (for backward compatibility)
-            speechStyles: parsed.speechStyles || undefined,
-            // Common fields
-            reasoning: parsed.reasoning || ['AI生成'],
-            pitfalls: parsed.pitfalls || [],
-            knowledgeSource: parsed.knowledgeSource || 'AI生成',
-            confidenceScore: parsed.confidenceScore || 0.8
-          };
-          // If AI returned tacticalExecutionPaths but no speechStyles, generate legacy fallback
-          if (!scriptData.speechStyles && scriptData.tacticalExecutionPaths) {
-            scriptData.speechStyles = scriptData.tacticalExecutionPaths.map(p => ({
-              style: p.pathType,
-              content: p.verbalScript
-            }));
-          }
-          // Clean up undefined fields
-          Object.keys(scriptData).forEach(k => scriptData[k] === undefined && delete scriptData[k]);
-        } else {
-          console.log('AI output quality check failed:', validation.reason);
-          scriptData = generateFallbackScript(styleName, scenarioName, industry);
-        }
-      } catch (e) {
-        // JSON parse failed, check if raw response is usable
-        if (aiResult.length > 100 && (aiResult.includes('开场') || aiResult.includes('Opening'))) {
-          scriptData = {
-            speechStyles: [{ style: styleName, content: aiResult }],
-            reasoning: ['AI生成'],
-            pitfalls: [],
-            knowledgeSource: 'AI生成',
-            confidenceScore: 0.6
-          };
-        } else {
-          scriptData = generateFallbackScript(styleName, scenarioName, industry);
-        }
-      }
-    } else {
-      // Fallback to template
-      console.log('Script generation: AI returned null, using fallback template for:', { scenarioName, industry, lang });
-      scriptData = generateFallbackScript(styleName, scenarioName, industry);
+    // 兼容旧格式
+    if (scriptData.tacticalExecutionPaths && !scriptData.speechStyles) {
+      scriptData.speechStyles = scriptData.tacticalExecutionPaths.map(p => ({
+        style: p.pathType,
+        content: p.verbalScript
+      }));
     }
 
     // Save script to DB
