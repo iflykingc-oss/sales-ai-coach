@@ -9,14 +9,71 @@
  */
 
 const crypto = require('crypto');
-const { sbSafeQuery, sbInsert, sbUpdate, sbDelete } = require('./index.js');
+const jwt = require('jsonwebtoken');
+
+const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+async function sbQuery(table, opts = {}) {
+  let url = `${SUPABASE_URL}/rest/v1/${table}`;
+  const params = new URLSearchParams();
+  if (opts.select) params.append('select', opts.select);
+  if (opts.limit) params.append('limit', opts.limit);
+  if (opts.order) params.append('order', opts.order);
+  if (opts.eq) for (const [c, v] of Object.entries(opts.eq)) params.append(c, `eq.${v}`);
+  const qs = params.toString();
+  if (qs) url += '?' + qs;
+  const headers = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' };
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) throw new Error('SB ' + table + ': ' + resp.status);
+  return resp.json();
+}
+
+// Safe query that returns empty on table-not-found
+async function sbSafeQuery(table, opts = {}) {
+  try { return await sbQuery(table, opts); }
+  catch (e) { if (e.message && e.message.includes('PGRST205')) return []; throw e; }
+}
+
+async function sbInsert(table, data) {
+  const resp = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body: JSON.stringify(data)
+  });
+  if (!resp.ok) throw new Error('SB insert: ' + resp.status);
+  const r = await resp.json();
+  return Array.isArray(r) ? r[0] : r;
+}
+
+async function sbUpdate(table, eq, data) {
+  let url = SUPABASE_URL + '/rest/v1/' + table;
+  const params = new URLSearchParams();
+  for (const [c, v] of Object.entries(eq)) params.append(c, 'eq.' + v);
+  url += '?' + params.toString();
+  const resp = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body: JSON.stringify(data)
+  });
+  if (!resp.ok) throw new Error('SB update: ' + resp.status);
+  return resp.json();
+}
+
+function requireAuth(req) {
+  const cookie = req.headers.cookie || '';
+  const tokenMatch = cookie.match(/token=([^;]+)/);
+  const token = tokenMatch ? tokenMatch[1] : null;
+  if (!token) throw { status: 401, error: 'No token' };
+  return jwt.verify(token, process.env.JWT_SECRET);
+}
 
 // ==================== 团队成员管理 ====================
 
 // 获取团队成员列表
 async function getTeamMembers(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
 
     // 验证用户是否属于该团队
@@ -59,7 +116,7 @@ async function getTeamMembers(req, res) {
 // 团队创建者直接创建成员账号
 async function createTeamMember(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
     const { name, email, password } = req.body;
 
@@ -115,7 +172,7 @@ async function createTeamMember(req, res) {
 // 移除团队成员
 async function removeTeamMember(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId, memberId } = req.params;
 
     // 验证是否是团队创建者
@@ -153,7 +210,7 @@ async function removeTeamMember(req, res) {
 // 获取团队真实统计数据
 async function getTeamStats(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
 
     // 验证用户是否属于该团队
@@ -246,7 +303,7 @@ async function getTeamStats(req, res) {
 // 创建任务
 async function createTask(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
     const { type, assigneeId, deadline, scenario, description } = req.body;
 
@@ -289,7 +346,7 @@ async function createTask(req, res) {
 // 获取任务列表
 async function getTasks(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
 
     const tasks = await sbSafeQuery('team_tasks', {
@@ -318,7 +375,7 @@ async function getTasks(req, res) {
 // 更新任务状态
 async function updateTask(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId, taskId } = req.params;
     const { status } = req.body;
 
@@ -339,7 +396,7 @@ async function updateTask(req, res) {
 // 获取用户通知
 async function getNotifications(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
 
     const notifications = await sbSafeQuery('notifications', {
       select: '*',
@@ -366,7 +423,7 @@ async function getNotifications(req, res) {
 // 标记通知已读
 async function markNotificationRead(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { notificationId } = req.params;
 
     await sbUpdate('notifications', { id: notificationId, user_id: jwt.userId }, {
@@ -385,7 +442,7 @@ async function markNotificationRead(req, res) {
 // 获取共享话术列表
 async function getSharedScripts(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
 
     const scripts = await sbSafeQuery('shared_scripts', {
@@ -414,7 +471,7 @@ async function getSharedScripts(req, res) {
 // 分享话术
 async function shareScript(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId } = req.params;
     const { title, content, industry } = req.body;
 
@@ -440,7 +497,7 @@ async function shareScript(req, res) {
 // 点赞话术
 async function likeScript(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId, scriptId } = req.params;
 
     const script = await sbSafeQuery('shared_scripts', { select: 'likes', eq: { id: scriptId }, limit: 1 });
@@ -460,7 +517,7 @@ async function likeScript(req, res) {
 // 审批话术
 async function approveScript(req, res) {
   try {
-    const jwt = require('./index.js').requireAuth(req);
+    const jwt = requireAuth(req);
     const { teamId, scriptId } = req.params;
     const { approved } = req.body;
 
