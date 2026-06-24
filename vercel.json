@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/weekly",
       "schedule": "7 2 * * 0"
+    },
+    {
+      "path": "/api/cron/knowledge",
+      "schedule": "15 3 * * *"
     }
   ],
   "rewrites": [
