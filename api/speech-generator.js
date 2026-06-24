@@ -181,12 +181,12 @@ function evaluateSpeech(result, knowledgeList) {
     }
   });
 
-  // 如果用了示例价格，在结果中标注
-  if (isExamplePrice && allContent.includes('XX')) {
-    result._priceNote = '注：话术中的价格为行业示例值（约80元/课时），非实际价格，请根据实际情况调整。';
-  }
-
   const allContent = styles.map(s => s.verbalScript || '').join(' ');
+
+  // 如果用了示例价格，在结果中标注
+  if (isExamplePrice && allContent.includes('元')) {
+    result._priceNote = '注：话术中的价格为行业示例值，非实际价格，请根据实际情况调整。';
+  }
 
   // Level2: 规则校验（只检查无法自动替换的占位符）
   const forbidden = ['某某', '某公司'];
