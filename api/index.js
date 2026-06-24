@@ -138,7 +138,7 @@ function buildSpeechPromptV2(industry, knowledgeList) {
   return parts.join('\n\n');
 }
 
-// 三级质控评估器
+// 三级质控评估器（三层知识落地校验：长度兜底 → 字段校验 → 宽松语义匹配）
 function evaluateSpeech(result, knowledgeList) {
   // Level1: 格式校验
   if (!result || typeof result !== 'object') return { passed: false, level: 1, feedback: '返回结果不是合法JSON对象', suggestions: [] };
@@ -149,12 +149,13 @@ function evaluateSpeech(result, knowledgeList) {
   const allContent = styles.map(s => s.verbalScript || '').join(' ');
 
   // Level2: 规则校验
+  // 1. 占位符检测
   const forbidden = ['XX', '某某', '某公司', '具体说明', '（具体', '相关优势', '等方面'];
   for (const ph of forbidden) {
     if (allContent.includes(ph)) return { passed: false, level: 2, feedback: `检测到禁用占位符：${ph}`, suggestions: [`将 ${ph} 替换为具体表述`] };
   }
 
-  // 风格差异化检测
+  // 2. 风格差异化检测
   const jaccard = (a, b) => {
     const wa = new Set((a.match(/[一-龥]{2,}/g) || []));
     const wb = new Set((b.match(/[一-龥]{2,}/g) || []));
@@ -168,11 +169,35 @@ function evaluateSpeech(result, knowledgeList) {
     return { passed: false, level: 2, feedback: `风格相似度过高(${Math.max(sim01, sim12).toFixed(2)})，差异化不足`, suggestions: ['三种话术使用不同的知识策略切入'] };
   }
 
-  // 知识落地检测（极宽松：只要话术有实质内容即通过，Prompt已强约束知识使用）
+  // 3. 知识落地三层校验（长度兜底 → 字段校验 → 宽松语义匹配）
   if (knowledgeList.length > 0) {
+    // 第一层：极端长度兜底（过短直接拦截）
     const totalLength = styles.reduce((sum, s) => sum + (s.verbalScript || '').length, 0);
     if (totalLength < 200) {
       return { passed: false, level: 2, feedback: '话术内容过短', suggestions: ['补充完整的话术内容'] };
+    }
+
+    // 第二层：knowledgeUsed 字段校验（成本最低，强制模型响应知识要求）
+    const knowledgeUsed = result.knowledgeUsed || [];
+    if (!Array.isArray(knowledgeUsed) || knowledgeUsed.length === 0) {
+      return { passed: false, level: 2, feedback: '未标注引用的知识库内容', suggestions: ['填写 knowledgeUsed 字段，标注用到的知识库策略'] };
+    }
+
+    // 第三层：宽松语义匹配（只拦完全不沾边的，阈值降到10%）
+    const strategyKeywords = new Set();
+    knowledgeList.forEach(kn => {
+      // 只提取核心策略短语（带业务属性后缀），降低误判
+      const phrases = kn.strategy.match(/[一-龥]{2,}(?:价格|成本|效果|算|对比|便宜|试听|退费|课时)/g) || [];
+      phrases.forEach(p => strategyKeywords.add(p));
+    });
+    const contentWords = new Set(allContent.match(/[一-龥]{2,}/g) || []);
+    let overlap = 0;
+    strategyKeywords.forEach(k => { if (contentWords.has(k)) overlap++; });
+    const overlapRate = strategyKeywords.size > 0 ? overlap / strategyKeywords.size : 1;
+
+    // 只拦截完全没沾边的纯通用话术
+    if (strategyKeywords.size > 0 && overlapRate < 0.1) {
+      return { passed: false, level: 2, feedback: '话术未体现知识库核心策略，通用化严重', suggestions: ['将知识库的核心策略融入异议处理环节'] };
     }
   }
 
