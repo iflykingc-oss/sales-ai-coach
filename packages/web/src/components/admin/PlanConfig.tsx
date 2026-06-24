@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Save, DollarSign, Package, Users, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -118,7 +118,7 @@ export function PlanConfig() {
           <Card key={plan.id} className={`relative overflow-hidden ${plan.isPopular ? 'border-2 border-primary-500' : ''}`}>
             {plan.isPopular && (
               <div className="absolute right-2 top-2">
-                <Badge variant="primary">推荐</Badge>
+                <Badge variant="success">推荐</Badge>
               </div>
             )}
 
