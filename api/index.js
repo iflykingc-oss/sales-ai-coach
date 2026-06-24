@@ -5,6 +5,7 @@ const Sentry = require('@sentry/node');
 const registry = require('./industry-context');
 const syncManager = require('./industry-sync');
 const { processKnowledge, generateSpeechWithRetry } = require('./speech-generator');
+const companyKnowledge = require('./company-knowledge');
 
 // 行业检测兼容函数（使用新的 L1 正则矩阵引擎）
 function detectIndustry(input, userIndustry) {
@@ -1719,6 +1720,27 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       }
     } catch (e) { console.error('Knowledge fetch error:', e.message); }
 
+    // Fetch company knowledge (租户私有知识，数据隔离)
+    let companyKnowledgeList = [];
+    try {
+      const companyItems = await sbSafeQuery('company_knowledge', {
+        select: 'category,title,content',
+        eq: { user_id: jwt.userId, is_active: true },
+        order: 'updated_at.desc',
+        limit: 10
+      });
+      if (companyItems && companyItems.length > 0) {
+        companyKnowledgeList = companyItems.map(k => {
+          const categoryLabel = { price: '价格政策', course: '课程介绍', policy: '售后政策', case: '成功案例', general: '通用' }[k.category] || '通用';
+          return `[公司${categoryLabel}] ${k.title}：${k.content}`;
+        });
+        console.log(`Company knowledge: ${companyItems.length} items loaded`);
+      }
+    } catch (e) { console.error('Company knowledge fetch error:', e.message); }
+
+    // 合并两种知识：行业通用 + 公司专属
+    const allRawKnowledge = [...companyKnowledgeList, ...rawKnowledgeList];
+
     // 使用方案二：知识清洗 + 强约束Prompt + 三级质控 + 自适应重试
     const userScene = `销售场景：${scenarioName}\n${industry ? `行业：${industry}` : ''}\n${input ? `补充信息：${input}` : ''}`;
     const detectedObj = scenarioName.includes('贵') ? '太贵了' :
@@ -1727,7 +1749,7 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
 
     scriptData = await generateSpeechWithRetry(
       detectedIndustry || industry || '通用',
-      processKnowledge(rawKnowledgeList, detectedIndustry || industry || '通用', detectedObj),
+      processKnowledge(allRawKnowledge, detectedIndustry || industry || '通用', detectedObj),
       userScene,
       lang,
       callAI  // 传入 AI 调用函数
@@ -2445,6 +2467,12 @@ routes['POST /api/knowledge/import'] = async (req, res) => {
     sendJson(res, 500, { success: false, error: 'Internal server error' });
   }
 };
+
+// --- Company Knowledge (租户隔离) ---
+routes['GET /api/company-knowledge'] = companyKnowledge.listCompanyKnowledge;
+routes['POST /api/company-knowledge'] = companyKnowledge.createCompanyKnowledge;
+routes['PUT /api/company-knowledge/:id'] = companyKnowledge.updateCompanyKnowledge;
+routes['DELETE /api/company-knowledge/:id'] = companyKnowledge.deleteCompanyKnowledge;
 
 // --- Teams ---
 routes['GET /api/teams/my'] = async (req, res) => {
