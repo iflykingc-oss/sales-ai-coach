@@ -10,6 +10,7 @@ import { SyncManager } from '@/components/admin/SyncManager';
 import { SystemSettings } from '@/components/admin/SystemSettings';
 import { UserAdmin } from '@/components/admin/UserAdmin';
 import { RetrievalLogs } from '@/components/admin/RetrievalLogs';
+import { PlanConfig } from '@/components/admin/PlanConfig';
 import { useAdminStore, type AdminTab } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
@@ -153,6 +154,7 @@ export default function AdminPage() {
             <TabsTrigger value="stats">数据统计</TabsTrigger>
             <TabsTrigger value="users">用户管理</TabsTrigger>
             <TabsTrigger value="knowledge">知识库管理</TabsTrigger>
+            <TabsTrigger value="plans">套餐配置</TabsTrigger>
             <TabsTrigger value="models">模型配置</TabsTrigger>
             <TabsTrigger value="announcements">公告管理</TabsTrigger>
             <TabsTrigger value="sync">数据同步</TabsTrigger>
@@ -171,6 +173,10 @@ export default function AdminPage() {
 
           <TabsContent value="knowledge">
             <KnowledgeAdmin />
+          </TabsContent>
+
+          <TabsContent value="plans">
+            <PlanConfig />
           </TabsContent>
 
           <TabsContent value="models">
