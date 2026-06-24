@@ -210,15 +210,24 @@ router.get('/models', requireAdmin, async (req, res, next) => {
 
 router.put('/models/:id', requireAdmin, async (req, res, next) => {
   try {
-    const { temperature, maxTokens, apiKey, isActive } = req.body;
+    const { temperature, maxTokens, apiKey, isActive, provider, modelId, displayName, baseUrl, isPrimary } = req.body;
+
+    // Detect masked apiKey (e.g., "***xyz") — skip updating it
+    const isMaskedKey = apiKey && apiKey.startsWith('***');
+    const validApiKey = isMaskedKey ? undefined : apiKey;
 
     const config = await prisma.modelConfig.update({
       where: { id: req.params.id as string },
       data: {
+        provider: provider || undefined,
+        modelId: modelId || undefined,
+        displayName: displayName || undefined,
+        baseUrl: baseUrl !== undefined ? baseUrl : undefined,
         temperature: temperature !== undefined ? temperature : undefined,
         maxTokens: maxTokens !== undefined ? maxTokens : undefined,
-        apiKey: apiKey !== undefined ? apiKey : undefined,
+        apiKey: validApiKey !== undefined ? validApiKey : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
+        isPrimary: isPrimary !== undefined ? isPrimary : undefined,
       },
     });
 

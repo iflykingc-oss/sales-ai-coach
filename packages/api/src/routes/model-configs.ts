@@ -20,6 +20,10 @@ router.post('/', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const { provider, modelId, displayName, apiKey, baseUrl, temperature, maxTokens, isActive, isPrimary } = req.body;
 
+    // Detect masked apiKey — skip it
+    const isMaskedKey = apiKey && apiKey.startsWith('***');
+    const validApiKey = isMaskedKey ? undefined : apiKey;
+
     // If setting as primary, unset other primaries
     if (isPrimary) {
       await prisma.modelConfig.updateMany({
@@ -32,7 +36,7 @@ router.post('/', authMiddleware, requireAdmin, async (req, res, next) => {
       where: { provider_modelId: { provider, modelId } },
       update: {
         displayName,
-        apiKey: apiKey || undefined,
+        apiKey: validApiKey || undefined,
         baseUrl: baseUrl || undefined,
         temperature,
         maxTokens,
@@ -61,6 +65,10 @@ router.put('/:id', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const { displayName, apiKey, baseUrl, temperature, maxTokens, isActive, isPrimary } = req.body;
 
+    // Detect masked apiKey — skip it
+    const isMaskedKey = apiKey && apiKey.startsWith('***');
+    const validApiKey = isMaskedKey ? undefined : apiKey;
+
     if (isPrimary) {
       await prisma.modelConfig.updateMany({
         where: { isPrimary: true, id: { not: req.params.id as string } },
@@ -72,7 +80,7 @@ router.put('/:id', authMiddleware, requireAdmin, async (req, res, next) => {
       where: { id: req.params.id as string },
       data: {
         displayName,
-        apiKey: apiKey || undefined,
+        apiKey: validApiKey || undefined,
         baseUrl: baseUrl || undefined,
         temperature,
         maxTokens,
