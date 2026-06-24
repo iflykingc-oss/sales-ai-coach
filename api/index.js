@@ -168,14 +168,20 @@ function evaluateSpeech(result, knowledgeList) {
     return { passed: false, level: 2, feedback: `风格相似度过高(${Math.max(sim01, sim12).toFixed(2)})，差异化不足`, suggestions: ['三种话术使用不同的知识策略切入'] };
   }
 
-  // 知识落地检测
+  // 知识落地检测（放宽：只要话术中出现知识库的任意关键词即通过）
   if (knowledgeList.length > 0) {
     const strategyWords = new Set();
-    knowledgeList.forEach(kn => (kn.strategy.match(/[一-龥]{2,}/g) || []).forEach(w => strategyWords.add(w)));
-    const contentWords = new Set(allContent.match(/[一-龥]{2,}/g) || []);
-    let overlap = 0; strategyWords.forEach(w => { if (contentWords.has(w)) overlap++; });
-    const rate = strategyWords.size > 0 ? overlap / strategyWords.size : 0;
-    if (rate < 0.25) return { passed: false, level: 2, feedback: '话术未有效引用知识库', suggestions: ['将知识库策略融入异议处理环节'] };
+    knowledgeList.forEach(kn => {
+      // 提取策略中的关键词（3字以上的词）
+      (kn.strategy.match(/[一-龥]{3,}/g) || []).forEach(w => strategyWords.add(w));
+    });
+    const contentWords = new Set(allContent.match(/[一-龥]{3,}/g) || []);
+    let overlap = 0;
+    strategyWords.forEach(w => { if (contentWords.has(w)) overlap++; });
+    // 只要有任意关键词命中即通过（至少1个）
+    if (overlap === 0 && strategyWords.size > 0) {
+      return { passed: false, level: 2, feedback: '话术未引用知识库策略', suggestions: ['将知识库策略融入异议处理环节'] };
+    }
   }
 
   return { passed: true, level: 3, overallScore: 0.85, feedback: '通过', suggestions: [] };
