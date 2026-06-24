@@ -1767,43 +1767,52 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
       }
     } catch (e) { console.error('Weak dimension fetch error:', e.message); }
 
-    // Deep prompt - example-driven, not instruction-driven
-    const scriptPrompt = `你是销冠话术生成器。用户给你一个销售场景，你输出3套可以直接复制使用的话术。
+    // Deep prompt - with strong differentiation requirements
+    const scriptPrompt = `你是销冠话术生成器。用户给你一个销售场景，你输出3套完全不同风格的话术。
 
 ${industryContextPrompt}
 
-【强制框架】（每套话术必须包含以下结构，缺一不可）
+【核心要求 - 这是最重要的一条】
+三种话术必须有实质区别！开场白、说服策略、促成方式都要完全不同！
 
-1. 共情句（1-2句）：先认同客户感受，不能直接反驳
-2. 数据支撑（2-3个具体数字）：用真实数字说服，不能用"很多""一些""XX"
-3. 价值呈现（2-3个卖点）：把产品优势转化为客户利益
-4. 促成动作（1句）：给客户一个立即行动的理由
-5. 预留退路（1句）：降低客户压力，不逼太紧
+【三种话术的具体要求】
 
-【话术质量红线】（违反任何一条直接不合格）
+◆ 共情版（必须用"我理解"、"确实"等词开头）：
+- 开场：先认同客户感受，建立信任
+- 策略：站在客户立场，帮他对比、避坑
+- 语气：温和、亲和、像朋友聊天
+- 示例开头："我完全理解您的想法，买东西确实要货比三家..."
 
+◆ 直爽版（必须用数据或直接结论开头）：
+- 开场：直接给数据或算账，不绕客套话
+- 策略：用具体数字、算账公式让客户看清真相
+- 语气：干脆、直接、效率优先
+- 示例开头："咱们直接算笔账，单课时价格其实我们更便宜..."
+
+◆ 专业版（必须用行业洞察或趋势开头）：
+- 开场：引用行业数据或市场趋势
+- 策略：用权威背书、成功案例说服
+- 语气：理性、专业、顾问式
+- 示例开头："根据教育部最新数据，85%的家长选择..."
+
+【每套话术必须包含】
+1. 开场白（1-2句）：必须按上述风格要求
+2. 异议处理（2-3句）：用具体数据说服
+3. 价值呈现（2-3个卖点）：转化为客户利益
+4. 促成动作（1句）：给客户行动理由
+
+【质量红线】
 - ❌ 不能用"XX"占位符：必须用具体数字
-- ❌ 不能用书面语：必须是口语化对话
-- ❌ 不能泛泛而谈：必须有具体场景和案例
-- ❌ 三版不能雷同：必须从不同角度切入
-- ❌ 不能超过500字：简洁有力，不啰嗦
+- ❌ 不能用书面语：必须口语化
+- ❌ 三版开场白不能相同！
+- ❌ 三版不能超过500字
 
 【输出格式】返回JSON：
-
 {
   "tacticalExecutionPaths": [
-    {
-      "pathType": "共情版",
-      "verbalScript": "完整话术（200-500字，可直接复制使用）"
-    },
-    {
-      "pathType": "直爽版",
-      "verbalScript": "完整话术（200-500字，可直接复制使用）"
-    },
-    {
-      "pathType": "专业版",
-      "verbalScript": "完整话术（200-500字，可直接复制使用）"
-    }
+    {"pathType": "共情版", "verbalScript": "完整话术"},
+    {"pathType": "直爽版", "verbalScript": "完整话术"},
+    {"pathType": "专业版", "verbalScript": "完整话术"}
   ],
   "confidenceScore": 0.85
 }
@@ -1844,7 +1853,7 @@ ${knowledgeContext}`,
     const aiResult = await callAI([
       { role: 'system', content: scriptPrompt },
       { role: 'user', content: userPrompts[lang] || userPrompts.en }
-    ], { max_tokens: 4096, temperature: 0.4 });
+    ], { max_tokens: 4096, temperature: 0.7 });
 
     if (aiResult) {
       try {
