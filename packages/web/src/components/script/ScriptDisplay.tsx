@@ -700,7 +700,7 @@ export default function ScriptDisplay() {
           })()}
 
           {/* Reason for this approach */}
-          {currentScript.reasoning.length > 0 && (
+          {currentScript.reasoning && currentScript.reasoning.length > 0 && (
             <div className="mb-4">
               <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-700">
                 <BookOpen className="h-4 w-4" />
@@ -772,7 +772,7 @@ export default function ScriptDisplay() {
           )}
 
           {/* Pitfalls */}
-          {currentScript.pitfalls.length > 0 && (
+          {currentScript.pitfalls && currentScript.pitfalls.length > 0 && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-amber-700">
                 <AlertTriangle className="h-4 w-4" />
