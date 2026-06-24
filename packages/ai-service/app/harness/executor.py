@@ -141,7 +141,7 @@ class TaskExecutor:
         """
         Stacked system prompt construction: persona → framework → knowledge → style → format.
 
-        Eliminates mutually exclusive branching; layers are additive.
+        Key design: Forces step-by-step generation with explicit differentiation.
         """
         frameworks = item.metadata.get("frameworks", [])
         has_framework = bool(frameworks)
@@ -161,38 +161,67 @@ class TaskExecutor:
                     "\n\n请将分析结果以JSON格式输出，使用框架ID作为key（如swotAnalysis, scenario5w2h等）。"
                 )
 
-        # Script generation step (stacked prompt)
+        # Script generation step
         if input_type:
+            # Core persona
             parts = [
-                "你是资深销售话术设计专家，拥有10年ToC销售培训经验。",
-                f"输出的话术必须包含以下环节：{'、'.join(config.default_sections)}，每个环节用小标题标注。",
-                "话术必须自然口语化，符合一线销售真实对话场景，禁止PPT式模板化表达。",
+                "你是资深销售话术设计专家。你的任务是为同一个客户场景生成3种完全不同风格的话术。",
             ]
 
-            # Stack: framework awareness
+            # Framework awareness
             has_framework_dep = any(
                 self.fl.get_item(dep_id) and self.fl.get_item(dep_id).metadata.get("frameworks")
                 for dep_id in item.dependencies
             )
             if has_framework_dep:
-                parts.append("请结合前置任务输出的分析框架结果进行生成，并保留框架字段。")
+                parts.append("请结合前置任务输出的分析框架结果进行生成。")
 
-            # Stack: knowledge rules + style differentiation
+            # Knowledge and style rules — THE CRITICAL PART
             if has_knowledge:
-                parts.extend([
-                    "你必须严格基于提供的行业知识库内容生成话术，禁止脱离知识库编造策略。",
-                    "禁止使用XX、某某等无意义占位符，必须将知识转化为具体可执行的口语化表达。",
-                    """三种话术风格的核心差异与知识使用规则：
-1. 共情版：站在客户立场，用知识库中的对比方法、损失厌恶逻辑帮客户避坑，语气亲和，先共情再讲价值
-2. 直爽版：开门见山，用知识库中的数据、算账公式、量化差异点直接给结论，不绕客套话
-3. 专业版：用知识库中的行业数据、市场规律、成交案例做专业背书，体现顾问身份，理性说服""",
-                    "输出必须包含 knowledge_source 字段，标注本次用到的知识ID和核心策略，禁止编造。",
-                ])
+                parts.append("""
+【核心规则 - 必须严格遵守】
+1. 你必须基于提供的知识库生成话术，禁止使用通用模板
+2. 禁止使用XX、某某等占位符，必须写具体话术
 
-            # Stack: output format
-            parts.append('严格输出标准JSON格式，不得包含任何多余解释文字：\n{"speech_styles": [{"style": "共情", "content": "完整话术"}, {"style": "直爽", "content": "完整话术"}, {"style": "专业", "content": "完整话术"}], "reasoning": ["设计逻辑说明"], "pitfalls": ["使用避坑点"], "knowledge_source": ["引用的知识ID+核心策略"]}')
+【三种风格必须有实质区别 — 这是最重要的要求】
+你必须用不同的心理策略和开场方式生成三种话术：
 
-            return "\n\n".join(parts)
+◆ 共情版（用"我理解"开头）：
+- 开场：先认同客户感受，用"确实"、"我理解"建立信任
+- 策略：站在客户立场，帮他对比、避坑，用损失厌恶心理
+- 语气：温和、亲和、像朋友聊天
+
+◆ 直爽版（用数据开头）：
+- 开场：直接给数据或算账，不绕客套话
+- 策略：用具体数字、算账公式、量化差异让客户看清真相
+- 语气：干脆、直接、效率优先
+
+◆ 专业版（用行业洞察开头）：
+- 开场：引用行业数据或市场趋势，体现专业度
+- 策略：用权威背书、成功案例、行业规律说服客户
+- 语气：理性、专业、顾问式
+
+【严禁】三种话术不得使用相同的开场白、相同的过渡句、相同的促成方式！""")
+            else:
+                parts.append("""
+【核心规则】
+生成3种完全不同风格的话术，每种话术的开场白、异议处理方式、价值呈现方式、促成方式都必须不同。""")
+
+            # Output format — at the end, but less rigid
+            parts.append("""
+输出JSON格式：
+{
+  "speech_styles": [
+    {"style": "共情", "content": "完整话术，包含开场白、异议处理、价值呈现、促成"},
+    {"style": "直爽", "content": "完整话术，包含开场白、异议处理、价值呈现、促成"},
+    {"style": "专业", "content": "完整话术，包含开场白、异议处理、价值呈现、促成"}
+  ],
+  "reasoning": ["共情版设计逻辑", "直爽版设计逻辑", "专业版设计逻辑"],
+  "pitfalls": ["使用避坑点"],
+  "knowledge_source": ["引用的知识ID"]
+}""")
+
+            return "\n".join(parts)
 
         # Default fallback
         return "你是一个专业的执行助手。根据任务描述和上下文，高质量地完成指定任务。只输出JSON格式的结果，不要输出其他内容。"
