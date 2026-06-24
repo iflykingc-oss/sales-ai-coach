@@ -23,16 +23,38 @@ function processKnowledge(rawList, industry, targetObjection) {
     return (bgA.size + bgB.size - inter) > 0 ? inter / (bgA.size + bgB.size - inter) : 0;
   };
 
+  // 清洗行业知识中的价格信息（避免和公司知识冲突）
+  const sanitizePrice = (text) => {
+    if (!text) return text;
+    // 移除具体价格数字（如 3000元、4500元、20块钱）
+    return text
+      .replace(/\d{2,}元/g, 'XX元')
+      .replace(/\d{2,}块/g, 'XX元')
+      .replace(/\d{2,}刀/g, 'XX美元')
+      .replace(/\d{2,}USD/gi, 'XX美元')
+      .replace(/原价|报价|收费标准|学费/g, '价格')
+      .replace(/退费/g, '售后政策');
+  };
+
   const parsed = rawList.map((raw, idx) => {
     const sceneMatch = raw.match(/客户说[""]([^""]+)[""]/);
     const strategyMatch = raw.match(/应对策略[：:]([^\n]+)/);
     const exampleMatch = raw.match(/（[""]([^""]+)[""]）/);
+
+    // 区分公司知识和行业知识
+    const isCompanyKnowledge = raw.startsWith('[公司');
+
     return {
-      id: `kn_${industry}_${idx}_${Math.abs(raw.split('').reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0)) % 10000}`,
+      id: `kn_${industry}_${idx}_${Math.abs(raw.split('').reduce((h, c) => (((h << 5) - h) + c.charCodeAt(0)) | 0, 0)) % 10000}`,
       industry,
       scene: sceneMatch ? sceneMatch[1] : '通用异议',
-      strategy: strategyMatch ? strategyMatch[1].split('（')[0].trim() : raw.slice(0, 100),
-      example: exampleMatch ? exampleMatch[1] : ''
+      strategy: isCompanyKnowledge
+        ? (strategyMatch ? strategyMatch[1].split('（')[0].trim() : raw.slice(0, 100))
+        : sanitizePrice(strategyMatch ? strategyMatch[1].split('（')[0].trim() : raw.slice(0, 100)),
+      example: isCompanyKnowledge
+        ? (exampleMatch ? exampleMatch[1] : '')
+        : sanitizePrice(exampleMatch ? exampleMatch[1] : ''),
+      isCompany: isCompanyKnowledge
     };
   });
 
