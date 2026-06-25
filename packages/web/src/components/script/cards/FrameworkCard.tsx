@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { Network, Check, AlertTriangle } from 'lucide-react';
-import { cn } from '@/utils/cn';
 
 interface FrameworkAnalysis {
   detectedFrameworks?: string[];

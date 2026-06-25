@@ -361,7 +361,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
         mode: 'scenario',
         salesChannel: selectedChannel,
         documentContext: uploadedDocs.length > 0
-          ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
+          ? uploadedDocs.map(d => d.content.slice(0, 500)).join('\n')
           : undefined,
       });
       return;
@@ -372,17 +372,17 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
 
     onStart({
       scenarioId: selectedScenario.id,
-      scenarioTitle: selectedScenario.title,
-      scenarioDesc: selectedScenario.desc,
+      scenarioTitle: String((selectedScenario as Record<string, unknown>)?.title ?? selectedScenario.name),
+      scenarioDesc: String((selectedScenario as Record<string, unknown>)?.desc ?? selectedScenario.description ?? ''),
       difficulty: selectedDifficulty,
-      greeting: selectedScenario.greeting,
-      customerProfile: selectedScenario.customerProfile,
-      objectives: selectedScenario.objectives || [],
+      greeting: String((selectedScenario as Record<string, unknown>)?.greeting ?? ''),
+      customerProfile: String((selectedScenario as Record<string, unknown>)?.customerProfile ?? ''),
+      objectives: ((selectedScenario as Record<string, unknown>)?.objectives as string[]) || [],
       industry: categoryData?.industry || '通用',
       mode: 'scenario',
       salesChannel: selectedChannel,
       documentContext: uploadedDocs.length > 0
-        ? uploadedDocs.map(d => d.summary || d.content.slice(0, 500)).join('\n')
+        ? uploadedDocs.map(d => d.content.slice(0, 500)).join('\n')
         : undefined,
     });
   };
@@ -598,18 +598,18 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
           {/* Pre-built scenario info */}
           {selectedCategory !== 'custom' && selectedScenario && (
             <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-              <h3 className="font-semibold text-gray-900">{selectedScenario.title}</h3>
-              <p className="mt-1 text-sm text-gray-600">{selectedScenario.desc}</p>
+              <h3 className="font-semibold text-gray-900">{String((selectedScenario as Record<string, unknown>)?.title ?? selectedScenario.name)}</h3>
+              <p className="mt-1 text-sm text-gray-600">{String((selectedScenario as Record<string, unknown>)?.desc ?? selectedScenario.description ?? '')}</p>
 
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-gray-500">客户画像</p>
-                  <p className="mt-1 text-sm text-gray-700">{selectedScenario.customerProfile}</p>
+                  <p className="mt-1 text-sm text-gray-700">{String((selectedScenario as Record<string, unknown>)?.customerProfile ?? '')}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">练习目标</p>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {selectedScenario.objectives?.map((obj: string, idx: number) => (
+                    {((selectedScenario as Record<string, unknown>)?.objectives as string[])?.map((obj, idx) => (
                       <span key={idx} className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700">
                         {obj}
                       </span>
@@ -620,7 +620,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
 
               <div className="mt-4 rounded-lg bg-gray-50 p-3">
                 <p className="text-xs text-gray-500">客户开场白</p>
-                <p className="mt-1 text-sm italic text-gray-700">"{selectedScenario.greeting}"</p>
+                <p className="mt-1 text-sm italic text-gray-700">"{String((selectedScenario as Record<string, unknown>)?.greeting ?? '')}"</p>
               </div>
             </div>
           )}
@@ -633,7 +633,7 @@ export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) 
             </h3>
             <div className="space-y-2 text-sm text-blue-700">
               <p>📋 <strong>任务规划:</strong> 根据场景自动选择客户画像和销售框架</p>
-              <p>🎯 <strong>框架推荐:</strong> 基于"{selectedCategory === 'custom' ? customTitle : selectedScenario?.title}"场景，AI将自动匹配最佳销售方法论</p>
+              <p>🎯 <strong>框架推荐:</strong> 基于"{selectedCategory === 'custom' ? customTitle : selectedScenario?.name}"场景，AI将自动匹配最佳销售方法论</p>
               <p>🧠 <strong>动态评估:</strong> 每轮对话后自动评估9个维度，低分时主动提供教练建议</p>
               <p>📊 <strong>实时追踪:</strong> 监控客户情绪变化，检测异议和购买信号</p>
             </div>

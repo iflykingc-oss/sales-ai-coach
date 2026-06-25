@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Download, Upload, Trash2, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, Upload, Trash2, Loader2, CheckCircle } from 'lucide-react';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 

@@ -334,7 +334,8 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
     }
   };
 
-  const [autoReport, setAutoReport] = useState<Record<string, unknown> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [autoReport, setAutoReport] = useState<any>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   const handleEndPractice = async () => {

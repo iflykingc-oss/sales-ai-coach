@@ -26,7 +26,8 @@ export default function TeamPage() {
     setLoading(true);
     setError(null);
     try {
-      const teamRes = await api.get<{ data?: { id: string } }>('/teams/my');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const teamRes: any = await api.get('/teams/my');
       const team = teamRes?.data;
       if (!team?.id) {
         setNoTeam(true);
@@ -36,7 +37,8 @@ export default function TeamPage() {
       setTeamId(team.id);
       setNoTeam(false);
 
-      const statsRes = await api.get<{ data?: { members: any[]; stats: any; weakScenarios: any[] } }>(`/teams/${team.id}/stats`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const statsRes: any = await api.get(`/teams/${team.id}/stats`);
       const statsData = statsRes?.data;
       if (statsData) {
         setMembers(statsData.members || []);
@@ -44,9 +46,11 @@ export default function TeamPage() {
         setWeakScenarios(statsData.weakScenarios || []);
       }
 
-      const tasksRes = await api.get<{ data?: Array<{ id: string; title?: string; type?: string; assigneeId?: string; assigneeName?: string; deadline?: string; status?: string; createdAt?: string; description?: string }> }>(`/teams/${team.id}/tasks`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tasksRes: any = await api.get(`/teams/${team.id}/tasks`);
       const tasks = tasksRes?.data || [];
-      setTasks(tasks.map((t) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setTasks(tasks.map((t: any) => ({
         id: t.id,
         title: t.title || t.type || '任务',
         type: t.type || 'practice',

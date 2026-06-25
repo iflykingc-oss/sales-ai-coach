@@ -43,11 +43,13 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [showUninstallDialog, setShowUninstallDialog] = useState(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
-  const [apiData, setApiData] = useState<{ scripts?: unknown[]; scenarios?: unknown[]; knowledge?: unknown[] } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [apiData, setApiData] = useState<any>(null);
 
   // Fetch plugin details from API for real scripts/scenarios/knowledge
   useEffect(() => {
-    api.get<{ data?: { scripts?: unknown[]; scenarios?: unknown[]; knowledge?: unknown[] } }>(`/plugins/${plugin.id}`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    api.get<any>(`/plugins/${plugin.id}`)
       .then((res) => setApiData(res?.data || null))
       .catch(() => {});
   }, [plugin.id]);

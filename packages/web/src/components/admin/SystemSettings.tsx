@@ -28,7 +28,8 @@ export function SystemSettings() {
   const [logoUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [initLoading, setInitLoading] = useState(false);
-  const [initResult, setInitResult] = useState<{ success: boolean; message: string } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [initResult, setInitResult] = useState<any>(null);
 
   const filteredUsers = searchQuery
     ? systemUsers.filter(

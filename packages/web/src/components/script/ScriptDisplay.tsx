@@ -2,9 +2,9 @@ import { logger } from '@/utils/logger';
 import { useState, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Copy, Check, BookOpen, AlertTriangle, Loader2, CheckCircle, Columns, X,
-  Target, MessageCircleQuestion, Shield, TrendingUp, Lightbulb, ChevronRight,
-  Swords, Network, ChevronDown, ChevronUp, Gauge, Star,
+  Copy, Check, BookOpen, AlertTriangle, Loader2, Columns, X,
+  Lightbulb,
+  Swords, ChevronDown, ChevronUp, Gauge,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useScriptStore } from '@/stores/scriptStore';
@@ -238,7 +238,17 @@ export default function ScriptDisplay() {
 
 // --- Sub-components (kept in same file to avoid circular deps) ---
 
-const CoachingDirectivesCard = memo(function CoachingDirectivesCard({ paths, activeStyle }: { paths: any[]; activeStyle: string }) {
+interface CoachingDirectives {
+  pacingAndTone?: string;
+  microBehaviors?: string;
+}
+
+interface TacticalPath {
+  pathType?: string;
+  coachingDirectives?: CoachingDirectives;
+}
+
+const CoachingDirectivesCard = memo(function CoachingDirectivesCard({ paths, activeStyle }: { paths?: TacticalPath[]; activeStyle: string }) {
   const pathMap: Record<string, string> = { 'empathy': '共情版', 'straightforward': '直爽版', 'professional': '专业版' };
   const activePath = paths?.find(p => p.pathType === pathMap[activeStyle]);
   if (!activePath?.coachingDirectives) return null;
@@ -253,7 +263,7 @@ const CoachingDirectivesCard = memo(function CoachingDirectivesCard({ paths, act
   );
 });
 
-const SpeechLogicCard = memo(function SpeechLogicCard({ styles, activeStyle, compareMode }: { styles: any[]; activeStyle: string; compareMode: boolean }) {
+const SpeechLogicCard = memo(function SpeechLogicCard({ styles, activeStyle, compareMode }: { styles?: Array<{ style: string; content: string; logic?: string }>; activeStyle: string; compareMode: boolean }) {
   if (compareMode || !styles) return null;
   const activeVariant = styles.find(s => normalizeStyle(s.style) === activeStyle) || styles[STYLE_TABS.findIndex(t => t.key === activeStyle)];
   if (!activeVariant?.logic) return null;

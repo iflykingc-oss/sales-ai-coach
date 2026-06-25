@@ -27,7 +27,8 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const [loading, setLoading] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
-  const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [reportData, setReportData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
   const handleSaveAndReview = useCallback(async () => {
@@ -548,11 +549,11 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
               </ul>
             </div>
           )}
-          {reportData.frameworkAnalysis.suggestedFrameworks?.length > 0 && (
+          {Array.isArray((reportData.frameworkAnalysis as Record<string, unknown>)?.suggestedFrameworks) && ((reportData.frameworkAnalysis as Record<string, unknown>).suggestedFrameworks as unknown[]).length > 0 && (
             <div>
               <p className="mb-1 text-xs font-medium text-blue-600">建议学习的框架</p>
               <div className="flex flex-wrap gap-1">
-                {reportData.frameworkAnalysis.suggestedFrameworks.map((fw: string, i: number) => (
+                {((reportData.frameworkAnalysis as Record<string, unknown>).suggestedFrameworks as string[]).map((fw, i) => (
                   <span key={i} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{fw}</span>
                 ))}
               </div>
@@ -562,7 +563,7 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
       )}
 
       {/* BANT Qualification Score */}
-      {reportData?.bantScore && reportData.bantScore.overall && (
+      {reportData?.bantScore && (reportData.bantScore as Record<string, unknown>)?.overall && (
         <Card className="border-sky-200 bg-sky-50/30">
           <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-sky-700">
             <Gauge className="h-4 w-4" />
@@ -571,19 +572,19 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
           <div className="mb-3 flex items-center gap-3">
             <div className="text-center">
               <div className="text-2xl font-bold text-sky-600">
-                {reportData.bantScore.overall.score}
+                {String(((reportData.bantScore as Record<string, unknown>)?.overall as Record<string, unknown>)?.score ?? '')}
               </div>
               <div className="text-xs text-gray-500">综合评分</div>
             </div>
             <div className="h-8 w-px bg-gray-200" />
             <div className="text-sm font-medium text-sky-700">
-              {reportData.bantScore.overall.rating}
+              {String(((reportData.bantScore as Record<string, unknown>)?.overall as Record<string, unknown>)?.rating ?? '')}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {["budget", "authority", "need", "timeline"].map((dim) => {
               const labels: Record<string, string> = { budget: "预算", authority: "决策权", need: "需求", timeline: "时间线" };
-              const d = reportData.bantScore[dim];
+              const d = (reportData.bantScore as Record<string, unknown>)?.[dim] as Record<string, unknown> | undefined;
               if (!d) return null;
               return (
                 <div key={dim} className="rounded-lg bg-white p-2 border border-sky-100">
@@ -591,16 +592,16 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
                     <span className="text-xs font-medium text-gray-700">{labels[dim]}</span>
                     <span className={cn(
                       'text-xs font-bold',
-                      d.score >= 7 ? 'text-green-600' : d.score >= 4 ? 'text-yellow-600' : 'text-red-600',
+                      Number(d.score ?? 0) >= 7 ? 'text-green-600' : Number(d.score ?? 0) >= 4 ? 'text-yellow-600' : 'text-red-600',
                     )}>
-                      {d.score}/10
+                      {String(d.score ?? '')}/10
                     </span>
                   </div>
                   <span className={cn(
                     'text-[10px]',
                     d.status === '已确认' ? 'text-green-500' : d.status === '部分确认' ? 'text-yellow-500' : 'text-gray-400',
                   )}>
-                    {d.status}
+                    {String(d.status ?? '')}
                   </span>
                 </div>
               );
@@ -618,31 +619,31 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
           </h4>
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div className="text-center">
-              <div className="text-xl font-bold text-green-600">{reportData.signalAnalysis.buying_signals}</div>
+              <div className="text-xl font-bold text-green-600">{String((reportData.signalAnalysis as Record<string, unknown>).buying_signals ?? '')}</div>
               <div className="text-xs text-gray-500">购买信号</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-red-600">{reportData.signalAnalysis.objections}</div>
+              <div className="text-xl font-bold text-red-600">{String((reportData.signalAnalysis as Record<string, unknown>).objections ?? '')}</div>
               <div className="text-xs text-gray-500">异议次数</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-bold text-blue-600">{reportData.signalAnalysis.decision_readiness * 100}%</div>
+              <div className="text-xl font-bold text-blue-600">{Number((reportData.signalAnalysis as Record<string, unknown>).decision_readiness ?? 0) * 100}%</div>
               <div className="text-xs text-gray-500">决策就绪</div>
             </div>
           </div>
-          {reportData.signalAnalysis.pain_points?.length > 0 && (
+          {Array.isArray((reportData.signalAnalysis as Record<string, unknown>)?.pain_points) && ((reportData.signalAnalysis as Record<string, unknown>).pain_points as unknown[]).length > 0 && (
             <div className="mb-2">
               <p className="text-xs font-medium text-orange-600 mb-1">客户痛点</p>
               <div className="flex flex-wrap gap-1">
-                {reportData.signalAnalysis.pain_points.map((p: string, i: number) => (
+                {((reportData.signalAnalysis as Record<string, unknown>).pain_points as string[]).map((p, i) => (
                   <span key={i} className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-700">{p}</span>
                 ))}
               </div>
             </div>
           )}
-          {reportData.signalAnalysis.recommended_action && (
+          {(reportData.signalAnalysis as Record<string, unknown>)?.recommended_action != null && (
             <p className="text-xs text-orange-600 mt-2">
-              <span className="font-medium">建议: </span>{reportData.signalAnalysis.recommended_action}
+              <span className="font-medium">建议: </span>{String((reportData.signalAnalysis as Record<string, unknown>).recommended_action)}
             </p>
           )}
         </Card>
@@ -655,17 +656,17 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
             <ClipboardList className="h-4 w-4" />
             改进计划
           </h4>
-          {reportData.improvement_plan.priority && (
+          {(reportData.improvement_plan as Record<string, unknown>)?.priority != null && (
             <p className="mb-3 text-sm text-emerald-800">
-              <span className="font-medium">优先改进: </span>{reportData.improvement_plan.priority}
+              <span className="font-medium">优先改进: </span>{String((reportData.improvement_plan as Record<string, unknown>).priority)}
             </p>
           )}
-          {reportData.improvement_plan.exercises?.length > 0 && (
+          {Array.isArray((reportData.improvement_plan as Record<string, unknown>)?.exercises) && ((reportData.improvement_plan as Record<string, unknown>).exercises as unknown[]).length > 0 && (
             <div className="space-y-2">
-              {reportData.improvement_plan.exercises.map((ex: any, i: number) => (
+              {((reportData.improvement_plan as Record<string, unknown>).exercises as Array<Record<string, unknown>>).map((ex, i) => (
                 <div key={i} className="rounded-lg border border-emerald-200 bg-white p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-emerald-800">{ex.title}</span>
+                    <span className="text-sm font-medium text-emerald-800">{String(ex.title ?? '')}</span>
                     <span className={cn(
                       'rounded-full px-2 py-0.5 text-[10px]',
                       ex.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
@@ -674,17 +675,17 @@ ${summary.strengths.length > 0 ? '优势:\n' + summary.strengths.map(s => `✓ $
                       {ex.difficulty === 'easy' ? '入门' : ex.difficulty === 'hard' ? '进阶' : '标准'}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-gray-600">{ex.description}</p>
-                  {ex.target_dimension && (
-                    <p className="mt-1 text-[10px] text-emerald-500">目标: {ex.target_dimension}</p>
+                  <p className="mt-1 text-xs text-gray-600">{String((ex as Record<string, unknown>).description ?? '')}</p>
+                  {(ex as Record<string, unknown>).target_dimension != null && (
+                    <p className="mt-1 text-[10px] text-emerald-500">目标: {String((ex as Record<string, unknown>).target_dimension)}</p>
                   )}
                 </div>
               ))}
             </div>
           )}
-          {reportData.improvement_plan.timeline && (
+          {reportData.improvement_plan?.timeline && (
             <p className="mt-3 text-xs text-emerald-600">
-              建议周期: {reportData.improvement_plan.timeline}
+              建议周期: {String(reportData.improvement_plan.timeline)}
             </p>
           )}
         </Card>

@@ -7,6 +7,7 @@ import { TalkTimeRatio } from './TalkTimeRatio';
 import { SessionHealthIndicator } from './SessionHealthIndicator';
 import { CustomScenarioBuilder, type CustomScenario } from './CustomScenarioBuilder';
 import { DocumentUpload } from './DocumentUpload';
+import { toast } from '@/hooks/useToast';
 import {
   usePracticeStore,
   type ChatMessage,
