@@ -65,55 +65,25 @@ async def process_knowledge(content: str, source: str = "") -> dict:
 
 async def get_text_embedding(text: str) -> list[float]:
     """
-    Get text embedding via model API for semantic similarity.
+    Get text embedding via DashScope embedding API.
 
-    Uses the configured primary model to generate embeddings.
-    Falls back to a simple character-ngram vectorization if embedding API unavailable.
+    Uses the embedding_service which handles:
+    1. DashScope text-embedding-v3 (primary, 1024-dim)
+    2. Character bigram fallback (64-dim, no API needed)
     """
-    # Try to use model API for embeddings
-    try:
-        messages = [
-            {
-                "role": "system",
-                "content": "你是一个文本向量化服务。请将以下文本转换为一个固定长度的数值向量（32维浮点数列表），用于计算文本间的语义相似度。输出纯JSON数组，不要其他内容。",
-            },
-            {"role": "user", "content": text[:2000]},
-        ]
-        result = await model_router.chat_with_fallback(messages, temperature=0, max_tokens=512)
-
-        content = result["content"]
-        if "```" in content:
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-
-        embedding = json.loads(content.strip())
-        if isinstance(embedding, list) and len(embedding) > 0:
-            return [float(x) for x in embedding]
-    except Exception as e:
-        logger.warning(f"Embedding API failed, using fallback: {e}")
-
-    # Fallback: character bigram frequency vector (works for Chinese)
-    return _fallback_embedding(text)
+    from app.services.embedding_service import embedding_service
+    return await embedding_service.embed(text)
 
 
-def _fallback_embedding(text: str) -> list[float]:
-    """Character bigram frequency embedding (works for Chinese text)."""
-    # Extract character bigrams
-    bigrams = {}
-    for i in range(len(text) - 1):
-        bigram = text[i:i+2]
-        bigrams[bigram] = bigrams.get(bigram, 0) + 1
+async def get_text_embeddings_batch(texts: list[str]) -> list[list[float]]:
+    """
+    Get embeddings for multiple texts in a single batch call.
 
-    # Convert to fixed 64-dim vector using hash
-    vec = [0.0] * 64
-    for bigram, count in bigrams.items():
-        h = hash(bigram) % 64
-        vec[h] += count
-
-    # Normalize
-    magnitude = math.sqrt(sum(x*x for x in vec)) or 1
-    return [x / magnitude for x in vec]
+    Much more efficient than individual calls for N > 1.
+    DashScope supports up to 25 texts per batch.
+    """
+    from app.services.embedding_service import embedding_service
+    return await embedding_service.embed_batch(texts)
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

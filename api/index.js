@@ -53,7 +53,7 @@ Sentry.init({
 });
 
 // ==================== CONFIG ====================
-const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.aisalecoach.work';
@@ -1253,7 +1253,7 @@ routes['POST /api/auth/social-login'] = async (req, res) => {
     if (!access_token) return sendJson(res, 400, { success: false, error: 'Access token required' });
 
     // Verify the Supabase token and get user info
-    const supabaseUrl = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+    const supabaseUrl = process.env.SUPABASE_URL;
     const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
         'Authorization': `Bearer ${access_token}`,
@@ -1377,8 +1377,8 @@ routes['POST /api/plans/upgrade'] = async (req, res) => {
 };
 
 // ==================== PAYPAL PAYMENT ====================
-const PAYPAL_CLIENT_ID = 'AahOPjypTzhAPRxiqfYysZ4lj528Du-FQeGIDHwsBPEEmAGa1HsrWjZx1z_BPWDKMRw3ZkQoPnQGrgVm';
-const PAYPAL_SECRET = 'EIXuGEwq7P9G9BsJJs-_sqwfRQ_yIBfD_Q79itCWsqeNUqMyqiPW6KdLzm3amqvYqinQmkF5UuGruyhP';
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
 const PAYPAL_API_BASE = 'https://api-m.paypal.com'; // Use https://api-m.sandbox.paypal.com for testing
 
 async function getPayPalAccessToken() {
@@ -3391,7 +3391,7 @@ routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
 
     // 飞书通知
     if (inserted > 0) {
-      const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL || 'https://open.feishu.cn/open-apis/bot/v2/hook/ddc4e243-5c8b-4fcb-a0db-d56c213cb1bb';
+      const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL;
       try {
         await fetch(FEISHU_WEBHOOK, {
           method: 'POST',
@@ -4078,7 +4078,7 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
     }
 
     // 4. 飞书 Webhook 通知
-    const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL || 'https://open.feishu.cn/open-apis/bot/v2/hook/ddc4e243-5c8b-4fcb-a0db-d56c213cb1bb';
+    const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL;
     try {
       const crawlCount = results.knowledgeCrawl?.added || 0;
       const topScripts = results.topScripts || 0;
@@ -4149,7 +4149,7 @@ routes['GET /api/cron/knowledge'] = async (req, res) => {
     }
 
     // 2. 飞书通知
-    const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL || 'https://open.feishu.cn/open-apis/bot/v2/hook/ddc4e243-5c8b-4fcb-a0db-d56c213cb1bb';
+    const FEISHU_WEBHOOK = process.env.FEISHU_WEBHOOK_URL;
     const elapsed = Math.round((Date.now() - startTime) / 1000);
 
     try {

@@ -69,14 +69,29 @@ function updateUI(state) {
   // 更新提示列表
   if (state.currentTip) {
     const tipsList = document.getElementById('tipsList');
-    tipsList.innerHTML = `
-      <div class="tip-item">
-        <span class="tip-icon">💡</span>
-        <div>
-          <div class="tip-text">${state.currentTip}</div>
-          <div class="tip-time">刚刚</div>
-        </div>
-      </div>
-    `;
+    const item = document.createElement('div');
+    item.className = 'tip-item';
+
+    const icon = document.createElement('span');
+    icon.className = 'tip-icon';
+    icon.textContent = '💡';
+
+    const content = document.createElement('div');
+
+    const text = document.createElement('div');
+    text.className = 'tip-text';
+    text.textContent = state.currentTip;
+
+    const time = document.createElement('div');
+    time.className = 'tip-time';
+    time.textContent = '刚刚';
+
+    content.appendChild(text);
+    content.appendChild(time);
+    item.appendChild(icon);
+    item.appendChild(content);
+
+    tipsList.innerHTML = '';
+    tipsList.appendChild(item);
   }
 }

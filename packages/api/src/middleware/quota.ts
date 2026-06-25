@@ -8,8 +8,21 @@ export const PLAN_LIMITS: Record<string, Record<string, number>> = {
   ENTERPRISE: { scripts: -1, practices: -1, reviews: -1 },
 };
 
+const FEATURE_NAMES: Record<string, string> = {
+  scripts: '话术生成',
+  practices: 'AI 陪练',
+  reviews: '复盘分析',
+};
+
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0];
+}
+
+function getTomorrowResetTime(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  return tomorrow.toISOString();
 }
 
 export function quotaMiddleware(action: string) {
@@ -39,10 +52,12 @@ export function quotaMiddleware(action: string) {
       if (usage && usage.count >= limit) {
         return res.status(429).json({
           success: false,
-          error: `已达到今日${action === 'scripts' ? '话术生成' : action === 'practices' ? '陪练' : '复盘'}次数上限`,
+          error: `已达到今日${FEATURE_NAMES[action] || action}次数上限`,
+          feature: action,
           limit,
           used: usage.count,
           plan: user.plan,
+          resetAt: getTomorrowResetTime(),
         });
       }
 

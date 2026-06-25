@@ -4,6 +4,7 @@ import AppLayout from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { CookieConsent } from './components/compliance/CookieConsent';
+import { UpgradeModalWrapper } from './components/payment/UpgradeModalWrapper';
 
 /**
  * Lazy load with chunk-error recovery.
@@ -65,6 +66,7 @@ const PricingPage = lazyWithRetry(() => import('./app/pages/PricingPage'));
 const PracticeHistoryPage = lazyWithRetry(() => import('./app/pages/PracticeHistoryPage'));
 const PrivacyPage = lazyWithRetry(() => import('./app/pages/PrivacyPage'));
 const TermsPage = lazyWithRetry(() => import('./app/pages/TermsPage'));
+const PublicPricingPage = lazyWithRetry(() => import('./app/pages/PublicPricingPage'));
 
 export default function App() {
   return (
@@ -77,6 +79,7 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/pricing" element={<PublicPricingPage />} />
             <Route path="/app" element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
               <Route path="scripts" element={<SessionPage />} />
@@ -97,6 +100,7 @@ export default function App() {
       </ErrorBoundary>
       <CommandPalette />
       <CookieConsent />
+      <UpgradeModalWrapper />
     </>
   );
 }

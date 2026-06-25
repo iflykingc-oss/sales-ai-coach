@@ -97,7 +97,7 @@ router.get('/current', authMiddleware, async (req: any, res: Response, next: Nex
   } catch (err) { next(err); }
 });
 
-// POST /plans/upgrade — user self-upgrade
+// POST /plans/upgrade — user self-upgrade (now redirects to Stripe)
 router.post('/upgrade', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
@@ -105,6 +105,10 @@ router.post('/upgrade', authMiddleware, async (req: any, res: Response, next: Ne
 
     if (!targetPlan || !PLAN_TIERS[targetPlan]) {
       return res.status(400).json({ success: false, error: 'Invalid target plan' });
+    }
+
+    if (targetPlan === 'ENTERPRISE') {
+      return res.status(400).json({ success: false, error: 'Enterprise plan requires contacting sales' });
     }
 
     const user = await prisma.user.findUnique({
@@ -120,36 +124,20 @@ router.post('/upgrade', authMiddleware, async (req: any, res: Response, next: Ne
       return res.status(400).json({ success: false, error: 'Already on this plan' });
     }
 
-    // ENTERPRISE requires contact sales
-    if (targetPlan === 'ENTERPRISE') {
-      return res.status(400).json({ success: false, error: 'Enterprise plan requires contacting sales' });
-    }
-
-    // Plan hierarchy: FREE < PROFESSIONAL < TEAM < ENTERPRISE
     const planOrder: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, TEAM: 2, ENTERPRISE: 3 };
     if (planOrder[targetPlan] <= planOrder[user.plan]) {
       return res.status(400).json({ success: false, error: 'Can only upgrade to a higher plan' });
     }
 
-    // Update plan and log the change
-    const [updatedUser] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: { plan: targetPlan as Plan },
-        select: { id: true, name: true, email: true, plan: true },
-      }),
-      prisma.planChange.create({
-        data: {
-          userId,
-          fromPlan: user.plan as Plan,
-          toPlan: targetPlan as Plan,
-          changedBy: 'user',
-          reason: `User upgraded from ${user.plan} to ${targetPlan}`,
-        },
-      }),
-    ]);
-
-    res.json({ success: true, data: updatedUser });
+    // Redirect to Stripe checkout
+    res.json({
+      success: true,
+      data: {
+        requiresPayment: true,
+        message: 'Please use /stripe/create-checkout to start payment',
+        checkoutUrl: `/api/stripe/create-checkout`,
+      },
+    });
   } catch (err) { next(err); }
 });
 

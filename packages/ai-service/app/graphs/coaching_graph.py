@@ -66,6 +66,8 @@ def build_coaching_graph():
 
     Returns a compiled graph that can be invoked with:
         result = await graph.ainvoke(initial_state)
+
+    Optimized: stage_detector and persona run in parallel (fan-out from START).
     """
     graph = StateGraph(CoachingState)
 
@@ -76,9 +78,12 @@ def build_coaching_graph():
     graph.add_node("coach", coach.intervene)
     graph.add_node("knowledge", knowledge.suggest)
 
-    # Define flow
+    # Define flow — fan-out: stage_detector and persona run in parallel
     graph.add_edge(START, "stage_detector")
-    graph.add_edge("stage_detector", "persona")
+    graph.add_edge(START, "persona")
+
+    # Both must complete before evaluator runs
+    graph.add_edge("stage_detector", "evaluator")
     graph.add_edge("persona", "evaluator")
 
     # Conditional: should coach intervene?
@@ -96,7 +101,7 @@ def build_coaching_graph():
     graph.add_edge("knowledge", END)
 
     compiled = graph.compile()
-    logger.info("[coaching_graph] Graph compiled: stage_detector → persona → evaluator → coach → knowledge")
+    logger.info("[coaching_graph] Graph compiled: START → (stage_detector || persona) → evaluator → coach → knowledge")
     return compiled
 
 

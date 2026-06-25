@@ -72,11 +72,27 @@ api.interceptors.response.use(
     // Handle rate limiting (429)
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'];
-      const message = (error.response.data as any)?.error || 'Too many requests. Please try again later.';
+      const data = error.response.data as any;
+      const message = data?.error || 'Too many requests. Please try again later.';
+
+      // If it's a quota limit (has feature info), trigger upgrade modal
+      if (data?.feature) {
+        // Dynamically import to avoid circular dependency
+        import('../stores/upgradeStore').then(({ useUpgradeStore }) => {
+          useUpgradeStore.getState().showUpgrade({
+            feature: data.feature,
+            limit: data.limit,
+            resetAt: data.resetAt,
+          });
+        });
+      }
+
       return Promise.reject({
         status: 429,
         error: message,
         retryAfter: retryAfter ? parseInt(retryAfter) : 60,
+        feature: data?.feature,
+        limit: data?.limit,
       });
     }
 

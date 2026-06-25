@@ -1,0 +1,40 @@
+{
+  "setup": {
+    "title": "开始陪练",
+    "selectScenario": "选择场景",
+    "selectDifficulty": "选择难度",
+    "selectFramework": "选择框架",
+    "start": "开始练习",
+    "difficulty": {
+      "easy": "初级",
+      "medium": "中级",
+      "hard": "高级",
+      "expert": "专家"
+    }
+  },
+  "chat": {
+    "placeholder": "输入你的回复...",
+    "send": "发送",
+    "hint": "获取提示",
+    "endSession": "结束练习",
+    "round": "第 {{round}} 轮",
+    "thinking": "客户正在思考...",
+    "coaching": "教练建议"
+  },
+  "emotions": {
+    "interested": "感兴趣",
+    "hesitant": "犹豫",
+    "resistant": "抗拒",
+    "empathy": "共情"
+  },
+  "summary": {
+    "title": "练习报告",
+    "overallScore": "综合评分",
+    "dimensions": "能力维度",
+    "strengths": "优势",
+    "weaknesses": "待改进",
+    "recommendations": "建议",
+    "practiceAgain": "再练一次",
+    "viewHistory": "查看历史"
+  }
+}

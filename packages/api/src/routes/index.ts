@@ -17,6 +17,8 @@ import v1Routes from './v1.js';
 import apiDocsRoutes from './api-docs.js';
 import complianceRoutes from './compliance.js';
 import planRoutes from './plans.js';
+import stripeRoutes from './stripe.js';
+import analyticsRoutes from './analytics.js';
 
 const router = Router();
 
@@ -49,5 +51,11 @@ router.use('/compliance', complianceRoutes);
 
 // Plan management (cookie auth)
 router.use('/plans', planRoutes);
+
+// Stripe payments (webhook uses raw body, others use JSON)
+router.use('/stripe', stripeRoutes);
+
+// Analytics & skill tracking (cookie auth)
+router.use('/analytics', analyticsRoutes);
 
 export default router;

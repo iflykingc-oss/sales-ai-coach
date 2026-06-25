@@ -1,0 +1,40 @@
+{
+  "setup": {
+    "title": "Start Practice",
+    "selectScenario": "Select Scenario",
+    "selectDifficulty": "Select Difficulty",
+    "selectFramework": "Select Framework",
+    "start": "Start Practice",
+    "difficulty": {
+      "easy": "Beginner",
+      "medium": "Intermediate",
+      "hard": "Advanced",
+      "expert": "Expert"
+    }
+  },
+  "chat": {
+    "placeholder": "Type your response...",
+    "send": "Send",
+    "hint": "Get Hint",
+    "endSession": "End Practice",
+    "round": "Round {{round}}",
+    "thinking": "Customer is thinking...",
+    "coaching": "Coaching"
+  },
+  "emotions": {
+    "interested": "Interested",
+    "hesitant": "Hesitant",
+    "resistant": "Resistant",
+    "empathy": "Empathy"
+  },
+  "summary": {
+    "title": "Practice Report",
+    "overallScore": "Overall Score",
+    "dimensions": "Skill Dimensions",
+    "strengths": "Strengths",
+    "weaknesses": "Areas for Improvement",
+    "recommendations": "Recommendations",
+    "practiceAgain": "Practice Again",
+    "viewHistory": "View History"
+  }
+}

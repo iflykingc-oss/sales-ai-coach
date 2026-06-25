@@ -1,0 +1,30 @@
+{
+  "brand": "销冠AI教练",
+  "sidebar": {
+    "home": "成单助手",
+    "scripts": "话术生成",
+    "practice": "AI 陪练",
+    "knowledge": "知识库",
+    "review": "复盘分析",
+    "team": "团队管理",
+    "plugins": "行业插件",
+    "analytics": "数据分析",
+    "admin": "管理后台",
+    "pricing": "套餐升级",
+    "logout": "退出登录",
+    "loggedOut": "已退出登录"
+  },
+  "header": {
+    "openMenu": "打开菜单",
+    "welcome": "欢迎回来",
+    "loading": "加载中...",
+    "notLoggedIn": "未登录"
+  },
+  "mobile": {
+    "sessions": "会话",
+    "practice": "陪练",
+    "knowledge": "知识",
+    "analytics": "数据",
+    "more": "更多"
+  }
+}

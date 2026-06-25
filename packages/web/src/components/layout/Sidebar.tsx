@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
 import {
   Home,
@@ -15,16 +16,19 @@ import {
 import { useUserStore } from '@/stores/userStore';
 import { toast } from '@/hooks/useToast';
 
-const navItems = [
-  { path: '/app', icon: Home, label: '成单助手', end: true },
-  { path: '/app/scripts', icon: MessageSquare, label: '话术生成', end: false },
-  { path: '/app/practice', icon: Dumbbell, label: 'AI陪练', end: false },
-  { path: '/app/knowledge', icon: BookOpen, label: '知识库', end: false },
-  { path: '/app/review', icon: ClipboardList, label: '复盘', end: false },
-  { path: '/app/analytics', icon: BarChart3, label: '数据分析', end: false },
-  { path: '/app/team', icon: Users, label: '团队', end: false },
-  { path: '/app/admin', icon: Settings, label: '管理后台', end: false },
-];
+function useNavItems() {
+  const { t } = useTranslation('layout');
+  return [
+    { path: '/app', icon: Home, label: t('sidebar.home'), end: true },
+    { path: '/app/scripts', icon: MessageSquare, label: t('sidebar.scripts'), end: false },
+    { path: '/app/practice', icon: Dumbbell, label: t('sidebar.practice'), end: false },
+    { path: '/app/knowledge', icon: BookOpen, label: t('sidebar.knowledge'), end: false },
+    { path: '/app/review', icon: ClipboardList, label: t('sidebar.review'), end: false },
+    { path: '/app/analytics', icon: BarChart3, label: t('sidebar.analytics'), end: false },
+    { path: '/app/team', icon: Users, label: t('sidebar.team'), end: false },
+    { path: '/app/admin', icon: Settings, label: t('sidebar.admin'), end: false },
+  ];
+}
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -34,6 +38,8 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const navigate = useNavigate();
   const { user, clearUser } = useUserStore();
+  const { t } = useTranslation('layout');
+  const navItems = useNavItems();
 
   const handleLogout = async () => {
     try {
@@ -114,20 +120,20 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <Crown className="h-4 w-4 text-amber-600" />
             <div className="flex-1">
               <span className="font-medium text-amber-800">
-                {user?.plan === 'FREE' ? '免费版' : user?.plan === 'PROFESSIONAL' ? '专业版' : user?.plan === 'TEAM' ? '团队版' : user?.plan === 'ENTERPRISE' ? '企业版' : '免费版'}
+                {user?.plan === 'FREE' ? t('common:free') : user?.plan === 'PROFESSIONAL' ? t('common:professional') : user?.plan === 'TEAM' ? t('common:team') : user?.plan === 'ENTERPRISE' ? t('common:enterprise') : t('common:free')}
               </span>
               {user?.plan === 'FREE' && (
-                <span className="ml-2 text-xs text-amber-600">升级 →</span>
+                <span className="ml-2 text-xs text-amber-600">{t('common:upgrade')} →</span>
               )}
             </div>
           </NavLink>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-red-600"
-            aria-label="退出登录"
+            aria-label={t('sidebar.logout')}
           >
             <LogOut className="h-5 w-5" aria-hidden="true" />
-            退出登录
+            {t('sidebar.logout')}
           </button>
         </div>
       </aside>

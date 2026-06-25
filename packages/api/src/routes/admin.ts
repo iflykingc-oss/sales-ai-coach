@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, requireAdmin } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
+import { decrypt, isEncrypted } from '../lib/encryption.js';
 
 const router = Router();
 
@@ -187,19 +188,31 @@ router.get('/models', requireAdmin, async (req, res, next) => {
     });
 
     if (dbModels.length > 0) {
-      const formatted = dbModels.map((m) => ({
-        id: m.id,
-        name: m.displayName,
-        provider: m.provider,
-        temperature: m.temperature,
-        maxTokens: m.maxTokens,
-        repetitionPenalty: 1.1,
-        status: m.isActive ? 'active' as const : 'inactive' as const,
-        usageQuota: 100000,
-        usageCurrent: 0,
-        alertThreshold: 80,
-        apiKey: m.apiKey ? '***' + m.apiKey.slice(-4) : '',
-      }));
+      const formatted = dbModels.map((m) => {
+        // Decrypt and mask API key for display
+        let maskedKey = '';
+        if (m.apiKey) {
+          try {
+            const raw = isEncrypted(m.apiKey) ? decrypt(m.apiKey) : m.apiKey;
+            maskedKey = raw.length > 8 ? raw.slice(0, 4) + '***' + raw.slice(-4) : '***' + raw.slice(-4);
+          } catch {
+            maskedKey = '***';
+          }
+        }
+        return {
+          id: m.id,
+          name: m.displayName,
+          provider: m.provider,
+          temperature: m.temperature,
+          maxTokens: m.maxTokens,
+          repetitionPenalty: 1.1,
+          status: m.isActive ? 'active' as const : 'inactive' as const,
+          usageQuota: 100000,
+          usageCurrent: 0,
+          alertThreshold: 80,
+          apiKey: maskedKey,
+        };
+      });
       return res.json({ success: true, data: formatted });
     }
 

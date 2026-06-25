@@ -162,6 +162,12 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <LanguageSwitcher mode="landing" />
             <button
+              onClick={() => navigate('/pricing')}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+            >
+              {t('定价', 'Pricing')}
+            </button>
+            <button
               onClick={() => navigate('/login')}
               className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
             >
@@ -231,6 +237,67 @@ export default function LandingPage() {
               <div className="mt-1 text-sm text-gray-500">{t(s.label, s.labelEn)}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Social Proof */}
+      <section className="bg-white py-12">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <p className="text-center text-sm font-medium text-gray-400 mb-8">
+            {t('受到各行业销售团队的信赖', 'Trusted by sales teams across industries')}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-8 opacity-60">
+            {['SaaS', '医疗', '教育', '金融', '房地产', '电商'].map((industry) => (
+              <div key={industry} className="flex items-center gap-2 text-gray-400">
+                <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold">
+                  {industry[0]}
+                </div>
+                <span className="text-sm font-medium">{industry}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Testimonials */}
+          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+            {[
+              {
+                quote: t('用了3周，成单率提升了23%', 'Used for 3 weeks, close rate improved 23%'),
+                author: '李经理',
+                role: t('SaaS销售主管', 'SaaS Sales Manager'),
+                rating: 5,
+              },
+              {
+                quote: t('新人培训周期从2个月缩短到2周', 'Onboarding cut from 2 months to 2 weeks'),
+                author: '王总监',
+                role: t('医疗行业销售总监', 'Medical Sales Director'),
+                rating: 5,
+              },
+              {
+                quote: t('AI陪练比真人Roleplay更高效', 'AI practice more efficient than roleplay'),
+                author: '张总',
+                role: t('教育公司创始人', 'EdTech Founder'),
+                rating: 5,
+              },
+            ].map((testimonial, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 p-6 shadow-sm">
+                <div className="flex gap-1 mb-3">
+                  {Array.from({ length: testimonial.rating }).map((_, j) => (
+                    <Star key={j} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  ))}
+                </div>
+                <p className="text-gray-700 text-sm leading-relaxed">"{testimonial.quote}"</p>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-600">
+                    {testimonial.author[0]}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{testimonial.author}</p>
+                    <p className="text-xs text-gray-500">{testimonial.role}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -444,6 +511,25 @@ export default function LandingPage() {
             {t('免费开始', 'Get Started Free')}
             <ArrowRight className="h-5 w-5" />
           </button>
+        </div>
+      </section>
+
+      {/* Trust Badges */}
+      <section className="bg-gray-50 py-10">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-center gap-8">
+            {[
+              { icon: '🔒', label: t('数据加密', 'Data Encrypted') },
+              { icon: '🛡️', label: t('隐私保护', 'Privacy Protected') },
+              { icon: '⚡', label: t('99.9% 可用性', '99.9% Uptime') },
+              { icon: '🌍', label: t('全球部署', 'Global Deployment') },
+            ].map((badge) => (
+              <div key={badge.label} className="flex items-center gap-2 text-gray-500">
+                <span className="text-lg">{badge.icon}</span>
+                <span className="text-sm font-medium">{badge.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

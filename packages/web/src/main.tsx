@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import './i18n/i18next'; // Initialize i18next before app renders
 import { I18nProvider } from './i18n';
 import App from './App';
 import './index.css';

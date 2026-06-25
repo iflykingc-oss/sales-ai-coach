@@ -17,6 +17,7 @@ Enhanced with:
 - Temperature decay support via attempt parameter
 """
 
+import asyncio
 import json
 from app.harness.feature_list import FeatureList, ItemStatus
 from app.models.router import model_router
@@ -67,18 +68,40 @@ class TaskExecutor:
                     break
                 break
 
+            # Parallel execution: run all ready items concurrently
             for item in ready_items:
                 self.fl.start_item(item.id)
+
+            async def _execute_with_retry(item):
+                """Execute item with retry logic. Returns (item, success)."""
                 success = await self._execute_item(item, attempt=attempt)
                 if not success:
-                    # Check retry budget
                     retries = self._retry_count.get(item.id, 0)
                     if retries < self.max_retries:
                         self._retry_count[item.id] = retries + 1
                         self.fl.start_item(item.id)  # Reset to in_progress
                         logger.info(f"Retrying item {item.id} (attempt {retries + 1})")
                         success = await self._execute_item(item, attempt=retries + 1)
+                return (item, success)
 
+            # Execute all ready items in parallel
+            if len(ready_items) == 1:
+                # Single item - execute directly
+                item, success = await _execute_with_retry(ready_items[0])
+                if not success:
+                    self.fl.fail_item(item.id, error="Execution failed after retries")
+            else:
+                # Multiple items - parallel execution
+                logger.info(f"Executing {len(ready_items)} items in parallel: {[i.id for i in ready_items]}")
+                results = await asyncio.gather(
+                    *[_execute_with_retry(item) for item in ready_items],
+                    return_exceptions=True,
+                )
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.error(f"Parallel execution error: {result}")
+                        continue
+                    item, success = result
                     if not success:
                         self.fl.fail_item(item.id, error="Execution failed after retries")
 

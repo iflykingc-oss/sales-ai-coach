@@ -178,11 +178,19 @@
     const personaInfo = document.getElementById('sc-persona-info');
 
     if (personaElement && personaInfo && persona) {
-      personaInfo.innerHTML = `
-        <div><strong>${persona.name}</strong> - ${persona.role}</div>
-        <div>性格: ${personality}</div>
-        <div>痛点: ${painPoints}</div>
-      `;
+      const name = document.createElement('div');
+      name.innerHTML = `<strong>${persona.name || '客户'}</strong> - ${persona.role || ''}`;
+
+      const personalityDiv = document.createElement('div');
+      personalityDiv.textContent = `性格: ${persona.personality || persona.traits || '未知'}`;
+
+      const painDiv = document.createElement('div');
+      painDiv.textContent = `痛点: ${persona.painPoints || persona.pain_points || '未知'}`;
+
+      personaInfo.innerHTML = '';
+      personaInfo.appendChild(name);
+      personaInfo.appendChild(personalityDiv);
+      personaInfo.appendChild(painDiv);
       personaElement.style.display = 'block';
     }
   }
@@ -284,9 +292,17 @@
   }
 
   // 启动
+  function safeInit() {
+    try {
+      init();
+    } catch (err) {
+      console.error('[SalesCoach] Init error:', err);
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', safeInit);
   } else {
-    init();
+    safeInit();
   }
 })();
