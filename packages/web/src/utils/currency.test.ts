@@ -1,24 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { formatCurrency } from './currency';
+import { formatPrice } from './currency';
 
-describe('formatCurrency', () => {
-  it('formats USD correctly', () => {
-    const result = formatCurrency(1234.56, 'USD');
-    expect(result).toContain('1,234.56');
-  });
-
-  it('formats CNY correctly', () => {
-    const result = formatCurrency(1234.56, 'CNY');
-    expect(result).toContain('1,234.56');
-  });
-
-  it('handles zero', () => {
-    const result = formatCurrency(0, 'USD');
-    expect(result).toContain('0');
-  });
-
-  it('handles negative values', () => {
-    const result = formatCurrency(-100, 'USD');
+describe('formatPrice', () => {
+  it('formats CNY correctly for zh locale', () => {
+    const result = formatPrice(100, 'zh');
+    expect(result).toContain('¥');
     expect(result).toContain('100');
+  });
+
+  it('formats USD correctly for en locale', () => {
+    const result = formatPrice(100, 'en');
+    expect(result).toContain('$');
+  });
+
+  it('handles zero as free', () => {
+    const result = formatPrice(0, 'zh');
+    expect(result).toBe('免费');
+  });
+
+  it('handles zero as free in English', () => {
+    const result = formatPrice(0, 'en');
+    expect(result).toBe('Free');
+  });
+
+  it('returns empty string for -1', () => {
+    const result = formatPrice(-1, 'zh');
+    expect(result).toBe('');
   });
 });

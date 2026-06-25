@@ -1,4 +1,4 @@
-import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const MAX_RETRIES = 2;
