@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState } from 'react';
 import { FileText, Upload, Globe, Mic, FileSpreadsheet, Presentation, Edit3, Check, X, Eye, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -92,7 +93,7 @@ export function KnowledgeAdmin() {
       deleteKnowledge(id);
       toast.success('知识条目已删除');
     } catch (err) {
-      console.error('Failed to delete knowledge:', err);
+      logger.error('Failed to delete knowledge:', err);
       toast.error('删除失败');
     }
   };
@@ -132,7 +133,7 @@ export function KnowledgeAdmin() {
         setManualCategory('');
         toast.success('知识条目已添加');
       } catch (err) {
-        console.error('Failed to add knowledge:', err);
+        logger.error('Failed to add knowledge:', err);
         toast.error('添加失败');
       }
     }

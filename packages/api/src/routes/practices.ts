@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
@@ -6,6 +7,25 @@ import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const router = Router();
+
+// Zod schemas for input validation
+const initSchema = z.object({
+  scenario: z.string().min(1).max(500),
+  industry: z.string().max(100).optional(),
+  mode: z.enum(['scenario', 'freeform', 'special', 'objection_training']).optional(),
+  maxRounds: z.number().int().min(1).max(50).optional(),
+  sessionId: z.string().uuid().optional(),
+  scriptId: z.string().uuid().optional(),
+  logicFramework: z.string().max(100).optional(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  skillFocus: z.string().max(50).optional(),
+});
+
+const messageSchema = z.object({
+  sessionId: z.string().min(1),
+  message: z.string().min(1).max(5000),
+  logicFramework: z.string().max(100).optional(),
+});
 
 // Auto-select logic framework based on skill focus or scenario
 function autoSelectFramework(skillFocus?: string, scenario?: string): string {
@@ -30,7 +50,11 @@ function autoSelectFramework(skillFocus?: string, scenario?: string): string {
 // Harness-powered endpoints (direct proxy to AI service)
 router.post('/init', authMiddleware, async (req, res, next) => {
   try {
-    const { scenario, industry, mode, maxRounds, sessionId, scriptId, logicFramework, difficulty, skillFocus } = req.body;
+    const parsed = initSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { scenario, industry, mode, maxRounds, sessionId, scriptId, logicFramework, difficulty, skillFocus } = parsed.data;
 
     // Auto-select framework if not provided (backend logic, hidden from user)
     const selectedFramework = logicFramework || autoSelectFramework(skillFocus, scenario);
@@ -69,7 +93,11 @@ router.post('/init', authMiddleware, async (req, res, next) => {
 
 router.post('/message', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
-    const { sessionId, message, logicFramework } = req.body;
+    const parsed = messageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { sessionId, message, logicFramework } = parsed.data;
     const result = await callAiService({
       path: '/practices/message',
       body: { sessionId, message, logicFramework: logicFramework || '' },
@@ -253,11 +281,21 @@ router.post('/:id/message', authMiddleware, aiLimiter, async (req, res, next) =>
 
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
-    const practices = await prisma.practiceSession.findMany({
-      where: { userId: req.user!.id },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ success: true, data: practices });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [practices, total] = await Promise.all([
+      prisma.practiceSession.findMany({
+        where: { userId: req.user!.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.practiceSession.count({ where: { userId: req.user!.id } }),
+    ]);
+
+    res.json({ success: true, data: practices, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (err) { next(err); }
 });
 

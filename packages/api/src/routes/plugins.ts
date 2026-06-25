@@ -55,6 +55,8 @@ router.get('/:id', authMiddleware, async (req, res: Response, next: NextFunction
 router.post('/install', authMiddleware, async (req, res: Response, next: NextFunction) => {
   try {
     const { pluginId } = req.body;
+    if (!pluginId) return res.status(400).json({ success: false, error: 'Missing pluginId' });
+
     const plugin = await prisma.industryPlugin.findUnique({ where: { id: pluginId } });
     if (!plugin) return res.status(404).json({ success: false, error: 'Plugin not found' });
 
@@ -66,6 +68,12 @@ router.post('/install', authMiddleware, async (req, res: Response, next: NextFun
         data: { industry: [...industries, plugin.industry] },
       });
     }
+
+    // Increment install count
+    await prisma.industryPlugin.update({
+      where: { id: pluginId },
+      data: { installCount: { increment: 1 } },
+    });
 
     res.json({ success: true, data: plugin });
   } catch (err) { next(err); }

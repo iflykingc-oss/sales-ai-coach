@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -227,7 +228,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
         });
         setSaved(true);
       } catch (err) {
-        console.error('Failed to save practice:', err);
+        logger.error('Failed to save practice:', err);
         toast.error('练习保存失败', { description: '数据可能丢失，请重试' });
       } finally {
         setSaving(false);
@@ -280,7 +281,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
           setReportData(report as PracticeReportData);
         }
       } catch (error) {
-        console.error('Failed to fetch practice report:', error);
+        logger.error('Failed to fetch practice report:', error);
       } finally {
         setIsGeneratingSummary(false);
         setLoading(false);

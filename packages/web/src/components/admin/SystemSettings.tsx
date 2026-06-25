@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState } from 'react';
 import { Upload, Save, Key, Shield, Database, Download, Users, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -27,7 +28,7 @@ export function SystemSettings() {
   const [logoUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [initLoading, setInitLoading] = useState(false);
-  const [initResult, setInitResult] = useState<any>(null);
+  const [initResult, setInitResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const filteredUsers = searchQuery
     ? systemUsers.filter(
@@ -69,7 +70,7 @@ export function SystemSettings() {
         toast.error('初始化失败');
       }
     } catch (err) {
-      console.error('Init DB error:', err);
+      logger.error('Init DB error:', err);
       setInitResult({ type: 'error', message: '请求失败' });
       toast.error('初始化请求失败');
     } finally {

@@ -38,6 +38,7 @@ router.post('/generate', authMiddleware, aiLimiter, async (req, res, next) => {
         strengths: analysis.strengths,
         improvements: analysis.improvements,
         recommendations: analysis.recommendations,
+        radarScores: analysis.radarScores || null,
       },
     });
 
@@ -49,7 +50,7 @@ router.post('/generate', authMiddleware, aiLimiter, async (req, res, next) => {
       });
     }
 
-    res.json({ success: true, data: { ...report, radarScores: analysis.radarScores } });
+    res.json({ success: true, data: report });
   } catch (err) { next(err); }
 });
 
@@ -101,6 +102,7 @@ router.post('/from-practice', authMiddleware, aiLimiter, async (req, res, next) 
         strengths: analysis.strengths,
         improvements: analysis.improvements,
         recommendations: analysis.recommendations,
+        radarScores: analysis.radarScores || null,
       },
     });
 
@@ -112,17 +114,38 @@ router.post('/from-practice', authMiddleware, aiLimiter, async (req, res, next) 
       });
     }
 
-    res.json({ success: true, data: { ...report, radarScores: analysis.radarScores } });
+    res.json({ success: true, data: report });
   } catch (err) { next(err); }
 });
 
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
-    const reports = await prisma.reviewReport.findMany({
-      where: { userId: req.user!.id },
-      orderBy: { createdAt: 'desc' },
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [reports, total] = await Promise.all([
+      prisma.reviewReport.findMany({
+        where: { userId: req.user!.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.reviewReport.count({ where: { userId: req.user!.id } }),
+    ]);
+
+    res.json({ success: true, data: reports, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id', authMiddleware, async (req, res, next) => {
+  try {
+    const report = await prisma.reviewReport.findFirst({
+      where: { id: req.params.id, userId: req.user!.id },
     });
-    res.json({ success: true, data: reports });
+    if (!report) return res.status(404).json({ success: false, error: 'Report not found' });
+    await prisma.reviewReport.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
   } catch (err) { next(err); }
 });
 

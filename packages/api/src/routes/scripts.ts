@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { quotaMiddleware } from '../middleware/quota.js';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 import { generateScript } from '../services/ai.service.js';
 
 /**
@@ -83,7 +84,7 @@ router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), 
       }
     } catch (ragErr) {
       // RAG failure shouldn't block script generation
-      console.warn(`RAG retrieval failed: ${ragErr}`);
+      logger.warn('RAG retrieval failed', { error: String(ragErr) });
     }
 
     const result = await generateScript({

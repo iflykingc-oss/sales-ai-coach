@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * 公司专属知识 API
  *
@@ -85,7 +86,7 @@ async function listCompanyKnowledge(req, res) {
 
     res.json({ success: true, data: items || [] });
   } catch (err) {
-    console.error('List company knowledge error:', err);
+    logger.error('List company knowledge error:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch knowledge' });
   }
 }
@@ -118,7 +119,7 @@ async function createCompanyKnowledge(req, res) {
 
     res.json({ success: true, data: item });
   } catch (err) {
-    console.error('Create company knowledge error:', err);
+    logger.error('Create company knowledge error:', err);
     res.status(500).json({ success: false, error: 'Failed to create knowledge' });
   }
 }
@@ -140,7 +141,7 @@ async function updateCompanyKnowledge(req, res) {
 
     res.json({ success: true, data: result });
   } catch (err) {
-    console.error('Update company knowledge error:', err);
+    logger.error('Update company knowledge error:', err);
     res.status(500).json({ success: false, error: 'Failed to update knowledge' });
   }
 }
@@ -158,7 +159,7 @@ async function deleteCompanyKnowledge(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete company knowledge error:', err);
+    logger.error('Delete company knowledge error:', err);
     res.status(500).json({ success: false, error: 'Failed to delete knowledge' });
   }
 }

@@ -1,20 +1,20 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
 // GET /analytics/skills — Get user's skill scores over time
-router.get('/skills', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.get('/skills', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const { dimension, days = 30 } = req.query;
 
     const since = new Date();
     since.setDate(since.getDate() - parseInt(days as string));
 
-    const where: any = { userId, createdAt: { gte: since } };
-    if (dimension) where.dimension = dimension;
+    const where: { userId: string; createdAt: { gte: Date }; dimension?: string } = { userId, createdAt: { gte: since } };
+    if (dimension) where.dimension = dimension as string;
 
     const scores = await prisma.skillScore.findMany({
       where,
@@ -58,7 +58,7 @@ router.get('/skills', authMiddleware, async (req: any, res: Response, next: Next
 });
 
 // POST /analytics/skills — Save skill scores from a practice session
-router.post('/skills', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.post('/skills', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
     const { sessionId, scores } = req.body;
@@ -103,7 +103,7 @@ router.post('/skills', authMiddleware, async (req: any, res: Response, next: Nex
 });
 
 // GET /analytics/trends — Get skill trend data for charts
-router.get('/trends', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.get('/trends', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
     const { days = 30 } = req.query;

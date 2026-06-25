@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState } from 'react';
 import { Eye, EyeOff, Save, AlertTriangle, Cpu, Plus, Trash2, TestTube, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -120,7 +121,7 @@ export function ModelConfig() {
       });
       toast.success('模型添加成功');
     } catch (err) {
-      console.error('Failed to add model:', err);
+      logger.error('Failed to add model:', err);
       toast.error('添加失败', { description: '请稍后重试' });
     }
   };
@@ -166,7 +167,7 @@ export function ModelConfig() {
       deleteModel(id);
       toast.success('模型已删除');
     } catch (err) {
-      console.error('Failed to delete model:', err);
+      logger.error('Failed to delete model:', err);
       toast.error('删除失败');
     }
   };

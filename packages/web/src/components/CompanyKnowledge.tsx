@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, Upload, BookOpen, DollarSign, Award, Shield, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -42,7 +43,7 @@ export function CompanyKnowledge() {
       const res = await api.get('/company-knowledge');
       setItems(res.data || []);
     } catch (err) {
-      console.error('Failed to fetch company knowledge:', err);
+      logger.error('Failed to fetch company knowledge:', err);
     } finally {
       setLoading(false);
     }

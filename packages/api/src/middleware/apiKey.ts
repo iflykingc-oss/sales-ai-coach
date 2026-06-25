@@ -103,7 +103,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
       res.set('X-DailyLimit-Remaining', String(Math.max(0, apiKey.dailyLimit - dailyEntry.count)));
 
       // Attach API context to request
-      (req as any).apiKey = {
+      req.apiKey = {
         id: apiKey.id,
         tier: apiKey.tier,
         permissions: JSON.parse(apiKey.permissions as string),
@@ -131,7 +131,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
 // Permission check middleware factory
 export function requirePermission(permission: string) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const apiKey = (req as any).apiKey;
+    const apiKey = req.apiKey;
     if (!apiKey) {
       return res.status(403).json({ success: false, error: 'API key context required' });
     }
@@ -153,7 +153,7 @@ export function requirePermission(permission: string) {
 // Log API usage (call after response completes)
 export function logApiUsage(req: Request, res: Response, next: NextFunction) {
   const startTime = Date.now();
-  const apiKey = (req as any).apiKey;
+  const apiKey = req.apiKey;
 
   res.on('finish', () => {
     if (!apiKey) return;

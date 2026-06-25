@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { get, set, del } from 'idb-keyval';
 
 const DB_PREFIX = 'sales-ai-coach:';
@@ -15,7 +16,7 @@ export const localDb = {
     try {
       await set(`${DB_PREFIX}${key}`, value);
     } catch (e) {
-      console.warn('IndexedDB write failed:', e);
+      logger.warn('IndexedDB write failed:', e);
     }
   },
 
@@ -38,6 +39,6 @@ export const localDb = {
 
   async clearAllSessions() {
     // In production, iterate and clear; for now just log
-    console.log('Clear all cached sessions');
+    logger.info('Clear all cached sessions');
   },
 };

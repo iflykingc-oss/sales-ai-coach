@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export interface CustomScenario {
   id: string;
@@ -20,23 +19,21 @@ interface CustomScenarioState {
   getScenariosByIndustry: (industry: string) => CustomScenario[];
 }
 
+// Privacy: custom scenarios are ephemeral (in-memory only)
 export const useCustomScenarioStore = create<CustomScenarioState>()(
-  persist(
-    (set, get) => ({
-      scenarios: [],
-      addScenario: (scenario) =>
-        set((state) => ({ scenarios: [...state.scenarios, scenario] })),
-      removeScenario: (id) =>
-        set((state) => ({ scenarios: state.scenarios.filter((s) => s.id !== id) })),
-      updateScenario: (id, updates) =>
-        set((state) => ({
-          scenarios: state.scenarios.map((s) =>
-            s.id === id ? { ...s, ...updates } : s
-          ),
-        })),
-      getScenariosByIndustry: (industry) =>
-        get().scenarios.filter((s) => s.industry === industry),
-    }),
-    { name: 'custom-scenarios' }
-  )
+  (set, get) => ({
+    scenarios: [],
+    addScenario: (scenario) =>
+      set((state) => ({ scenarios: [...state.scenarios, scenario] })),
+    removeScenario: (id) =>
+      set((state) => ({ scenarios: state.scenarios.filter((s) => s.id !== id) })),
+    updateScenario: (id, updates) =>
+      set((state) => ({
+        scenarios: state.scenarios.map((s) =>
+          s.id === id ? { ...s, ...updates } : s
+        ),
+      })),
+    getScenariosByIndustry: (industry) =>
+      get().scenarios.filter((s) => s.industry === industry),
+  }),
 );

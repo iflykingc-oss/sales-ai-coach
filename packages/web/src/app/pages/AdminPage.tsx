@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -54,7 +55,7 @@ export default function AdminPage() {
         content: k.content,
       })) : []);
     } catch (e) {
-      console.error('Failed to fetch admin data:', e);
+      logger.error('Failed to fetch admin data:', e);
       toast.error('加载管理数据失败', { description: '请刷新页面重试' });
     } finally {
       setLoading(false);

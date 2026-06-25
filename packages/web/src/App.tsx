@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { CookieConsent } from './components/compliance/CookieConsent';
 import { UpgradeModalWrapper } from './components/payment/UpgradeModalWrapper';
@@ -81,18 +81,18 @@ export default function App() {
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/pricing" element={<PublicPricingPage />} />
             <Route path="/app" element={<AppLayout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="scripts" element={<SessionPage />} />
-              <Route path="practice" element={<PracticePage />} />
-              <Route path="knowledge" element={<KnowledgePage />} />
-              <Route path="review" element={<ReviewPage />} />
-              <Route path="team" element={<TeamPage />} />
-              <Route path="plugins" element={<PluginPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="admin" element={<AdminPage />} />
-              <Route path="data-rights" element={<DataRightsPage />} />
-              <Route path="pricing" element={<PricingPage />} />
-              <Route path="practice/history" element={<PracticeHistoryPage />} />
+              <Route index element={<RouteErrorBoundary><DashboardPage /></RouteErrorBoundary>} />
+              <Route path="scripts" element={<RouteErrorBoundary><SessionPage /></RouteErrorBoundary>} />
+              <Route path="practice" element={<RouteErrorBoundary><PracticePage /></RouteErrorBoundary>} />
+              <Route path="knowledge" element={<RouteErrorBoundary><KnowledgePage /></RouteErrorBoundary>} />
+              <Route path="review" element={<RouteErrorBoundary><ReviewPage /></RouteErrorBoundary>} />
+              <Route path="team" element={<RouteErrorBoundary><TeamPage /></RouteErrorBoundary>} />
+              <Route path="plugins" element={<RouteErrorBoundary><PluginPage /></RouteErrorBoundary>} />
+              <Route path="analytics" element={<RouteErrorBoundary><AnalyticsPage /></RouteErrorBoundary>} />
+              <Route path="admin" element={<RouteErrorBoundary><AdminPage /></RouteErrorBoundary>} />
+              <Route path="data-rights" element={<RouteErrorBoundary><DataRightsPage /></RouteErrorBoundary>} />
+              <Route path="pricing" element={<RouteErrorBoundary><PricingPage /></RouteErrorBoundary>} />
+              <Route path="practice/history" element={<RouteErrorBoundary><PracticeHistoryPage /></RouteErrorBoundary>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

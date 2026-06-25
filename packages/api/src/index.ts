@@ -4,27 +4,55 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import * as Sentry from '@sentry/node';
+import { logger } from './lib/logger.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { errorMiddleware } from './middleware/error.js';
 import routes from './routes/index.js';
 
 // Global error handlers for unhandled promise rejections and uncaught exceptions
 process.on('unhandledRejection', (reason: unknown) => {
-  console.error('[FATAL] Unhandled promise rejection:', reason);
+  logger.error('Unhandled promise rejection', reason);
   process.exit(1);
 });
 
 process.on('uncaughtException', (err: Error) => {
-  console.error('[FATAL] Uncaught exception:', err);
+  logger.error('Uncaught exception', err);
   process.exit(1);
 });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Sentry initialization (requires SENTRY_DSN env var)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  });
+}
+
 app.use(helmet());
+// Sentry request handler — must be first middleware
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.requestHandler());
+  app.use(Sentry.Handlers.tracingHandler());
+}
+// Dynamic CORS whitelist
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map((o) => o.trim());
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin(origin, callback) {
+    // Allow requests with no origin (curl, server-to-server, mobile apps)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  },
   credentials: true,
 }));
 
@@ -47,10 +75,15 @@ app.get('/health', (req, res) => {
 
 app.use('/api', routes);
 
+// Sentry error handler — must be before custom error middleware
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.errorHandler());
+}
+
 app.use(errorMiddleware);
 
 app.listen(PORT, () => {
-  console.log(`API server running on http://localhost:${PORT}`);
+  logger.info(`API server running on port ${PORT}`, { env: process.env.NODE_ENV || 'development' });
 });
 
 export default app;

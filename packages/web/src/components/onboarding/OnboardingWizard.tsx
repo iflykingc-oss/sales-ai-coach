@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Target, BookOpen, Dumbbell, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Target, BookOpen, Dumbbell, Shield, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useI18n } from '@/i18n';
 import { cn } from '@/utils/cn';
@@ -37,6 +37,14 @@ const STEPS: OnboardingStep[] = [
     description: '基础功 → 进阶技能 → 实战模拟 → 挑战模式\n\n从开场白训练开始，逐步掌握异议处理、价格谈判、促单技巧，最终成为销售高手。',
     descriptionEn: 'Fundamentals → Advanced Skills → Simulation → Challenge\n\nStart with opening techniques, then master objection handling, negotiation, and closing skills.',
     icon: <Dumbbell className="h-8 w-8 text-primary-500" />,
+  },
+  {
+    id: 'privacy',
+    title: '数据安全',
+    titleEn: 'Data Privacy',
+    description: '您的数据由您掌控：\n• 练习和话术默认仅在当前会话有效\n• 您可以随时保存到账号、导出备份\n• 上传的知识库仅用于为您服务，平台无法查看\n• 您可随时一键删除所有数据',
+    descriptionEn: 'Your data, your control:\n• Practice and scripts are ephemeral by default\n• Save to account or export anytime\n• Uploaded knowledge is private and deletable\n• One-click data deletion available',
+    icon: <Shield className="h-8 w-8 text-primary-500" />,
   },
 ];
 

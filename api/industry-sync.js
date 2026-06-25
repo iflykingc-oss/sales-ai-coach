@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * @file industry-sync.js
  * @description 多渠道行业数据聚合器 - 自动从外部数据源获取并同步行业配置
@@ -40,7 +41,7 @@ class IndustrySyncManager {
       this.syncAll();
     }, intervalMs);
 
-    console.log(`[IndustrySync] 自动同步已启动，间隔: ${intervalMs / 1000}s`);
+    logger.info(`[IndustrySync] 自动同步已启动，间隔: ${intervalMs / 1000}s`);
   }
 
   /**
@@ -50,7 +51,7 @@ class IndustrySyncManager {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
-      console.log('[IndustrySync] 自动同步已停止');
+      logger.info('[IndustrySync] 自动同步已停止');
     }
   }
 
@@ -70,7 +71,7 @@ class IndustrySyncManager {
       lastFetch: null,
       errorCount: 0
     });
-    console.log(`[IndustrySync] 注册外部 API: ${name}`);
+    logger.info(`[IndustrySync] 注册外部 API: ${name}`);
   }
 
   /**
@@ -78,7 +79,7 @@ class IndustrySyncManager {
    */
   async syncAll() {
     if (this.syncStatus === 'syncing') {
-      console.log('[IndustrySync] 同步正在进行中，跳过...');
+      logger.info('[IndustrySync] 同步正在进行中，跳过...');
       return;
     }
 
@@ -107,10 +108,10 @@ class IndustrySyncManager {
         this.syncHistory = this.syncHistory.slice(-100);
       }
 
-      console.log(`[IndustrySync] 同步完成，耗时: ${Date.now() - startTime}ms`, results);
+      logger.info(`[IndustrySync] 同步完成，耗时: ${Date.now() - startTime}ms`, results);
     } catch (error) {
       this.syncStatus = 'error';
-      console.error('[IndustrySync] 同步失败:', error.message);
+      logger.error('[IndustrySync] 同步失败:', error.message);
     }
   }
 
@@ -143,7 +144,7 @@ class IndustrySyncManager {
             synced++;
           }
         } catch (e) {
-          console.error(`[IndustrySync] 解析插件 ${plugin.name} 失败:`, e.message);
+          logger.error(`[IndustrySync] 解析插件 ${plugin.name} 失败:`, e.message);
         }
       }
 
@@ -189,7 +190,7 @@ class IndustrySyncManager {
       } catch (error) {
         apiConfig.errorCount++;
         results.push({ source: name, status: 'error', error: error.message });
-        console.error(`[IndustrySync] 外部 API ${name} 同步失败:`, error.message);
+        logger.error(`[IndustrySync] 外部 API ${name} 同步失败:`, error.message);
       }
     }
 

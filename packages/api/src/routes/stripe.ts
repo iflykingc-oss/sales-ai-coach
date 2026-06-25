@@ -13,7 +13,8 @@ const stripe = process.env.STRIPE_SECRET_KEY
 
 // Helper to extract period dates from Stripe subscription
 function getPeriodDates(subscription: Stripe.Subscription) {
-  const sub = subscription as any;
+  // Stripe subscription has current_period_start/end on the raw object
+  const sub = subscription as Stripe.Subscription & { current_period_start?: number; current_period_end?: number };
   return {
     start: new Date((sub.current_period_start || 0) * 1000),
     end: new Date((sub.current_period_end || 0) * 1000),
@@ -38,7 +39,7 @@ const PLAN_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, TEAM: 2, 
 // ============================================================
 // POST /stripe/create-checkout — Create Stripe Checkout Session
 // ============================================================
-router.post('/create-checkout', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.post('/create-checkout', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!stripe) {
       return res.status(503).json({ success: false, error: 'Payment service not configured' });
@@ -111,7 +112,7 @@ router.post('/create-checkout', authMiddleware, async (req: any, res: Response, 
 // ============================================================
 // POST /stripe/create-portal — Create Stripe Customer Portal
 // ============================================================
-router.post('/create-portal', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.post('/create-portal', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!stripe) {
       return res.status(503).json({ success: false, error: 'Payment service not configured' });
@@ -138,7 +139,7 @@ router.post('/create-portal', authMiddleware, async (req: any, res: Response, ne
 // ============================================================
 // GET /stripe/subscription — Get current subscription status
 // ============================================================
-router.get('/subscription', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.get('/subscription', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
     const sub = await prisma.subscription.findUnique({
@@ -235,6 +236,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const subscriptionId = session.subscription as string;
   const customerId = session.customer as string;
+
+  // Idempotency: skip if subscription already exists with this Stripe ID
+  const existingSub = await prisma.subscription.findFirst({
+    where: { stripeSubscriptionId: subscriptionId },
+  });
+  if (existingSub) {
+    console.log(`[Stripe] Checkout already processed for subscription ${subscriptionId}`);
+    return;
+  }
 
   // Fetch current user plan and subscription details
   const [user, subscription] = await Promise.all([
@@ -339,6 +349,10 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   const userId = subscription.metadata?.userId;
   if (!userId) return;
 
+  // Fetch current plan before resetting to FREE
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
+  const fromPlan = user?.plan || 'FREE';
+
   await prisma.$transaction([
     prisma.subscription.update({
       where: { userId },
@@ -354,7 +368,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     prisma.planChange.create({
       data: {
         userId,
-        fromPlan: 'PROFESSIONAL', // Will be correct if we fetch sub first
+        fromPlan,
         toPlan: 'FREE',
         changedBy: 'stripe',
         reason: 'Subscription canceled',
@@ -362,11 +376,12 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     }),
   ]);
 
-  console.log(`[Stripe] Subscription canceled for user ${userId}`);
+  console.log(`[Stripe] Subscription canceled for user ${userId}, was ${fromPlan}`);
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  const subscriptionId = (invoice as any).subscription as string;
+  // Stripe Invoice has subscription field on the raw object
+  const subscriptionId = (invoice as Stripe.Invoice & { subscription?: string }).subscription as string;
   if (!subscriptionId) return;
 
   const sub = await prisma.subscription.findFirst({
@@ -391,7 +406,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  const subscriptionId = (invoice as any).subscription as string;
+  const subscriptionId = (invoice as Stripe.Invoice & { subscription?: string }).subscription as string;
   if (!subscriptionId) return;
 
   const sub = await prisma.subscription.findFirst({

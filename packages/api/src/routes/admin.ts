@@ -11,46 +11,14 @@ router.get('/stats', async (req, res, next) => {
   try {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const [totalUsers, activeUsers, totalSessions, totalScripts, totalPractices, totalReviews] = await Promise.all([
+    // Privacy: only aggregate account stats — no content data
+    const [totalUsers, activeUsers, paidUsers] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { updatedAt: { gte: weekAgo } } }),
-      prisma.session.count(),
-      prisma.script.count(),
-      prisma.practiceSession.count(),
-      prisma.reviewReport.count(),
+      prisma.user.count({ where: { plan: { not: 'FREE' } } }),
     ]);
 
-    // Daily scripts in last 30 days
-    const scriptsByDay = await prisma.script.groupBy({
-      by: ['createdAt'],
-      where: { createdAt: { gte: monthAgo } },
-      _count: true,
-    });
-    const dailyScripts = new Array(30).fill(0);
-    scriptsByDay.forEach((s) => {
-      const dayIndex = Math.floor((now.getTime() - new Date(s.createdAt).getTime()) / (24 * 60 * 60 * 1000));
-      if (dayIndex >= 0 && dayIndex < 30) dailyScripts[29 - dayIndex] = s._count;
-    });
-
-    // Industry distribution (real data from user.industry array)
-    const allUsers = await prisma.user.findMany({
-      where: { industry: { isEmpty: false } },
-      select: { industry: true },
-    });
-    const industryCount: Record<string, number> = {};
-    allUsers.forEach((u) => {
-      (u.industry as string[]).forEach((ind) => {
-        industryCount[ind] = (industryCount[ind] || 0) + 1;
-      });
-    });
-    const topIndustries = Object.entries(industryCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-
-    // User growth trend (group by month using raw query)
     const userGrowthTrend: { month: string; count: number }[] = await prisma.$queryRaw`
       SELECT to_char("createdAt", 'YYYY-MM') AS month, COUNT(*)::int AS count
       FROM "User"
@@ -61,29 +29,17 @@ router.get('/stats', async (req, res, next) => {
 
     res.json({
       success: true,
-      data: {
-        totalUsers,
-        dailyActiveUsers: activeUsers,
-        totalScriptsGenerated: totalScripts,
-        dailyScriptsGenerated: dailyScripts[29] || 0,
-        totalSessions,
-        totalPractices,
-        totalReviews,
-        modelUsage: null,
-        userGrowthTrend,
-        scriptUsageTrend: dailyScripts,
-        topIndustries,
-      },
+      data: { totalUsers, dailyActiveUsers: activeUsers, paidUsers, userGrowthTrend },
     });
   } catch (err) { next(err); }
 });
 
 router.get('/users', async (req, res, next) => {
   try {
+    // Privacy: only account info — no behavioral data (industry, teamId)
     const users = await prisma.user.findMany({
       select: {
-        id: true, name: true, email: true, role: true, plan: true,
-        industry: true, teamId: true, createdAt: true, updatedAt: true,
+        id: true, name: true, email: true, role: true, plan: true, createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -134,18 +90,6 @@ router.put('/users/:id/plan', async (req, res, next) => {
     ]);
 
     res.json({ success: true, data: updatedUser });
-  } catch (err) { next(err); }
-});
-
-// GET /admin/users/:id/plan-history — admin views user's plan change history
-router.get('/users/:id/plan-history', async (req, res, next) => {
-  try {
-    const history = await prisma.planChange.findMany({
-      where: { userId: req.params.id as string },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-    res.json({ success: true, data: history });
   } catch (err) { next(err); }
 });
 

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useCallback } from 'react';
 import { ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -36,7 +37,7 @@ export default function ScriptFeedback({
           }
           setSubmitted(true);
         } catch (err) {
-          console.error('Feedback error:', err);
+          logger.error('Feedback error:', err);
           setSelectedType(null);
         } finally {
           setIsSubmitting(false);
@@ -62,7 +63,7 @@ export default function ScriptFeedback({
       setSubmitted(true);
       setShowReason(false);
     } catch (err) {
-      console.error('Feedback error:', err);
+      logger.error('Feedback error:', err);
     } finally {
       setIsSubmitting(false);
     }

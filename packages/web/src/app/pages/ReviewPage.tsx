@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
@@ -30,7 +31,7 @@ export default function ReviewPage() {
             generateMutation.mutate({ conversations });
           }
         } catch (err) {
-          console.error('Failed to load practice for review:', err);
+          logger.error('Failed to load practice for review:', err);
         }
       };
       loadPracticeAndReview();

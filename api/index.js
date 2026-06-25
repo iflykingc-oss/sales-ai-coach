@@ -2,6 +2,7 @@ const { URL } = require('url');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Sentry = require('@sentry/node');
+const logger = require('./lib/logger');
 const registry = require('./industry-context');
 const syncManager = require('./industry-sync');
 const { processKnowledge, generateSpeechWithRetry } = require('./speech-generator');
@@ -40,7 +41,7 @@ if (process.env.VERCEL !== '1') {
     try {
       syncManager.startAutoSync(5 * 60 * 1000);
     } catch (e) {
-      console.log('Industry sync disabled:', e.message);
+      logger.info('Industry sync disabled:', e.message);
     }
   }, 3000);
 }
@@ -362,7 +363,7 @@ async function trackUsage(userId, action) {
         created_at: new Date().toISOString()
       });
     }
-  } catch (e) { console.error('Usage tracking error:', e.message); }
+  } catch (e) { logger.error('Usage tracking error:', e.message); }
 }
 
 // ==================== AI QUALITY GATE ====================
@@ -419,7 +420,7 @@ async function getActiveModel() {
       _cacheTime = now;
       return _cachedModel;
     }
-  } catch (e) { console.error('getActiveModel error:', e.message); }
+  } catch (e) { logger.error('getActiveModel error:', e.message); }
   return null;
 }
 
@@ -431,7 +432,7 @@ function buildApiUrl(baseUrl, provider) {
   // 自动升级 HTTP → HTTPS（Vercel 环境必须用 HTTPS）
   if (url.startsWith('http://')) {
     url = url.replace('http://', 'https://');
-    console.log('buildApiUrl: Auto-upgraded HTTP to HTTPS:', url);
+    logger.info('buildApiUrl: Auto-upgraded HTTP to HTTPS:', url);
   }
 
   // 1. 默认 URL
@@ -464,7 +465,7 @@ function buildApiUrl(baseUrl, provider) {
 async function callAI(messages, options = {}) {
   const model = await getActiveModel();
   if (!model) {
-    console.log('callAI: No active model configured, using fallback');
+    logger.info('callAI: No active model configured, using fallback');
     return null; // no model configured, caller should use fallback
   }
 
@@ -476,7 +477,7 @@ async function callAI(messages, options = {}) {
   const maxTokens = options.max_tokens ?? model.max_tokens ?? 2048;
 
   if (!apiKey || !modelId) {
-    console.error('callAI: Model configured but missing apiKey or modelId', {
+    logger.error('callAI: Model configured but missing apiKey or modelId', {
       provider, modelId: modelId || '(empty)', hasApiKey: !!apiKey, baseUrl
     });
     return null;
@@ -517,7 +518,7 @@ async function callAI(messages, options = {}) {
       });
     }
 
-    console.log(`callAI: Calling ${provider} API`, {
+    logger.info(`callAI: Calling ${provider} API`, {
       url: url.replace(apiKey, '***'), // 不打印完整 key
       modelId,
       temperature,
@@ -529,7 +530,7 @@ async function callAI(messages, options = {}) {
     if (!resp.ok) {
       const errText = await resp.text();
       const errPreview = errText.slice(0, 500);
-      console.error(`callAI: API error (${provider} ${resp.status}):`, {
+      logger.error(`callAI: API error (${provider} ${resp.status}):`, {
         status: resp.status,
         statusText: resp.statusText,
         error: errPreview,
@@ -538,11 +539,11 @@ async function callAI(messages, options = {}) {
       });
       // 429 = 限流，记录但不抛异常
       if (resp.status === 429) {
-        console.warn('callAI: Rate limited by provider, will use fallback');
+        logger.warn('callAI: Rate limited by provider, will use fallback');
       }
       // 400 = 请求格式错误，记录详细信息
       if (resp.status === 400) {
-        console.error('callAI: Bad request - check model_id and base_url config:', errPreview);
+        logger.error('callAI: Bad request - check model_id and base_url config:', errPreview);
       }
       return null;
     }
@@ -558,14 +559,14 @@ async function callAI(messages, options = {}) {
     }
 
     if (!content) {
-      console.error('callAI: Empty response from API', {
+      logger.error('callAI: Empty response from API', {
         provider,
         modelId,
         responseKeys: Object.keys(data),
         responsePreview: JSON.stringify(data).slice(0, 300)
       });
     } else {
-      console.log(`callAI: Success (${provider})`, {
+      logger.info(`callAI: Success (${provider})`, {
         modelId,
         contentLength: content.length,
         contentPreview: content.slice(0, 100)
@@ -574,7 +575,7 @@ async function callAI(messages, options = {}) {
 
     return content;
   } catch (e) {
-    console.error('callAI error:', e.message);
+    logger.error('callAI error:', e.message);
     return null;
   }
 }
@@ -737,11 +738,11 @@ async function graphSearch(industry, objection, persona) {
       match_count: 5,
     });
     if (results && results.length > 0) {
-      console.log(`Graph: ${results.length} strategies (top: ${results[0].strategy_name}, score: ${results[0].effectiveness?.toFixed(3)})`);
+      logger.info(`Graph: ${results.length} strategies (top: ${results[0].strategy_name}, score: ${results[0].effectiveness?.toFixed(3)})`);
       return results;
     }
   } catch (e) {
-    console.log('Graph search failed:', e.message.slice(0, 80));
+    logger.info('Graph search failed:', e.message.slice(0, 80));
   }
   return [];
 }
@@ -768,7 +769,7 @@ async function retrieveKnowledge(query, industry, userId) {
   const persona = inferPersona(query);
   logData.objection = objection;
   logData.persona = persona;
-  console.log(`Retrieval: industry=${industry}, objection=${objection}, persona=${persona}`);
+  logger.info(`Retrieval: industry=${industry}, objection=${objection}, persona=${persona}`);
 
   // 2. 图谱检索（优先）
   let graphResults = [];
@@ -801,7 +802,7 @@ async function retrieveKnowledge(query, industry, userId) {
       final_score: r.final_score,
     }));
   } catch (e) {
-    console.log('KB search failed:', e.message.slice(0, 80));
+    logger.info('KB search failed:', e.message.slice(0, 80));
   }
 
   // 4. 合并：图谱结果优先，知识库补充
@@ -876,7 +877,7 @@ async function retrieveKnowledge(query, industry, userId) {
     content_preview: (r.content || '').slice(0, 150),
   }));
 
-  console.log(`Retrieval: graph=${graphResults.length} kb=${kbResults?.length || 0} → bm25=${bm25Ranked.length} → final=${final.length} (${styles.length} styles)`);
+  logger.info(`Retrieval: graph=${graphResults.length} kb=${kbResults?.length || 0} → bm25=${bm25Ranked.length} → final=${final.length} (${styles.length} styles)`);
 
   // 7. 异步写入日志（不阻塞返回）
   sbInsert('retrieval_logs', logData).catch(() => {});
@@ -1211,7 +1212,7 @@ routes['POST /api/auth/register'] = async (req, res) => {
     const token = createJWT({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET);
     res.setHeader('Set-Cookie', `token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7*24*60*60}`);
     sendJson(res, 201, { success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan, industry: user.industry } } });
-  } catch (err) { console.error('Register error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' }); }
+  } catch (err) { logger.error('Register error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' }); }
 };
 
 routes['POST /api/auth/login'] = async (req, res) => {
@@ -1225,7 +1226,7 @@ routes['POST /api/auth/login'] = async (req, res) => {
     const token = createJWT({ userId: user.id, email: user.email, role: user.role }, JWT_SECRET);
     res.setHeader('Set-Cookie', `token=${token}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7*24*60*60}`);
     sendJson(res, 200, { success: true, data: { user: { id: user.id, name: user.name, email: user.email, role: user.role, plan: user.plan, industry: user.industry } } });
-  } catch (err) { console.error('Login error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' }); }
+  } catch (err) { logger.error('Login error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' }); }
 };
 
 routes['GET /api/auth/me'] = async (req, res) => {
@@ -1237,7 +1238,7 @@ routes['GET /api/auth/me'] = async (req, res) => {
     sendJson(res, 200, { success: true, data: { user: { id: u.id, name: u.name, email: u.email, role: u.role, plan: u.plan, industry: u.industry, createdAt: u.created_at } } });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    console.error('Me error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' });
+    logger.error('Me error:', err); sendJson(res, 500, { success: false, error: 'Internal server error' });
   }
 };
 
@@ -1313,7 +1314,7 @@ routes['POST /api/auth/social-login'] = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Social login error:', err);
+    logger.error('Social login error:', err);
     sendJson(res, 500, { success: false, error: 'Social login failed' });
   }
 };
@@ -1435,7 +1436,7 @@ routes['POST /api/payment/create-order'] = async (req, res) => {
       sendJson(res, 500, { success: false, error: 'Failed to create PayPal order' });
     }
   } catch (err) {
-    console.error('PayPal create order error:', err);
+    logger.error('PayPal create order error:', err);
     sendJson(res, 500, { success: false, error: 'Payment service error' });
   }
 };
@@ -1482,7 +1483,7 @@ routes['POST /api/payment/capture-order'] = async (req, res) => {
       sendJson(res, 400, { success: false, error: 'Payment not completed' });
     }
   } catch (err) {
-    console.error('PayPal capture error:', err);
+    logger.error('PayPal capture error:', err);
     sendJson(res, 500, { success: false, error: 'Payment capture failed' });
   }
 };
@@ -1494,14 +1495,14 @@ routes['POST /api/payment/webhook'] = async (req, res) => {
     const eventType = body.event_type;
 
     if (eventType === 'CHECKOUT.ORDER.APPROVED') {
-      console.log('PayPal webhook: Order approved', body.resource?.id);
+      logger.info('PayPal webhook: Order approved', body.resource?.id);
     } else if (eventType === 'PAYMENT.CAPTURE.COMPLETED') {
-      console.log('PayPal webhook: Payment completed', body.resource?.id);
+      logger.info('PayPal webhook: Payment completed', body.resource?.id);
     }
 
     sendJson(res, 200, { success: true });
   } catch (err) {
-    console.error('PayPal webhook error:', err);
+    logger.error('PayPal webhook error:', err);
     sendJson(res, 500, { success: false, error: 'Webhook processing failed' });
   }
 };
@@ -1530,7 +1531,7 @@ routes['POST /api/sessions'] = async (req, res) => {
     sendJson(res, 201, { success: true, data: session });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    console.error('Session create error:', err);
+    logger.error('Session create error:', err);
     sendJson(res, 500, { success: false, error: 'Internal server error' });
   }
 };
@@ -1690,7 +1691,7 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
     // 自动检测行业并获取上下文
     const detectedIndustry = detectIndustry(input, industry);
     const industryContextPrompt = generateIndustryPrompt(detectedIndustry, scenarioName);
-    console.log('Auto-detected industry:', detectedIndustry);
+    logger.info('Auto-detected industry:', detectedIndustry);
 
     // Language instruction for AI
     const langInstructions = {
@@ -1717,9 +1718,9 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
           if (k.response_example) item += ` （"${k.response_example}"）`;
           return item;
         });
-        console.log(`Knowledge: ${allKnowledge.length} items retrieved via hybrid retrieval`);
+        logger.info(`Knowledge: ${allKnowledge.length} items retrieved via hybrid retrieval`);
       }
-    } catch (e) { console.error('Knowledge fetch error:', e.message); }
+    } catch (e) { logger.error('Knowledge fetch error:', e.message); }
 
     // Fetch company knowledge (租户私有知识，数据隔离)
     let companyKnowledgeList = [];
@@ -1735,9 +1736,9 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
           const categoryLabel = { price: '价格政策', course: '课程介绍', policy: '售后政策', case: '成功案例', general: '通用' }[k.category] || '通用';
           return `[公司${categoryLabel}] ${k.title}：${k.content}`;
         });
-        console.log(`Company knowledge: ${companyItems.length} items loaded`);
+        logger.info(`Company knowledge: ${companyItems.length} items loaded`);
       }
-    } catch (e) { console.error('Company knowledge fetch error:', e.message); }
+    } catch (e) { logger.error('Company knowledge fetch error:', e.message); }
 
     // 合并两种知识：行业通用 + 公司专属
     const allRawKnowledge = [...companyKnowledgeList, ...rawKnowledgeList];
@@ -1789,10 +1790,10 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
             status: 'ACTIVE',
             created_at: new Date().toISOString()
           });
-          console.log('Auto-saved high-quality script to knowledge base');
-        } catch (e) { console.error('Knowledge auto-save error:', e.message); }
+          logger.info('Auto-saved high-quality script to knowledge base');
+        } catch (e) { logger.error('Knowledge auto-save error:', e.message); }
       }
-    } catch (e) { console.error('Script save error:', e.message); }
+    } catch (e) { logger.error('Script save error:', e.message); }
 
     // Track usage
     await trackUsage(jwt.userId, 'scripts');
@@ -1800,7 +1801,7 @@ routes['POST /api/scripts/generate'] = async (req, res) => {
     sendJson(res, 200, { success: true, data: scriptData, scriptIds: [scriptId] });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    console.error('Script generate error:', err);
+    logger.error('Script generate error:', err);
     sendJson(res, 500, { success: false, error: 'Internal server error' });
   }
 };
@@ -1842,7 +1843,7 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
           }
         }
       }
-    } catch (e) { console.log('Graph feedback update error:', e.message.slice(0, 60)); }
+    } catch (e) { logger.info('Graph feedback update error:', e.message.slice(0, 60)); }
 
     // Get the script to potentially archive to knowledge base
     try {
@@ -1876,17 +1877,17 @@ routes['POST /api/scripts/:id/feedback'] = async (req, res) => {
               status: 'ACTIVE',
               created_at: new Date().toISOString()
             });
-            console.log(`Auto-archived script ${scriptId} to knowledge base (${upCount} positive feedback)`);
+            logger.info(`Auto-archived script ${scriptId} to knowledge base (${upCount} positive feedback)`);
           }
         }
 
         // Mark for review if too many negative feedbacks
         if (downCount >= 3) {
           await sbUpdate('scripts', { id: scriptId }, { status: 'ARCHIVED', weight: 0.1 });
-          console.log(`Archived script ${scriptId} due to negative feedback`);
+          logger.info(`Archived script ${scriptId} due to negative feedback`);
         }
       }
-    } catch (e) { console.error('Feedback processing error:', e.message); }
+    } catch (e) { logger.error('Feedback processing error:', e.message); }
 
     sendJson(res, 201, { success: true, data: feedback });
   } catch (err) {
@@ -1915,7 +1916,7 @@ routes['POST /api/practices/init'] = async (req, res) => {
         rounds: 0, score: 0, feedback: {}, transcript: [],
         created_at: new Date().toISOString()
       });
-    } catch (e) { console.error('Practice session save error:', e.message); }
+    } catch (e) { logger.error('Practice session save error:', e.message); }
 
     // Track usage
     await trackUsage(jwt.userId, 'practices');
@@ -1937,7 +1938,7 @@ routes['POST /api/practices/init'] = async (req, res) => {
     }}});
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    console.error('Practice init error:', err);
+    logger.error('Practice init error:', err);
     sendJson(res, 500, { success: false, error: 'AI service connection failed' });
   }
 };
@@ -2010,7 +2011,7 @@ JSON 结构：
               } catch (e) { /* skip non-JSON lines */ }
             }
           }
-        } catch (e) { console.error('Stream read error:', e.message); }
+        } catch (e) { logger.error('Stream read error:', e.message); }
 
         // Try to parse AI response as JSON
         let practiceResp;
@@ -2021,7 +2022,7 @@ JSON 结构：
           if (validation.valid) {
             practiceResp = parsed;
           } else {
-            console.log('Practice response quality check failed:', validation.reason);
+            logger.info('Practice response quality check failed:', validation.reason);
             practiceResp = { response: fullText || '嗯，继续说。', emotion: 'neutral', round_score: 0.5, stage: '对话中', is_complete: false };
           }
         } catch (e) {
@@ -2088,7 +2089,7 @@ JSON 结构：
     })}\n\n`);
     res.end();
   } catch (err) {
-    console.error('Practice stream error:', err);
+    logger.error('Practice stream error:', err);
     res.write(`data: ${JSON.stringify({ type: 'error', data: { error: 'AI service temporarily unavailable' } })}\n\n`);
     res.end();
   }
@@ -2291,14 +2292,14 @@ routes['POST /api/practices/save'] = async (req, res) => {
             status: 'ACTIVE',
             created_at: new Date().toISOString()
           });
-          console.log('Auto-saved high-scoring practice to knowledge base');
-        } catch (e) { console.error('Knowledge auto-save error:', e.message); }
+          logger.info('Auto-saved high-scoring practice to knowledge base');
+        } catch (e) { logger.error('Knowledge auto-save error:', e.message); }
       }
-    } catch (e) { console.error('Practice save DB error:', e.message); }
+    } catch (e) { logger.error('Practice save DB error:', e.message); }
     sendJson(res, 200, { data: { data: { id: practiceId } } });
   } catch (err) {
     if (err.status) return sendJson(res, err.status, { success: false, error: err.error });
-    console.error('Practice save error:', err);
+    logger.error('Practice save error:', err);
     sendJson(res, 500, { success: false, error: 'Internal server error' });
   }
 };
@@ -3144,7 +3145,7 @@ routes['POST /api/admin/plugins/seed'] = async (req, res) => {
       try {
         await sbInsert('industry_plugins', plugin);
         created++;
-      } catch (e) { console.error('Plugin seed error:', e.message); }
+      } catch (e) { logger.error('Plugin seed error:', e.message); }
     }
 
     sendJson(res, 200, { success: true, data: { created, total: SEED_PLUGINS.length } });
@@ -3228,7 +3229,7 @@ routes['POST /api/admin/industries'] = async (req, res) => {
 
     if (action === 'unregister') {
       registry.unregister(name);
-      console.log(`[ADMIN-SYNC] 行业规则动态注销成功: ${name}`);
+      logger.info(`[ADMIN-SYNC] 行业规则动态注销成功: ${name}`);
       return sendJson(res, 200, { success: true, message: `行业 [${name}] 已注销` });
     }
 
@@ -3238,13 +3239,13 @@ routes['POST /api/admin/industries'] = async (req, res) => {
 
     const success = registry.register(name, config);
     if (success) {
-      console.log(`[ADMIN-SYNC] 后台配置热更新成功并完成矩阵重组. 行业: ${name}`);
+      logger.info(`[ADMIN-SYNC] 后台配置热更新成功并完成矩阵重组. 行业: ${name}`);
       sendJson(res, 200, { success: true, message: `行业 [${name}] 已注册/更新并重新编译` });
     } else {
       sendJson(res, 500, { success: false, error: '注册失败，请检查日志' });
     }
   } catch (err) {
-    console.error('[ADMIN-SYNC-FATAL]', err);
+    logger.error('[ADMIN-SYNC-FATAL]', err);
     sendJson(res, 500, { success: false, error: err.message });
   }
 };
@@ -3286,7 +3287,7 @@ routes['POST /api/admin/industries/sync-from-db'] = async (req, res) => {
           synced++;
         }
       } catch (e) {
-        console.error(`Failed to sync plugin ${plugin.name}:`, e.message);
+        logger.error(`Failed to sync plugin ${plugin.name}:`, e.message);
       }
     }
 
@@ -3328,7 +3329,7 @@ routes['POST /api/admin/knowledge/crawl'] = async (req, res) => {
     const result = await crawlKnowledge();
     sendJson(res, 200, { success: true, data: result });
   } catch (err) {
-    console.error('Knowledge crawl error:', err);
+    logger.error('Knowledge crawl error:', err);
     sendJson(res, 500, { success: false, error: 'Crawl failed' });
   }
 };
@@ -3341,7 +3342,7 @@ routes['POST /api/admin/knowledge/crawl-sales'] = async (req, res) => {
     const result = await crawlSalesContent();
     sendJson(res, 200, { success: true, data: result });
   } catch (err) {
-    console.error('Sales content crawl error:', err);
+    logger.error('Sales content crawl error:', err);
     sendJson(res, 500, { success: false, error: 'Sales content crawl failed' });
   }
 };
@@ -3419,7 +3420,7 @@ routes['POST /api/admin/knowledge/batch-insert'] = async (req, res) => {
 
     sendJson(res, 200, { success: true, data: { inserted, failed, total: items.length } });
   } catch (err) {
-    console.error('Batch insert error:', err);
+    logger.error('Batch insert error:', err);
     sendJson(res, 500, { success: false, error: 'Batch insert failed' });
   }
 };
@@ -3636,7 +3637,7 @@ routes['POST /api/admin/models'] = async (req, res) => {
     let baseUrl = data.baseUrl || '';
     if (baseUrl.startsWith('http://')) {
       baseUrl = baseUrl.replace('http://', 'https://');
-      console.log('Model config: Auto-upgraded HTTP to HTTPS:', baseUrl);
+      logger.info('Model config: Auto-upgraded HTTP to HTTPS:', baseUrl);
     }
 
     const newModel = {
@@ -3760,7 +3761,7 @@ routes['POST /api/admin/models/test'] = async (req, res) => {
       });
     }
 
-    console.log('Testing model connection:', { provider: providerLower, modelId, url: testUrl, originalBaseUrl: baseUrl });
+    logger.info('Testing model connection:', { provider: providerLower, modelId, url: testUrl, originalBaseUrl: baseUrl });
 
     const response = await fetch(testUrl, {
       method: 'POST',
@@ -3954,9 +3955,9 @@ routes['GET /api/cron/daily'] = async (req, res) => {
     try {
       // Note: Supabase doesn't support DELETE with date comparison easily
       // This is a placeholder - in production, use a Supabase function or direct SQL
-      console.log('Daily cron: Would clean usage logs older than', thirtyDaysAgo);
+      logger.info('Daily cron: Would clean usage logs older than', thirtyDaysAgo);
       results.usageCleanup = 0; // Would be count of deleted records
-    } catch (e) { console.error('Usage cleanup error:', e.message); }
+    } catch (e) { logger.error('Usage cleanup error:', e.message); }
 
     // 2. Archive low-quality knowledge items
     try {
@@ -3972,14 +3973,14 @@ routes['GET /api/cron/daily'] = async (req, res) => {
         }
         results.knowledgeCleanup = lowQuality.length;
       }
-    } catch (e) { console.error('Knowledge cleanup error:', e.message); }
+    } catch (e) { logger.error('Knowledge cleanup error:', e.message); }
 
     // 3. Reset daily usage counters (handled by date-based queries, no action needed)
-    console.log('Daily cron completed:', results);
+    logger.info('Daily cron completed:', results);
 
     sendJson(res, 200, { success: true, data: results });
   } catch (err) {
-    console.error('Cron error:', err);
+    logger.error('Cron error:', err);
     sendJson(res, 500, { success: false, error: 'Cron job failed' });
   }
 };
@@ -4024,7 +4025,7 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
           }
         }
       }
-    } catch (e) { console.error('Top scripts aggregation error:', e.message); }
+    } catch (e) { logger.error('Top scripts aggregation error:', e.message); }
 
     // 2. Identify high-scoring practices for knowledge base
     try {
@@ -4062,18 +4063,18 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
           }
         }
       }
-    } catch (e) { console.error('Top practices aggregation error:', e.message); }
+    } catch (e) { logger.error('Top practices aggregation error:', e.message); }
 
     // 3. 爬取外部销售知识
     let crawlResult = null;
     try {
-      console.log('Weekly cron: Starting knowledge crawl...');
+      logger.info('Weekly cron: Starting knowledge crawl...');
       const { crawlSalesContent } = require('./sales-content-crawler');
       crawlResult = await crawlSalesContent();
       results.knowledgeCrawl = crawlResult;
-      console.log('Weekly cron: Knowledge crawl completed:', crawlResult);
+      logger.info('Weekly cron: Knowledge crawl completed:', crawlResult);
     } catch (e) {
-      console.error('Knowledge crawl error:', e.message);
+      logger.error('Knowledge crawl error:', e.message);
       results.knowledgeCrawl = { error: e.message };
     }
 
@@ -4118,15 +4119,15 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
         }),
         signal: AbortSignal.timeout(10000),
       });
-      console.log('Weekly cron: Feishu notification sent');
+      logger.info('Weekly cron: Feishu notification sent');
     } catch (e) {
-      console.error('Feishu notification failed:', e.message);
+      logger.error('Feishu notification failed:', e.message);
     }
 
-    console.log('Weekly cron completed:', results);
+    logger.info('Weekly cron completed:', results);
     sendJson(res, 200, { success: true, data: results });
   } catch (err) {
-    console.error('Weekly cron error:', err);
+    logger.error('Weekly cron error:', err);
     sendJson(res, 500, { success: false, error: 'Weekly cron job failed' });
   }
 };
@@ -4135,16 +4136,16 @@ routes['GET /api/cron/weekly'] = async (req, res) => {
 routes['GET /api/cron/knowledge'] = async (req, res) => {
   try {
     const startTime = Date.now();
-    console.log('Knowledge cron: Starting daily crawl...');
+    logger.info('Knowledge cron: Starting daily crawl...');
 
     // 1. 爬取销售知识
     let crawlResult = { added: 0, skipped: 0, failed: 0 };
     try {
       const { crawlSalesContent } = require('./sales-content-crawler');
       crawlResult = await crawlSalesContent();
-      console.log('Knowledge cron: Crawl completed:', crawlResult);
+      logger.info('Knowledge cron: Crawl completed:', crawlResult);
     } catch (e) {
-      console.error('Knowledge cron: Crawl error:', e.message);
+      logger.error('Knowledge cron: Crawl error:', e.message);
       crawlResult.error = e.message;
     }
 
@@ -4181,9 +4182,9 @@ routes['GET /api/cron/knowledge'] = async (req, res) => {
         }),
         signal: AbortSignal.timeout(10000),
       });
-      console.log('Knowledge cron: Feishu notification sent');
+      logger.info('Knowledge cron: Feishu notification sent');
     } catch (e) {
-      console.error('Knowledge cron: Feishu notification failed:', e.message);
+      logger.error('Knowledge cron: Feishu notification failed:', e.message);
     }
 
     sendJson(res, 200, {
@@ -4191,7 +4192,7 @@ routes['GET /api/cron/knowledge'] = async (req, res) => {
       data: { ...crawlResult, elapsed_seconds: elapsed, timestamp: new Date().toISOString() },
     });
   } catch (err) {
-    console.error('Knowledge cron error:', err);
+    logger.error('Knowledge cron error:', err);
     sendJson(res, 500, { success: false, error: 'Knowledge cron failed' });
   }
 };
@@ -4256,7 +4257,7 @@ module.exports = async (req, res) => {
   if (handler) {
     try { await handler(req, res); }
     catch (err) {
-      console.error('Handler error:', err);
+      logger.error('Handler error:', err);
       Sentry.captureException(err, {
         tags: { path, method: req.method },
         extra: { url: req.url },

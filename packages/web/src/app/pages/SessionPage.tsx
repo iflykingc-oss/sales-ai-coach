@@ -1,11 +1,12 @@
-import { useEffect, useCallback } from 'react';
+import { logger } from '@/utils/logger';
+import { useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useScriptStore } from '@/stores/scriptStore';
 import type { InputType, GenerateScriptOutput } from '@sales-ai-coach/shared';
 import type { Session as SessionType } from '@sales-ai-coach/shared';
 import SessionTabBar from '@/components/session/SessionTabBar';
-import MessageList from '@/components/session/MessageList';
+import MessageList, { type AppendMessageFn } from '@/components/session/MessageList';
 import InputBar from '@/components/session/InputBar';
 import ScriptDisplay from '@/components/script/ScriptDisplay';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
@@ -17,6 +18,7 @@ export default function SessionPage() {
   const { setSessions, activeSessionId, setActiveSessionId } = useSessionStore();
   const { setCurrentScript, setGeneratedScriptIds, reset: resetScript } = useScriptStore();
   const { addActivity } = useActivityStore();
+  const appendMessageRef = useRef<AppendMessageFn | null>(null);
 
   // Fetch sessions on mount
   const { data: sessionsData } = useQuery({
@@ -50,7 +52,7 @@ export default function SessionPage() {
             setActiveSessionId(res.data.id);
           }
         })
-        .catch(console.error);
+        .catch(logger.error);
     }
   }, [sessionsData, activeSessionId, setSessions, setActiveSessionId]);
 
@@ -76,7 +78,7 @@ export default function SessionPage() {
           inputType,
           createdAt: new Date().toISOString(),
         };
-        (window as any).__messageListAppend?.(userMsg);
+        appendMessageRef.current?.(userMsg);
 
         // Use shared script service
         const result = await generateScript({
@@ -108,7 +110,7 @@ export default function SessionPage() {
             inputType: 'TEXT' as InputType,
             createdAt: new Date().toISOString(),
           };
-          (window as any).__messageListAppend?.(assistantMsg);
+          appendMessageRef.current?.(assistantMsg);
         }
       } catch (err) {
         useScriptStore.setState({
@@ -128,7 +130,7 @@ export default function SessionPage() {
 
       {/* Main content: Message list */}
       <div className="min-h-0 flex-1">
-        <MessageList onSend={handleSend} />
+        <MessageList onSend={handleSend} appendMessageRef={appendMessageRef} />
       </div>
 
       {/* Script display (shown after generation) */}

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect } from 'react';
 import { Search, ChevronDown, ChevronRight, Clock, Zap, Database, Target } from 'lucide-react';
 import { api } from '@/services/api';
@@ -53,7 +54,7 @@ export function RetrievalLogs() {
       setLogs(res.data || []);
       setSummary(res.data?.summary || null);
     } catch (e) {
-      console.error('Failed to fetch logs:', e);
+      logger.error('Failed to fetch logs:', e);
     } finally {
       setLoading(false);
     }

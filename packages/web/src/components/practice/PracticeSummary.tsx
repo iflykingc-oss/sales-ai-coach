@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Wrench, Lightbulb, CheckCircle, RotateCcw, BarChart3, Target, ClipboardList, ChevronDown, ChevronUp, FileSearch, Network, Gauge, Zap, Download, Copy, Link } from 'lucide-react';
@@ -26,7 +27,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
   const [loading, setLoading] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
-  const [reportData, setReportData] = useState<any>(null);
+  const [reportData, setReportData] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleSaveAndReview = useCallback(async () => {
@@ -51,7 +52,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
         state: { practiceSessionId: practiceId, autoReview: true },
       });
     } catch (err) {
-      console.error('Failed to save practice:', err);
+      logger.error('Failed to save practice:', err);
     } finally {
       setSaving(false);
     }
@@ -95,7 +96,7 @@ export function PracticeSummary({ onRestart }: PracticeSummaryProps) {
           setReportData(report);
         }
       } catch (error) {
-        console.error('Failed to fetch practice report:', error);
+        logger.error('Failed to fetch practice report:', error);
       } finally {
         setIsGeneratingSummary(false);
         setLoading(false);

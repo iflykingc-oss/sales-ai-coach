@@ -112,12 +112,14 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    // Check if this is a new user (no practices)
-    const hasSeenOnboarding = localStorage.getItem('onboarding_complete');
-    if (!hasSeenOnboarding && data && data.stats.totalPractices === 0) {
-      setShowOnboarding(true);
+    // Check if this is a new user (no practices) — only after data is loaded
+    if (!loading && data) {
+      const hasSeenOnboarding = localStorage.getItem('onboarding_complete');
+      if (!hasSeenOnboarding && data.stats.totalPractices === 0) {
+        setShowOnboarding(true);
+      }
     }
-  }, [data]);
+  }, [loading, data]);
 
   useEffect(() => {
     api.get('/dashboard')
@@ -476,19 +478,19 @@ export default function DashboardPage() {
               <p className="text-2xl font-bold text-amber-600">
                 {data.stats.avgPracticeScore > 0 ? Math.round(data.stats.avgPracticeScore) : '-'}
               </p>
-              <p className="text-xs text-gray-500">成单概率</p>
+              <p className="text-xs text-gray-500">平均练习分</p>
             </div>
 
-          {/* 成单概率趋势 */}
+          {/* 练习分数趋势 */}
           {(data.stats.thisWeekAvg ?? 0) > 0 && (
             <div className="col-span-2 sm:col-span-4 mt-2 pt-3 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">本周成单概率</span>
-                  <span className="text-sm font-semibold text-gray-800">{data.stats.thisWeekAvg}%</span>
+                  <span className="text-xs text-gray-500">本周平均分</span>
+                  <span className="text-sm font-semibold text-gray-800">{data.stats.thisWeekAvg}</span>
                   {(data.stats.lastWeekAvg ?? 0) > 0 && (
                     <>
-                      <span className="text-xs text-gray-400">vs 上周 {data.stats.lastWeekAvg}%</span>
+                      <span className="text-xs text-gray-400">vs 上周 {data.stats.lastWeekAvg}</span>
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${(data.stats.recentImprovement ?? 0) > 0 ? 'bg-green-100 text-green-700' : (data.stats.recentImprovement ?? 0) < 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
                         {(data.stats.recentImprovement ?? 0) > 0 ? '+' : ''}{data.stats.recentImprovement}%
                       </span>
@@ -503,6 +505,62 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+          </div>
+        </Card>
+      )}
+
+      {/* 销售漏斗 */}
+      {data?.pipeline && (
+        <Card>
+          <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+            <Target className="h-4 w-4 text-gray-500" />
+            销售漏斗
+          </h3>
+          <div className="flex items-center gap-2">
+            {[
+              { key: 'SCRIPT', label: '话术', color: 'bg-blue-500' },
+              { key: 'PRACTICE', label: '陪练', color: 'bg-purple-500' },
+              { key: 'REVIEW', label: '复盘', color: 'bg-emerald-500' },
+              { key: 'CLOSED', label: '成交', color: 'bg-amber-500' },
+            ].map(({ key, label, color }, i) => (
+              <div key={key} className="flex-1 text-center">
+                <div className={cn('h-1.5 rounded-full mb-1', color)} style={{ opacity: 1 - i * 0.15 }} />
+                <p className="text-lg font-bold text-gray-800">{(data.pipeline as Record<string, number>)[key] || 0}</p>
+                <p className="text-xs text-gray-500">{label}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* 最近会话 */}
+      {data?.recentSessions && data.recentSessions.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-700">最近会话</h3>
+          </div>
+          <div className="space-y-2">
+            {data.recentSessions.slice(0, 5).map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                <div>
+                  <p className="text-sm text-gray-800">{s.name}</p>
+                  <p className="text-xs text-gray-400">
+                    {s.industry || '通用'} · {s.customerName || '未知客户'} · {new Date(s.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'rounded-full px-2 py-0.5 text-xs font-medium',
+                    s.stage === 'CLOSED' ? 'bg-green-100 text-green-700' :
+                    s.stage === 'REVIEW' ? 'bg-purple-100 text-purple-700' :
+                    s.stage === 'PRACTICE' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-600',
+                  )}>
+                    {s.stage === 'SCRIPT' ? '话术' : s.stage === 'PRACTICE' ? '陪练' : s.stage === 'REVIEW' ? '复盘' : '成交'}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Edit2, Trash2, Pause, Play, Clock, Users,
@@ -74,7 +75,7 @@ export function AnnouncementAdmin() {
       const res = await api.get('/admin/announcements');
       setAnnouncements((res as any)?.data || []);
     } catch (err) {
-      console.error('Failed to fetch announcements:', err);
+      logger.error('Failed to fetch announcements:', err);
       toast.error('获取公告列表失败');
     } finally {
       setIsLoading(false);
@@ -144,7 +145,7 @@ export function AnnouncementAdmin() {
       setShowDialog(false);
       fetchAnnouncements();
     } catch (err) {
-      console.error('Failed to save announcement:', err);
+      logger.error('Failed to save announcement:', err);
       toast.error('保存失败');
     }
   };
@@ -158,7 +159,7 @@ export function AnnouncementAdmin() {
       toast.success('公告已删除');
       fetchAnnouncements();
     } catch (err) {
-      console.error('Failed to delete announcement:', err);
+      logger.error('Failed to delete announcement:', err);
       toast.error('删除失败');
     }
   };
@@ -171,7 +172,7 @@ export function AnnouncementAdmin() {
       toast.success(newStatus === 'published' ? '公告已发布' : '公告已暂停');
       fetchAnnouncements();
     } catch (err) {
-      console.error('Failed to toggle status:', err);
+      logger.error('Failed to toggle status:', err);
       toast.error('操作失败');
     }
   };
@@ -184,7 +185,7 @@ export function AnnouncementAdmin() {
       setReadsData((res as any)?.data || []);
       setShowReadsDialog(true);
     } catch (err) {
-      console.error('Failed to fetch reads:', err);
+      logger.error('Failed to fetch reads:', err);
       toast.error('获取阅读详情失败');
     }
   };

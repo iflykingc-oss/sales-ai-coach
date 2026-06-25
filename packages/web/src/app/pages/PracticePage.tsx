@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, History } from 'lucide-react';
@@ -326,14 +327,14 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
         description: config.scenarioTitle,
       });
     } catch (error) {
-      console.error('Failed to start practice:', error);
+      logger.error('Failed to start practice:', error);
       toast.error('AI服务连接失败', { description: '无法连接AI陪练服务，请稍后重试' });
     } finally {
       setIsStarting(false);
     }
   };
 
-  const [autoReport, setAutoReport] = useState<any>(null);
+  const [autoReport, setAutoReport] = useState<Record<string, unknown> | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   const handleEndPractice = async () => {
@@ -350,7 +351,7 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
       });
       setAutoReport(res.data?.data || res.data);
     } catch (error) {
-      console.error('Failed to generate report:', error);
+      logger.error('Failed to generate report:', error);
       // 即使报告生成失败，也允许查看完整报告
     } finally {
       setIsLoadingReport(false);

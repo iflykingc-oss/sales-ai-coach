@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState } from 'react';
 import { Plus, Calendar, User, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -77,7 +78,7 @@ export function TaskManager({ teamId }: TaskManagerProps) {
       setNewTask({ title: '', type: 'practice', assigneeId: '', deadline: '', description: '' });
       setShowDialog(false);
     } catch (err) {
-      console.error('Failed to create task:', err);
+      logger.error('Failed to create task:', err);
     } finally {
       setCreating(false);
     }
@@ -89,7 +90,7 @@ export function TaskManager({ teamId }: TaskManagerProps) {
     try {
       await api.patch(`/teams/${teamId}/tasks/${taskId}`, { status });
     } catch (err) {
-      console.error('Failed to update task:', err);
+      logger.error('Failed to update task:', err);
       // Revert on failure
       updateTaskStatus(taskId, status === 'completed' ? 'pending' : status);
     }

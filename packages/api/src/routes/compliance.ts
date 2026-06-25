@@ -356,6 +356,106 @@ router.post('/delete/process', authMiddleware, async (req: Request, res: Respons
   }
 });
 
+// ── Data Import (restore from export) ──────────────────────────
+
+router.post('/import', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const data = req.body;
+
+    if (!data || data.format !== 'sales-ai-coach-export-v1') {
+      return res.status(400).json({ success: false, error: 'Invalid export format' });
+    }
+
+    let imported = { scripts: 0, knowledge: 0, practices: 0, reviews: 0 };
+
+    // Import scripts
+    if (Array.isArray(data.scripts)) {
+      for (const s of data.scripts) {
+        await prisma.script.create({
+          data: {
+            userId,
+            content: s.content || '',
+            style: s.style || 'default',
+            tags: s.tags || [],
+            industry: s.industry || null,
+            status: s.status || 'DRAFT',
+          },
+        });
+        imported.scripts++;
+      }
+    }
+
+    // Import knowledge
+    if (Array.isArray(data.knowledge)) {
+      for (const k of data.knowledge) {
+        await prisma.knowledgeItem.create({
+          data: {
+            userId,
+            source: k.source || 'import',
+            content: k.content || '',
+            tags: k.tags || [],
+            industry: k.industry || null,
+            weight: k.weight || 1.0,
+          },
+        });
+        imported.knowledge++;
+      }
+    }
+
+    // Import practices (as records, not re-playable)
+    if (Array.isArray(data.practices)) {
+      for (const p of data.practices) {
+        await prisma.practiceSession.create({
+          data: {
+            userId,
+            scenario: p.scenario || 'imported',
+            industry: p.industry || null,
+            rounds: p.rounds || 0,
+            score: p.score || 0,
+            feedback: p.feedback || {},
+            transcript: p.transcript || null,
+          },
+        });
+        imported.practices++;
+      }
+    }
+
+    // Import reviews
+    if (Array.isArray(data.reviews)) {
+      for (const r of data.reviews) {
+        await prisma.reviewReport.create({
+          data: {
+            userId,
+            summary: r.summary || '',
+            strengths: r.strengths || [],
+            improvements: r.improvements || [],
+            recommendations: r.recommendations || [],
+            radarScores: r.radarScores || null,
+          },
+        });
+        imported.reviews++;
+      }
+    }
+
+    return res.json({ success: true, data: imported });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Data import failed' });
+  }
+});
+
+// ── One-click Knowledge Delete ─────────────────────────────────
+
+router.delete('/knowledge', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const result = await prisma.knowledgeItem.deleteMany({ where: { userId } });
+    return res.json({ success: true, data: { deleted: result.count } });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Failed to delete knowledge data' });
+  }
+});
+
 // ── Privacy Policy / Terms Info ────────────────────────────────
 
 // GET /compliance/legal — Get current privacy policy and terms versions
@@ -387,18 +487,23 @@ router.get('/legal', (_req: Request, res: Response) => {
         lastUpdated: '2024-01-15',
       },
       dataProcessing: {
-        version: '2024-01-15',
+        version: '2025-06-25',
         purposes: [
           'Sales coaching and script generation',
           'Practice session analysis',
           'Knowledge base management',
-          'Service improvement and analytics',
         ],
         retention: {
-          conversations: '2 years',
-          scripts: '2 years',
-          practiceData: '2 years',
-          accountData: 'Until deletion request',
+          accountData: 'Until user requests deletion',
+          paymentData: 'As required by tax law',
+          contentData: 'Only when user explicitly saves; otherwise ephemeral',
+          knowledgeData: 'Until user deletes via dashboard or one-click clear',
+        },
+        userControl: {
+          save: 'User must explicitly click Save to persist content data',
+          export: 'Full data export available at any time via Data Rights page',
+          import: 'Users can re-import previously exported data',
+          delete: 'One-click knowledge deletion; full account deletion via request',
         },
         thirdParties: [
           'AI model providers (for script generation and analysis)',

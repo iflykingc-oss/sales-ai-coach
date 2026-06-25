@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState } from 'react';
 import { FileText, Upload, Globe, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -165,7 +166,7 @@ export function CompanyKnowledgeImport({ open, onOpenChange, onSuccess }: Compan
           });
           successCount++;
         } catch (err) {
-          console.error('Failed to import item:', err);
+          logger.error('Failed to import item:', err);
         }
       }
 

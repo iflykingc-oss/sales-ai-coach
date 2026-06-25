@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * 团队管理模块
  *
@@ -108,7 +109,7 @@ async function getTeamMembers(req, res) {
 
     res.json({ success: true, data: membersWithStats || [] });
   } catch (err) {
-    console.error('Get team members error:', err);
+    logger.error('Get team members error:', err);
     res.status(500).json({ success: false, error: 'Failed to get members' });
   }
 }
@@ -164,7 +165,7 @@ async function createTeamMember(req, res) {
       }
     });
   } catch (err) {
-    console.error('Create team member error:', err);
+    logger.error('Create team member error:', err);
     res.status(500).json({ success: false, error: 'Failed to create member' });
   }
 }
@@ -200,7 +201,7 @@ async function removeTeamMember(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Remove team member error:', err);
+    logger.error('Remove team member error:', err);
     res.status(500).json({ success: false, error: 'Failed to remove member' });
   }
 }
@@ -293,7 +294,7 @@ async function getTeamStats(req, res) {
       }
     });
   } catch (err) {
-    console.error('Get team stats error:', err);
+    logger.error('Get team stats error:', err);
     res.status(500).json({ success: false, error: 'Failed to get stats' });
   }
 }
@@ -338,7 +339,7 @@ async function createTask(req, res) {
 
     res.json({ success: true, data: { id: task.id } });
   } catch (err) {
-    console.error('Create task error:', err);
+    logger.error('Create task error:', err);
     res.status(500).json({ success: false, error: 'Failed to create task' });
   }
 }
@@ -367,7 +368,7 @@ async function getTasks(req, res) {
 
     res.json({ success: true, data: tasksWithAssignee || [] });
   } catch (err) {
-    console.error('Get tasks error:', err);
+    logger.error('Get tasks error:', err);
     res.status(500).json({ success: false, error: 'Failed to get tasks' });
   }
 }
@@ -386,7 +387,7 @@ async function updateTask(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Update task error:', err);
+    logger.error('Update task error:', err);
     res.status(500).json({ success: false, error: 'Failed to update task' });
   }
 }
@@ -415,7 +416,7 @@ async function getNotifications(req, res) {
       }
     });
   } catch (err) {
-    console.error('Get notifications error:', err);
+    logger.error('Get notifications error:', err);
     res.status(500).json({ success: false, error: 'Failed to get notifications' });
   }
 }
@@ -432,7 +433,7 @@ async function markNotificationRead(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Mark notification error:', err);
+    logger.error('Mark notification error:', err);
     res.status(500).json({ success: false, error: 'Failed to mark notification' });
   }
 }
@@ -463,7 +464,7 @@ async function getSharedScripts(req, res) {
 
     res.json({ success: true, data: scriptsWithAuthor || [] });
   } catch (err) {
-    console.error('Get shared scripts error:', err);
+    logger.error('Get shared scripts error:', err);
     res.status(500).json({ success: false, error: 'Failed to get scripts' });
   }
 }
@@ -489,7 +490,7 @@ async function shareScript(req, res) {
 
     res.json({ success: true, data: { id: script.id } });
   } catch (err) {
-    console.error('Share script error:', err);
+    logger.error('Share script error:', err);
     res.status(500).json({ success: false, error: 'Failed to share script' });
   }
 }
@@ -509,7 +510,7 @@ async function likeScript(req, res) {
 
     res.json({ success: true, data: { likes: (script?.[0]?.likes || 0) + 1 } });
   } catch (err) {
-    console.error('Like script error:', err);
+    logger.error('Like script error:', err);
     res.status(500).json({ success: false, error: 'Failed to like script' });
   }
 }
@@ -533,7 +534,7 @@ async function approveScript(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Approve script error:', err);
+    logger.error('Approve script error:', err);
     res.status(500).json({ success: false, error: 'Failed to approve script' });
   }
 }

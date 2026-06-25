@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw, Play, Pause, Plus, CheckCircle, AlertCircle,
@@ -56,7 +57,7 @@ export function SyncManager() {
       const res = await api.get('/admin/sync/status');
       setStatus((res as any)?.data || null);
     } catch (err) {
-      console.error('Failed to fetch sync status:', err);
+      logger.error('Failed to fetch sync status:', err);
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +78,7 @@ export function SyncManager() {
       toast.success('同步完成');
       await fetchStatus();
     } catch (err) {
-      console.error('Failed to trigger sync:', err);
+      logger.error('Failed to trigger sync:', err);
       toast.error('同步失败');
     } finally {
       setIsSyncing(false);
@@ -91,7 +92,7 @@ export function SyncManager() {
       toast.success(enabled ? '自动同步已启动' : '自动同步已停止');
       await fetchStatus();
     } catch (err) {
-      console.error('Failed to toggle auto sync:', err);
+      logger.error('Failed to toggle auto sync:', err);
       toast.error('操作失败');
     }
   };
@@ -110,7 +111,7 @@ export function SyncManager() {
       setNewSource({ name: '', url: '', method: 'GET', enabled: true });
       await fetchStatus();
     } catch (err) {
-      console.error('Failed to add source:', err);
+      logger.error('Failed to add source:', err);
       toast.error('添加失败');
     }
   };

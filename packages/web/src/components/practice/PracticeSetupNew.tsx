@@ -300,11 +300,11 @@ interface PracticeSetupNewProps {
 export function PracticeSetupNew({ onStart, isLoading }: PracticeSetupNewProps) {
   const [step, setStep] = useState<'category' | 'scenario' | 'config'>('category');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedScenario, setSelectedScenario] = useState<any>(null);
+  const [selectedScenario, setSelectedScenario] = useState<{ id: string; name: string; description?: string } | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
   const [selectedChannel, setSelectedChannel] = useState('wechat');
   const [showDocUpload, setShowDocUpload] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
+  const [uploadedDocs, setUploadedDocs] = useState<Array<{ name: string; content: string }>>([]);
   // Custom scenario state
   const [customTitle, setCustomTitle] = useState('');
   const [customDesc, setCustomDesc] = useState('');

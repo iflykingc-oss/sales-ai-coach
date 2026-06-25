@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { callAiService } from '../services/ai.service.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ const upload = multer({
 });
 
 // Extract text content from uploaded file buffer
-function extractTextFromBuffer(buffer: Buffer, filename: string): string {
+async function extractTextFromBuffer(buffer: Buffer, filename: string): Promise<string> {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
 
   // Text-based formats: read directly
@@ -30,39 +31,78 @@ function extractTextFromBuffer(buffer: Buffer, filename: string): string {
     return buffer.toString('utf-8').trim();
   }
 
-  // Binary formats — return placeholder (user should paste text manually)
+  // PDF parsing
   if (ext === 'pdf') {
-    return `[PDF文件: ${filename}] 请将PDF中的文字内容复制粘贴到知识库中，以获得最佳效果。`;
+    try {
+      const pdfParse = (await import('pdf-parse')).default;
+      const data = await pdfParse(buffer);
+      return data.text.trim() || `[PDF文件: ${filename}] 无法提取文本内容，可能是扫描件。`;
+    } catch (err) {
+      logger.warn('PDF parse failed', { filename, error: String(err) });
+      return `[PDF文件: ${filename}] 解析失败，请将文字内容复制粘贴到知识库中。`;
+    }
   }
 
+  // DOCX parsing
   if (ext === 'docx') {
-    return `[DOCX文件: ${filename}] 请将文档中的文字内容复制粘贴到知识库中，以获得最佳效果。`;
+    try {
+      const mammoth = await import('mammoth');
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value.trim() || `[DOCX文件: ${filename}] 文档内容为空。`;
+    } catch (err) {
+      logger.warn('DOCX parse failed', { filename, error: String(err) });
+      return `[DOCX文件: ${filename}] 解析失败，请将文字内容复制粘贴到知识库中。`;
+    }
   }
 
+  // Excel parsing
   if (ext === 'xlsx' || ext === 'xls') {
-    return `[Excel文件: ${filename}] 请将表格数据复制粘贴到知识库中。`;
+    try {
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      const texts: string[] = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        if (csv.trim()) {
+          texts.push(`[Sheet: ${sheetName}]\n${csv}`);
+        }
+      }
+      return texts.join('\n\n').trim() || `[Excel文件: ${filename}] 表格内容为空。`;
+    } catch (err) {
+      logger.warn('Excel parse failed', { filename, error: String(err) });
+      return `[Excel文件: ${filename}] 解析失败，请将表格数据复制粘贴到知识库中。`;
+    }
   }
 
-  return `[${filename}] 无法提取文本内容，请手动粘贴。`;
+  return `[${filename}] 不支持的文件格式，请手动粘贴内容。`;
 }
 
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
-    const { tag, industry, q } = req.query;
+    const { tag, industry, q, page: pageStr, limit: limitStr } = req.query;
+    const page = Math.max(1, parseInt(pageStr as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(limitStr as string) || 50));
+    const skip = (page - 1) * limit;
+
     const where: Record<string, unknown> = { userId: req.user!.id, status: 'ACTIVE' };
     if (tag) where.tags = { has: tag as string };
     if (industry) where.industry = industry;
-
-    // Server-side text search
     if (q && typeof q === 'string' && q.trim()) {
       where.content = { contains: q, mode: 'insensitive' };
     }
 
-    const items = await prisma.knowledgeItem.findMany({
-      where,
-      orderBy: [{ weight: 'desc' }, { createdAt: 'desc' }],
-    });
-    res.json({ success: true, data: items });
+    const [items, total] = await Promise.all([
+      prisma.knowledgeItem.findMany({
+        where,
+        orderBy: [{ weight: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      prisma.knowledgeItem.count({ where }),
+    ]);
+
+    res.json({ success: true, data: items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (err) { next(err); }
 });
 
@@ -163,7 +203,7 @@ router.post('/import', authMiddleware, upload.array('files', 10), async (req, re
 
     const imported = [];
     for (const file of files) {
-      const textContent = extractTextFromBuffer(file.buffer, file.originalname);
+      const textContent = await extractTextFromBuffer(file.buffer, file.originalname);
 
       // Split large content into chunks if needed
       const chunks = splitIntoChunks(textContent, 5000);
@@ -238,6 +278,20 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
     });
     if (result.count === 0) return res.status(404).json({ success: false, error: 'Item not found' });
     res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+// Bulk delete
+router.post('/bulk-delete', authMiddleware, async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: '缺少要删除的 ID 列表' });
+    }
+    const result = await prisma.knowledgeItem.deleteMany({
+      where: { id: { in: ids }, userId: req.user!.id },
+    });
+    res.json({ success: true, data: { deleted: result.count } });
   } catch (err) { next(err); }
 });
 

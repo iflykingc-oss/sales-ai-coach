@@ -43,12 +43,12 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [showUninstallDialog, setShowUninstallDialog] = useState(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
-  const [apiData, setApiData] = useState<any>(null);
+  const [apiData, setApiData] = useState<{ scripts?: unknown[]; scenarios?: unknown[]; knowledge?: unknown[] } | null>(null);
 
   // Fetch plugin details from API for real scripts/scenarios/knowledge
   useEffect(() => {
-    api.get(`/plugins/${plugin.id}`)
-      .then((res: any) => setApiData(res.data))
+    api.get<{ data?: { scripts?: unknown[]; scenarios?: unknown[]; knowledge?: unknown[] } }>(`/plugins/${plugin.id}`)
+      .then((res) => setApiData(res?.data || null))
       .catch(() => {});
   }, [plugin.id]);
 
@@ -325,7 +325,7 @@ export function PluginDetail({ plugin, onClose }: PluginDetailProps) {
             </Button>
             <Button onClick={() => {
               setShowUpgradeDialog(false);
-              // TODO: navigate to pricing page when implemented
+              window.location.href = '/app/pricing';
             }}>了解更多</Button>
           </DialogFooter>
         </DialogContent>

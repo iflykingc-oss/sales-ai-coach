@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect } from 'react';
 import { ThumbsUp, Share2, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -32,7 +33,7 @@ export function ScriptSharing() {
         const scripts = res?.data || [];
         setSharedScripts(scripts);
       } catch (err) {
-        console.error('Failed to fetch shared scripts:', err);
+        logger.error('Failed to fetch shared scripts:', err);
       } finally {
         setLoading(false);
       }
@@ -58,7 +59,7 @@ export function ScriptSharing() {
       const res = await api.get(`/shared-scripts/${teamId}`) as any;
       setSharedScripts(res?.data || []);
     } catch (err) {
-      console.error('Failed to share script:', err);
+      logger.error('Failed to share script:', err);
     }
   };
 
@@ -71,7 +72,7 @@ export function ScriptSharing() {
       await api.post(`/shared-scripts/${teamId}/${scriptId}/like`);
       toggleScriptLike(scriptId);
     } catch (err) {
-      console.error('Failed to like script:', err);
+      logger.error('Failed to like script:', err);
     }
   };
 
@@ -88,7 +89,7 @@ export function ScriptSharing() {
         rejectScript(scriptId);
       }
     } catch (err) {
-      console.error('Failed to approve script:', err);
+      logger.error('Failed to approve script:', err);
     }
   };
 

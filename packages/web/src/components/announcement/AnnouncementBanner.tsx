@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { X, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -37,7 +38,7 @@ export function AnnouncementBanner() {
         await markAsRead(data[0].id);
       }
     } catch (err) {
-      console.error('Failed to fetch announcements:', err);
+      logger.error('Failed to fetch announcements:', err);
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +56,7 @@ export function AnnouncementBanner() {
         prev.map(a => a.id === id ? { ...a, isRead: true } : a)
       );
     } catch (err) {
-      console.error('Failed to mark as read:', err);
+      logger.error('Failed to mark as read:', err);
     }
   };
 
@@ -72,7 +73,7 @@ export function AnnouncementBanner() {
 
       toast.success('公告已关闭');
     } catch (err) {
-      console.error('Failed to dismiss announcement:', err);
+      logger.error('Failed to dismiss announcement:', err);
     }
   };
 

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState } from 'react';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
@@ -65,7 +66,7 @@ export function PayPalCheckout({ plan, onSuccess, onCancel }: PayPalCheckoutProp
 
   const onError = (err: any) => {
     setStatus('error');
-    console.error('PayPal error:', err);
+    logger.error('PayPal error:', err);
     toast.error('支付错误', { description: '请稍后重试' });
   };
 

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export interface ScriptVariant {
   style: string;
@@ -101,6 +100,12 @@ export interface ScriptStateData {
   scqaNarrative?: Record<string, unknown>;
   challengerInsight?: Record<string, unknown>;
   frameworkAnalysis?: FrameworkAnalysis;
+  quality_report?: {
+    score: number;
+    feedback: string;
+    passed: boolean;
+    suggestions: string[];
+  };
 }
 
 export interface ScriptFeedbackState {
@@ -119,7 +124,7 @@ export interface ScriptFeedbackState {
   reset: () => void;
 }
 
-export const useScriptStore = create<ScriptFeedbackState>()(persist(
+export const useScriptStore = create<ScriptFeedbackState>()(
   (set) => ({
     sessionId: null,
     activeStyle: 'empathy',
@@ -147,13 +152,4 @@ export const useScriptStore = create<ScriptFeedbackState>()(persist(
         feedbackSubmitted: {},
       }),
   }),
-  {
-    name: 'script-state',
-    partialize: (state) => ({
-      currentScript: state.currentScript,
-      activeStyle: state.activeStyle,
-      generatedScriptIds: state.generatedScriptIds,
-      feedbackSubmitted: state.feedbackSubmitted,
-    }),
-  }
-));
+);

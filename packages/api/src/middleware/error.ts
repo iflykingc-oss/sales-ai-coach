@@ -1,21 +1,33 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { logger } from '../lib/logger.js';
 
-export function errorMiddleware(err: Error, req: Request, res: Response, next: NextFunction) {
-  console.error('[Error]', err);
+const isProd = process.env.NODE_ENV === 'production';
 
+export function errorMiddleware(err: Error, req: Request, res: Response, _next: NextFunction) {
+  // Always log the full error server-side with request context
+  logger.error('Request error', err, {
+    method: req.method,
+    path: req.path,
+    requestId: req.headers['x-request-id'],
+  });
+
+  // Zod validation errors — hide field details in production
   if (err instanceof ZodError) {
     return res.status(400).json({
       success: false,
-      error: 'Validation error',
-      details: err.errors.reduce((acc, e) => {
-        const key = e.path.join('.');
-        acc[key] = e.message;
-        return acc;
-      }, {} as Record<string, string>),
+      error: isProd ? 'Invalid request parameters' : 'Validation error',
+      ...(isProd ? {} : {
+        details: err.errors.reduce((acc, e) => {
+          const key = e.path.join('.');
+          acc[key] = e.message;
+          return acc;
+        }, {} as Record<string, string>),
+      }),
     });
   }
 
+  // Prisma known errors
   if (err.name === 'PrismaClientKnownRequestError') {
     const code = (err as any).code;
     if (code === 'P2002') {
@@ -32,8 +44,25 @@ export function errorMiddleware(err: Error, req: Request, res: Response, next: N
     }
   }
 
+  // JWT errors
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid or expired token',
+    });
+  }
+
+  // Rate limit errors
+  if (err.name === 'RateLimitError' || (err as any).status === 429) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many requests',
+    });
+  }
+
+  // Generic 500 — never leak internals in production
   res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : 'An error occurred',
+    error: isProd ? 'Internal server error' : err.message || 'An error occurred',
   });
 }

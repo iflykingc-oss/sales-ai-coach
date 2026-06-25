@@ -48,7 +48,7 @@ router.get('/', (req, res: Response) => {
 });
 
 // GET /plans/current — get current user's plan with usage stats
-router.get('/current', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.get('/current', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
     const user = await prisma.user.findUnique({
@@ -98,7 +98,7 @@ router.get('/current', authMiddleware, async (req: any, res: Response, next: Nex
 });
 
 // POST /plans/upgrade — user self-upgrade (now redirects to Stripe)
-router.post('/upgrade', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.post('/upgrade', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
     const { targetPlan } = req.body;
@@ -142,7 +142,7 @@ router.post('/upgrade', authMiddleware, async (req: any, res: Response, next: Ne
 });
 
 // GET /plans/history — user's plan change history
-router.get('/history', authMiddleware, async (req: any, res: Response, next: NextFunction) => {
+router.get('/history', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user.id;
     const history = await prisma.planChange.findMany({

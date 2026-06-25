@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { logger } from '@/utils/logger';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, Target, Brain, Trophy, Clock, ChevronRight, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -31,7 +32,7 @@ export default function PracticeHistoryPage() {
         const res = await api.get('/practices');
         setPractices(res.data?.data || []);
       } catch (err) {
-        console.error('Failed to fetch practices:', err);
+        logger.error('Failed to fetch practices:', err);
       } finally {
         setLoading(false);
       }
@@ -39,15 +40,18 @@ export default function PracticeHistoryPage() {
     fetchPractices();
   }, []);
 
-  const filteredPractices = practices.filter((p) => {
+  const filteredPractices = useMemo(() => practices.filter((p) => {
     const matchesSearch = !searchQuery ||
       p.scenario.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.industry && p.industry.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesIndustry = filterIndustry === 'all' || p.industry === filterIndustry;
     return matchesSearch && matchesIndustry;
-  });
+  }), [practices, searchQuery, filterIndustry]);
 
-  const industries = [...new Set(practices.map((p) => p.industry).filter((i): i is string => i !== null && i !== undefined))];
+  const industries = useMemo(() =>
+    [...new Set(practices.map((p) => p.industry).filter((i): i is string => i !== null && i !== undefined))],
+    [practices]
+  );
 
   const getScoreColor = (score: number) => {
     const normalizedScore = score > 1 ? score : Math.round(score * 100);

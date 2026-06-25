@@ -1,4 +1,4 @@
-import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const MAX_RETRIES = 2;
@@ -9,6 +9,13 @@ export const api = axios.create({
   withCredentials: true,
   timeout: 120000, // 120 second timeout (AI calls can take up to 60s)
 });
+
+/**
+ * Type-safe API response helper.
+ * The interceptor unwraps response.data, so api.get() returns data directly.
+ * Use this to type the result without `as any`.
+ */
+export type ApiResponse<T = unknown> = T;
 
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (value: unknown) => void; reject: (reason?: unknown) => void }> = [];

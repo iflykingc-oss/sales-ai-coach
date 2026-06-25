@@ -19,24 +19,7 @@ export interface Activity {
   metadata?: Record<string, unknown>;
 }
 
-const STORAGE_KEY = 'activities';
 const MAX_ACTIVITIES = 50;
-
-function getInitialActivities(): Activity[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored) as Activity[];
-    }
-  } catch {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-  return [];
-}
-
-function persist(activities: Activity[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(activities));
-}
 
 interface ActivityState {
   activities: Activity[];
@@ -45,8 +28,9 @@ interface ActivityState {
   clearActivities: () => void;
 }
 
+// Privacy: activity log is ephemeral (in-memory only, not persisted)
 export const useActivityStore = create<ActivityState>((set, get) => ({
-  activities: getInitialActivities(),
+  activities: [],
 
   addActivity: (activity) => {
     const newActivity: Activity = {
@@ -54,17 +38,14 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: new Date().toISOString(),
     };
-    set((state) => {
-      const updated = [newActivity, ...state.activities].slice(0, MAX_ACTIVITIES);
-      persist(updated);
-      return { activities: updated };
-    });
+    set((state) => ({
+      activities: [newActivity, ...state.activities].slice(0, MAX_ACTIVITIES),
+    }));
   },
 
   getActivities: () => get().activities,
 
   clearActivities: () => {
-    localStorage.removeItem(STORAGE_KEY);
     set({ activities: [] });
   },
 }));

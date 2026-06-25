@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export type PracticeMode = 'scenario' | 'freeform' | 'special' | 'objection_training';
 export type EmotionType = 'interest' | 'hesitate' | 'resist' | 'empathy';
@@ -88,87 +87,64 @@ interface PracticeState {
 }
 
 export const usePracticeStore = create<PracticeState>()(
-  persist(
-    (set) => ({
-      session: null,
-      summary: null,
-      isGeneratingSummary: false,
-      isLoading: false,
-      error: null,
-      recentScenarioIds: [],
+  (set) => ({
+    session: null,
+    summary: null,
+    isGeneratingSummary: false,
+    isLoading: false,
+    error: null,
+    recentScenarioIds: [],
 
-      setSession: (session) => set({ session }),
-      addMessage: (message) =>
-        set((state) => {
-          if (!state.session) return state;
-          // Track character counts for talk-time ratio
-          const charCount = message.content.length;
-          const isUser = message.role === 'user';
-          return {
-            session: {
-              ...state.session,
-              messages: [...state.session.messages, message],
-              userCharCount: (state.session.userCharCount || 0) + (isUser ? charCount : 0),
-              assistantCharCount: (state.session.assistantCharCount || 0) + (!isUser ? charCount : 0),
-            },
-          };
-        }),
-      incrementRound: () =>
-        set((state) => {
-          if (!state.session) return state;
-          return {
-            session: {
-              ...state.session,
-              round: state.session.round + 1,
-            },
-          };
-        }),
-      setCustomerEmotion: (emotion) =>
-        set((state) => {
-          if (!state.session) return state;
-          return { session: { ...state.session, customerEmotion: emotion } };
-        }),
-      completePractice: () =>
-        set((state) => {
-          if (!state.session) return state;
-          return {
-            session: {
-              ...state.session,
-              state: 'completed',
-              completedAt: Date.now(),
-            },
-          };
-        }),
-      resetPractice: () =>
-        set({ session: null, summary: null, error: null, isGeneratingSummary: false }),
-      setSummary: (summary) => set({ summary }),
-      setIsGeneratingSummary: (loading) => set({ isGeneratingSummary: loading }),
-      setError: (error) => set({ error }),
-      setLoading: (loading) => set({ isLoading: loading }),
-      addRecentScenario: (scenarioId) =>
-        set((state) => {
-          const recent = [scenarioId, ...state.recentScenarioIds.filter((id) => id !== scenarioId)].slice(0, 10);
-          return { recentScenarioIds: recent };
-        }),
-      setLogicFramework: (frameworkId) =>
-        set((state) => {
-          if (!state.session) return state;
-          return { session: { ...state.session, logicFramework: frameworkId } };
-        }),
-      setDetectedStage: (stage) =>
-        set((state) => {
-          if (!state.session) return state;
-          return { session: { ...state.session, detectedStage: stage } };
-        }),
-    }),
-    {
-      name: 'practice-state',
-      partialize: (state) => ({
-        session: state.session ? {
-          ...state.session,
-          messages: state.session.messages?.slice(-20) || [],
-        } : null,
+    setSession: (session) => set({ session }),
+    addMessage: (message) =>
+      set((state) => {
+        if (!state.session) return state;
+        const charCount = message.content.length;
+        const isUser = message.role === 'user';
+        return {
+          session: {
+            ...state.session,
+            messages: [...state.session.messages, message],
+            userCharCount: (state.session.userCharCount || 0) + (isUser ? charCount : 0),
+            assistantCharCount: (state.session.assistantCharCount || 0) + (!isUser ? charCount : 0),
+          },
+        };
       }),
-    },
-  ),
+    incrementRound: () =>
+      set((state) => {
+        if (!state.session) return state;
+        return { session: { ...state.session, round: state.session.round + 1 } };
+      }),
+    setCustomerEmotion: (emotion) =>
+      set((state) => {
+        if (!state.session) return state;
+        return { session: { ...state.session, customerEmotion: emotion } };
+      }),
+    completePractice: () =>
+      set((state) => {
+        if (!state.session) return state;
+        return { session: { ...state.session, state: 'completed', completedAt: Date.now() } };
+      }),
+    resetPractice: () =>
+      set({ session: null, summary: null, error: null, isGeneratingSummary: false }),
+    setSummary: (summary) => set({ summary }),
+    setIsGeneratingSummary: (loading) => set({ isGeneratingSummary: loading }),
+    setError: (error) => set({ error }),
+    setLoading: (loading) => set({ isLoading: loading }),
+    addRecentScenario: (scenarioId) =>
+      set((state) => {
+        const recent = [scenarioId, ...state.recentScenarioIds.filter((id) => id !== scenarioId)].slice(0, 10);
+        return { recentScenarioIds: recent };
+      }),
+    setLogicFramework: (frameworkId) =>
+      set((state) => {
+        if (!state.session) return state;
+        return { session: { ...state.session, logicFramework: frameworkId } };
+      }),
+    setDetectedStage: (stage) =>
+      set((state) => {
+        if (!state.session) return state;
+        return { session: { ...state.session, detectedStage: stage } };
+      }),
+  }),
 );

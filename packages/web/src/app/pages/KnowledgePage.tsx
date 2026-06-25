@@ -4,7 +4,7 @@ import { KnowledgeList } from '@/components/knowledge/KnowledgeList';
 import { KnowledgeForm } from '@/components/knowledge/KnowledgeForm';
 import { KnowledgeImport } from '@/components/knowledge/KnowledgeImport';
 import { CompanyKnowledge } from '@/components/CompanyKnowledge';
-import { BookOpen, Building2 } from 'lucide-react';
+import { BookOpen, Building2, Shield } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 type TabType = 'general' | 'company';
@@ -20,6 +20,13 @@ export default function KnowledgePage() {
         <p className="mt-1 text-sm text-gray-500">
           管理销售知识资产，通用知识由管理员维护，公司知识由你配置
         </p>
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700">
+          <Shield className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">隐私说明</p>
+            <p>上传的文件仅用于为您生成更好的话术，平台无法查看您的内容。您可随时在「数据权利」页面一键永久删除所有上传数据。</p>
+          </div>
+        </div>
       </div>
 
       {/* Tab 切换 */}

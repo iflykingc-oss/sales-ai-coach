@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -95,7 +96,7 @@ export default function SessionTabBar() {
         }
       }
     } catch (err) {
-      console.error('Failed to rename session:', err);
+      logger.error('Failed to rename session:', err);
     }
     setRenamingId(null);
   }, [renamingId, renameValue, sessions, setSessions]);
@@ -118,7 +119,7 @@ export default function SessionTabBar() {
           await localDb.removeItem(`session:${id}`);
         }
       } catch (err) {
-        console.error('Failed to delete session:', err);
+        logger.error('Failed to delete session:', err);
       }
       setContextMenu((prev) => ({ ...prev, visible: false }));
     },
@@ -143,7 +144,7 @@ export default function SessionTabBar() {
         }
       }
     } catch (err) {
-      console.error('Failed to create session:', err);
+      logger.error('Failed to create session:', err);
     }
     setIsCreating(false);
   }, [sessions.length, addSession, handleSelectSession]);

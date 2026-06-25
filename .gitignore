@@ -49,5 +49,7 @@ docker-compose.override.yml
 *.tsbuildinfo
 coverage/
 
-.vercel
-.env*.local
+# Test scripts with potential secrets
+test-all-features.js
+e2e-test.js
+e2e-debug.js

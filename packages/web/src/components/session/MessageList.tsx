@@ -16,6 +16,9 @@ interface Message {
   createdAt: string;
 }
 
+/** Callback ref type for appending messages from parent */
+export type AppendMessageFn = (msg: Message) => void;
+
 const INPUT_TYPE_ICONS: Record<InputType, React.ReactNode> = {
   TEXT: <MessageCircle className="h-3.5 w-3.5" />,
   IMAGE: <Image className="h-3.5 w-3.5" />,
@@ -112,10 +115,11 @@ function MessageBubble({ message }: { message: Message }) {
 
 interface MessageListProps {
   onSend?: (input: string, inputType: InputType) => void;
-  onAppendMessage?: (msg: Message) => void;
+  /** Called when parent wants to append a message imperatively */
+  appendMessageRef?: React.MutableRefObject<AppendMessageFn | null>;
 }
 
-export default function MessageList({ onSend, onAppendMessage }: MessageListProps) {
+export default function MessageList({ onSend, appendMessageRef }: MessageListProps) {
   const { activeSessionId } = useSessionStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -130,11 +134,10 @@ export default function MessageList({ onSend, onAppendMessage }: MessageListProp
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Expose appendMessage via callback
+  // Expose appendMessage via ref callback (replaces window global anti-pattern)
   useEffect(() => {
-    if (onAppendMessage) {
-      // Store the callback so parent can call it
-      (window as any).__messageListAppend = (msg: Message) => {
+    if (appendMessageRef) {
+      appendMessageRef.current = (msg: Message) => {
         setMessages((prev) => {
           const updated = [...prev, msg];
           if (activeSessionId) {
@@ -145,9 +148,11 @@ export default function MessageList({ onSend, onAppendMessage }: MessageListProp
       };
     }
     return () => {
-      delete (window as any).__messageListAppend;
+      if (appendMessageRef) {
+        appendMessageRef.current = null;
+      }
     };
-  }, [onAppendMessage, activeSessionId]);
+  }, [appendMessageRef, activeSessionId]);
 
   // Load messages when active session changes
   useEffect(() => {

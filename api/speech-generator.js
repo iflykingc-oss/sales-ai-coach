@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * 话术生成模块 V2.1
  *
@@ -347,7 +348,7 @@ async function generateSpeechWithRetry(industry, knowledgeList, userScene, lang,
         lastResult = JSON.parse(cleaned);
       }
     } catch (err) {
-      console.error(`[SpeechGen] 第${attempt}轮生成异常:`, err.message);
+      logger.error(`[SpeechGen] 第${attempt}轮生成异常:`, err.message);
     }
 
     lastEval = evaluateSpeech(lastResult, knowledgeList);
@@ -365,7 +366,7 @@ async function generateSpeechWithRetry(industry, knowledgeList, userScene, lang,
     console.info(`[SpeechGen] 第${attempt}轮未通过: ${lastEval.feedback}`);
   }
 
-  console.warn('[SpeechGen] 重试耗尽，降级返回');
+  logger.warn('[SpeechGen] 重试耗尽，降级返回');
   return {
     ...lastResult,
     meta: { retryAttempts: maxRetries, status: 'DEGRADED', knowledgeCount: knowledgeList.length },

@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import { ApiTier } from '@prisma/client';
 
 declare global {
   namespace Express {
@@ -8,7 +9,13 @@ declare global {
         email: string;
         role: string;
       };
-      cookies?: Record<string, any>;
+      apiKey?: {
+        id: string;
+        tier: ApiTier;
+        permissions: string[];
+        userId: string;
+      };
+      cookies?: Record<string, string>;
     }
   }
 }

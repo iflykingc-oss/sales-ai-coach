@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, Target, BarChart3, Flame } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -56,7 +57,7 @@ export default function AnalyticsPage() {
         const data = analyticsRes.data?.data || analyticsRes.data;
         setAnalytics(data);
       } catch (err) {
-        console.error('Failed to fetch analytics:', err);
+        logger.error('Failed to fetch analytics:', err);
       } finally {
         setLoading(false);
       }

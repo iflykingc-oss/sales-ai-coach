@@ -1,5 +1,38 @@
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
+// --- Configuration ---
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+const TIMEOUT_MS = 90_000; // 90s — AI calls can be slow
+const CIRCUIT_BREAKER_THRESHOLD = 5; // consecutive failures before opening
+const CIRCUIT_BREAKER_RESET_MS = 60_000; // 1 minute cooldown
+
+// --- Circuit breaker state ---
+let consecutiveFailures = 0;
+let circuitOpenUntil = 0;
+
+function isCircuitOpen(): boolean {
+  if (Date.now() < circuitOpenUntil) return true;
+  if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+    circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_RESET_MS;
+    return true;
+  }
+  return false;
+}
+
+function recordSuccess() {
+  consecutiveFailures = 0;
+  circuitOpenUntil = 0;
+}
+
+function recordFailure() {
+  consecutiveFailures++;
+}
+
+// --- Sleep helper ---
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// --- Core caller with retry + timeout + circuit breaker ---
 interface AiServiceRequest {
   path: string;
   method?: string;
@@ -7,21 +40,55 @@ interface AiServiceRequest {
 }
 
 export async function callAiService<T>({ path, method = 'POST', body }: AiServiceRequest): Promise<T> {
-  const response = await fetch(`${AI_SERVICE_URL}/api${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`AI service error (${response.status}): ${error}`);
+  if (isCircuitOpen()) {
+    throw new Error('AI service circuit breaker is open — service temporarily unavailable');
   }
 
-  const data = (await response.json()) as { success?: boolean; data?: T };
-  // AI service wraps all responses in { success, data }
-  return (data.data ?? data) as T;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(RETRY_DELAY_MS * attempt); // Exponential-ish backoff
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${AI_SERVICE_URL}/api${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'unknown');
+        throw new Error(`AI service error (${response.status}): ${errorText}`);
+      }
+
+      const data = (await response.json()) as { success?: boolean; data?: T };
+      recordSuccess();
+      return (data.data ?? data) as T;
+    } catch (err) {
+      clearTimeout(timeout);
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      // Don't retry on client errors (4xx) — those are our fault
+      if (lastError.message.includes('AI service error (4')) {
+        recordFailure();
+        throw lastError;
+      }
+    }
+  }
+
+  recordFailure();
+  throw lastError || new Error('AI service call failed after retries');
 }
+
+// --- Type definitions ---
 
 export interface ScriptGenerationInput {
   input: string;
@@ -29,7 +96,7 @@ export interface ScriptGenerationInput {
   industry?: string;
   context?: string;
   userId: string;
-  frameworks?: string[];  // Analytical framework IDs to apply
+  frameworks?: string[];
 }
 
 export interface ScriptGenerationOutput {

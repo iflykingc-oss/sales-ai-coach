@@ -226,6 +226,7 @@ model ReviewReport {
   strengths         String[]
   improvements      String[]
   recommendations   String[]
+  radarScores       Json?    @map("radar_scores")
   createdAt         DateTime @default(now()) @map("created_at")
 
   @@index([userId])

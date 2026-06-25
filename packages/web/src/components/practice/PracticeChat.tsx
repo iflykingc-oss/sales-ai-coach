@@ -482,6 +482,10 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
       });
     };
 
+    // AbortController for cancellation + timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000); // 2 min timeout
+
     try {
       const response = await fetch('/api/practices/message/stream', {
         method: 'POST',
@@ -492,6 +496,7 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           logicFramework: session.logicFramework || '',
         }),
         credentials: 'include',
+        signal: controller.signal,
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -597,9 +602,15 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
           }
         }
       }
-    } catch {
-      updateAiMessage({ content: '抱歉，AI服务暂时不可用，请稍后再试。' });
+    } catch (err) {
+      clearTimeout(timeout);
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      const errorMsg = isAbort ? '请求超时，请稍后重试' : 'AI服务暂时不可用，请稍后再试';
+      updateAiMessage({ content: `⚠️ ${errorMsg}` });
+      toast.error(errorMsg);
     } finally {
+      clearTimeout(timeout);
+      controller.abort(); // Clean up stream
       setIsLoading(false);
     }
   };
