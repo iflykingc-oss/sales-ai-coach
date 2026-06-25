@@ -31,7 +31,7 @@ export default function AppLayout() {
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
-          <p className="mt-4 text-sm text-gray-500">加载中...</p>
+          <p className="mt-4 text-sm text-gray-500">Loading...</p>
         </div>
       </div>
     );
@@ -43,7 +43,7 @@ export default function AppLayout() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-0 focus:top-0 focus:z-[100] focus:rounded-b-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
       >
-        跳转到主要内容
+        Skip to main content
       </a>
       <Sidebar
         mobileOpen={mobileOpen}

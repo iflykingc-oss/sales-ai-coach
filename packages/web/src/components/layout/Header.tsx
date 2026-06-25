@@ -1,4 +1,5 @@
 import { Menu, User } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useUserStore } from '@/stores/userStore';
 import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
@@ -7,6 +8,7 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuToggle }: HeaderProps) {
+  const { t } = useTranslation('layout');
   const { user } = useUserStore();
 
   return (
@@ -15,7 +17,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
         <button
           onClick={onMenuToggle}
           className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 md:hidden"
-          aria-label="打开菜单"
+          aria-label={t('header.openMenu')}
           aria-expanded="false"
           aria-controls="sidebar-navigation"
         >
@@ -23,9 +25,9 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </button>
         <div className="text-sm text-gray-500">
           {user ? (
-            <>欢迎回来，<span className="font-medium text-gray-700">{user.name}</span></>
+            <>{t('header.welcome')}<span className="font-medium text-gray-700">{user.name}</span></>
           ) : (
-            '加载中...'
+            t('header.loading')
           )}
         </div>
       </div>
@@ -34,7 +36,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
         <div
           className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700"
           role="img"
-          aria-label={`用户: ${user?.name || '未登录'}`}
+          aria-label={`${t('header.userLabel')}: ${user?.name || t('header.notLoggedIn')}`}
         >
           <User className="h-4 w-4" aria-hidden="true" />
         </div>

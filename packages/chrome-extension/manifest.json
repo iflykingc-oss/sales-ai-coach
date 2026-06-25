@@ -6,12 +6,16 @@
   "permissions": [
     "activeTab",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "tabs"
   ],
   "host_permissions": [
     "https://*.zoom.us/*",
     "https://meet.google.com/*",
-    "https://teams.microsoft.com/*"
+    "https://teams.microsoft.com/*",
+    "https://teams.live.com/*",
+    "https://teams.cloud.microsoft.com/*",
+    "https://www.aisalecoach.work/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -29,7 +33,9 @@
       "matches": [
         "https://*.zoom.us/*",
         "https://meet.google.com/*",
-        "https://teams.microsoft.com/*"
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*",
+        "https://teams.cloud.microsoft.com/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"]

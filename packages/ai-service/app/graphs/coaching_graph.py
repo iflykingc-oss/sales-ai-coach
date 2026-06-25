@@ -9,6 +9,7 @@ Coaching Graph — LangGraph StateGraph 定义
 """
 
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 
 from app.graphs.state import CoachingState
 from app.graphs.nodes import stage_detector, persona, evaluator, coach, knowledge
@@ -100,8 +101,9 @@ def build_coaching_graph():
 
     graph.add_edge("knowledge", END)
 
-    compiled = graph.compile()
-    logger.info("[coaching_graph] Graph compiled: START → (stage_detector || persona) → evaluator → coach → knowledge")
+    checkpointer = MemorySaver()
+    compiled = graph.compile(checkpointer=checkpointer)
+    logger.info("[coaching_graph] Graph compiled with checkpointing: START → (stage_detector || persona) → evaluator → coach → knowledge")
     return compiled
 
 

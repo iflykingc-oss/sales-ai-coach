@@ -10,7 +10,7 @@ const logger = require('./lib/logger');
 // 由于 index.js 没有导出，我们需要在这里重新实现或通过 req.app 访问
 // 这里使用直接 fetch Supabase 的方式
 
-const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function sbQuery(table, opts = {}) {

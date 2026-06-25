@@ -138,6 +138,7 @@ model Session {
   @@index([userId])
   @@index([teamId])
   @@index([stage])
+  @@index([userId, updatedAt])
   @@map("sessions")
 }
 
@@ -184,10 +185,12 @@ model KnowledgeItem {
   industry  String?
   weight    Float           @default(1.0)
   status    KnowledgeStatus @default(ACTIVE)
+  embedding Unsupported("vector(1024)")?  // pgvector: 1024-dim for DashScope text-embedding-v3
   createdAt DateTime        @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([teamId])
+  @@index([userId, status])
   @@map("knowledge_items")
 }
 
@@ -211,6 +214,7 @@ model PracticeSession {
   @@index([userId])
   @@index([sessionId])
   @@index([createdAt])
+  @@index([userId, createdAt])
   @@map("practice_sessions")
 }
 
@@ -232,6 +236,7 @@ model ReviewReport {
   @@index([userId])
   @@index([sessionId])
   @@index([practiceSessionId])
+  @@index([userId, createdAt])
   @@map("review_reports")
 }
 
@@ -427,6 +432,8 @@ model DataDeletionRequest {
   createdAt   DateTime         @default(now()) @map("created_at")
 
   @@index([status])
+  @@index([userId])
+  @@index([userId, createdAt])
   @@map("data_deletion_requests")
 }
 

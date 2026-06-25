@@ -111,9 +111,15 @@ class FeishuChannel(ChatChannel):
         except Exception as e:
             logger.error(f"[feishu] Event processing error: {e}")
 
+    # Feishu message card size limit: 30KB
+    MAX_CONTENT_BYTES = 30 * 1024
+
     async def send(self, reply: Reply, context: IMContext) -> bool:
         """Send reply to Feishu."""
         try:
+            # Validate message size
+            self._validate_reply_size(reply)
+
             token = await self._get_access_token()
 
             if reply.type == ReplyType.CARD:
@@ -126,6 +132,24 @@ class FeishuChannel(ChatChannel):
         except Exception as e:
             logger.error(f"[feishu] Send failed: {e}")
             return False
+
+    def _validate_reply_size(self, reply: Reply):
+        """Truncate reply content if it exceeds Feishu's 30KB limit."""
+        suffix = "...(truncated)"
+        content = reply.content
+        if len(content.encode("utf-8")) > self.MAX_CONTENT_BYTES:
+            # Truncate to fit within limit
+            max_bytes = self.MAX_CONTENT_BYTES - len(suffix.encode("utf-8"))
+            truncated = content.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
+            reply.content = truncated + suffix
+
+        # Also truncate card elements content
+        for elem in reply.card_elements:
+            if elem.get("tag") == "markdown" and "content" in elem:
+                c = elem["content"]
+                if len(c.encode("utf-8")) > self.MAX_CONTENT_BYTES:
+                    max_bytes = self.MAX_CONTENT_BYTES - len(suffix.encode("utf-8"))
+                    elem["content"] = c.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore") + suffix
 
     async def _send_text(self, reply: Reply, context: IMContext, token: str) -> bool:
         """Send plain text message."""
@@ -254,14 +278,42 @@ class FeishuChannel(ChatChannel):
                 return data.get("code") == 0
 
     async def _update_card_content(self, card_id: str, content: str, headers: dict):
-        """Update card content (streaming chunk)."""
-        # Find the markdown element to update
+        """Update card content (streaming chunk).
+
+        Handles transient errors:
+        - Card expired (code 230001): fall back to sending a new message
+        - Rate limited (code 99991400): wait and retry once
+        - Other errors: log and continue (streaming is best-effort)
+        """
         url = f"{self.BASE_URL}/cardkit/v1/cards/{card_id}/elements/content"
         body = {"content": content}
 
         async with aiohttp.ClientSession() as session:
             async with session.put(url, json=body, headers=headers) as resp:
-                pass  # Ignore errors during streaming
+                if resp.status == 200:
+                    data = await resp.json()
+                    code = data.get("code", 0)
+                    if code == 0:
+                        return
+
+                    # Card expired — cannot update anymore
+                    if code == 230001:
+                        logger.warning(f"[feishu] Card {card_id} expired during streaming, content lost")
+                        return
+
+                    # Rate limited — wait and retry once
+                    if code == 99991400:
+                        logger.info(f"[feishu] Rate limited on card update, retrying after 1s")
+                        await asyncio.sleep(1)
+                        async with session.put(url, json=body, headers=headers) as retry_resp:
+                            retry_data = await retry_resp.json()
+                            if retry_data.get("code", 0) != 0:
+                                logger.warning(f"[feishu] Card update retry failed: {retry_data}")
+                        return
+
+                    logger.warning(f"[feishu] Card update error code={code}: {data}")
+                else:
+                    logger.warning(f"[feishu] Card update HTTP {resp.status}")
 
     async def _close_streaming(self, card_id: str, headers: dict):
         """Close streaming_mode on a card."""
@@ -270,7 +322,12 @@ class FeishuChannel(ChatChannel):
 
         async with aiohttp.ClientSession() as session:
             async with session.patch(url, json=body, headers=headers) as resp:
-                pass
+                if resp.status != 200:
+                    logger.warning(f"[feishu] Close streaming failed (status={resp.status}) for card {card_id}")
+                else:
+                    data = await resp.json()
+                    if data.get("code", 0) != 0:
+                        logger.warning(f"[feishu] Close streaming error: {data}")
 
     async def _get_access_token(self) -> str:
         """Get or refresh tenant access token."""

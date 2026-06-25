@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useToastStore, type Toast, type ToastVariant } from '@/hooks/useToast';
@@ -25,6 +26,7 @@ const variantIconClasses: Record<ToastVariant, string> = {
 };
 
 function ToastItem({ toast }: { toast: Toast }) {
+  const { t } = useTranslation();
   const { removeToast } = useToastStore();
   const Icon = variantIcons[toast.variant as ToastVariant];
   const [visible, setVisible] = useState(true);
@@ -60,7 +62,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       <button
         onClick={() => removeToast(toast.id)}
         className="flex-shrink-0 rounded p-1 opacity-60 transition-opacity hover:opacity-100"
-        aria-label="关闭通知"
+        aria-label={t('toast.closeNotification')}
       >
         <X className="h-4 w-4" />
       </button>

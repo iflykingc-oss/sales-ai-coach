@@ -1,8 +1,18 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
 import { analyzeReview } from '../services/ai.service.js';
+
+const generateReviewSchema = z.object({
+  conversations: z.array(z.object({
+    role: z.string().max(20),
+    content: z.string().max(10000),
+  })).min(1, '对话不能为空').max(200),
+  sessionId: z.string().uuid().optional(),
+  practiceSessionId: z.string().uuid().optional(),
+});
 
 const router = Router();
 
@@ -20,7 +30,11 @@ async function getKnowledgeContext(userId: string): Promise<string> {
 
 router.post('/generate', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
-    const { conversations, sessionId, practiceSessionId } = req.body;
+    const parsed = generateReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { conversations, sessionId, practiceSessionId } = parsed.data;
     const knowledgeContext = await getKnowledgeContext(req.user!.id);
 
     const analysis = await analyzeReview({

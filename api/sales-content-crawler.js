@@ -21,7 +21,7 @@ if (process.env.DISABLE_PLAYWRIGHT === '1') chromium = null;
 const crypto = require('crypto');
 
 // Supabase helper
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function sbInsert(table, data) {

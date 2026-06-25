@@ -1,0 +1,74 @@
+{
+  "setup": {
+    "title": "Start Practice",
+    "selectScenario": "Select Scenario",
+    "selectDifficulty": "Select Difficulty",
+    "selectFramework": "Select Framework",
+    "start": "Start Practice",
+    "difficulty": {
+      "easy": "Beginner",
+      "medium": "Intermediate",
+      "hard": "Advanced",
+      "expert": "Expert"
+    }
+  },
+  "chat": {
+    "placeholder": "Type your response...",
+    "send": "Send",
+    "hint": "Get Hint",
+    "endSession": "End Practice",
+    "round": "Round {{round}}",
+    "thinking": "Customer is thinking...",
+    "coaching": "Coaching"
+  },
+  "emotions": {
+    "interested": "Interested",
+    "hesitant": "Hesitant",
+    "resistant": "Resistant",
+    "empathy": "Empathy"
+  },
+  "summary": {
+    "title": "Practice Report",
+    "overallScore": "Overall Score",
+    "dimensions": "Skill Dimensions",
+    "strengths": "Strengths",
+    "weaknesses": "Areas for Improvement",
+    "recommendations": "Recommendations",
+    "practiceAgain": "Practice Again",
+    "viewHistory": "View History"
+  },
+  "bestScript": "Best Script",
+  "customerPsychology": "Customer Psychology",
+  "end": "End Practice",
+  "framework": "Sales Framework",
+  "startChat": "Start a conversation with AI customer",
+  "inputPlaceholder": "Type your response...",
+  "skillFocus": {
+    "objection": "Objection Handling",
+    "closing": "Closing",
+    "discovery": "Needs Discovery",
+    "rapport": "Building Trust",
+    "negotiation": "Price Negotiation",
+    "presentation": "Product Demo"
+  },
+  "difficulty": {
+    "easy": "Beginner",
+    "easyDesc": "Friendly buyer, few objections",
+    "medium": "Intermediate",
+    "mediumDesc": "Analytical/Expressive buyer, moderate objections",
+    "hard": "Advanced",
+    "hardDesc": "Driver/Skeptic buyer, strong objections",
+    "expert": "Hell Mode",
+    "expertDesc": "Mixed-type buyer, multiple objections"
+  },
+  "coaching": {
+    "feedback": "Round {round} Assessment",
+    "hint": "Coaching Tip",
+    "emotionWarning": "Emotion Alert",
+    "progress": "Progress",
+    "customerGreeting": "Hello, I'm your {scenario} practice customer. Please begin your sales pitch.",
+    "maxRounds": "Conversation has gone {round} rounds, you can wrap up",
+    "continue": "Continue 5 more rounds",
+    "endAndView": "End practice and view results"
+  }
+}

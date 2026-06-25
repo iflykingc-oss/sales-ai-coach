@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { useI18n, LOCALES, type Locale } from '@/i18n';
+import { LOCALES, type Locale } from '@/i18n';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 import {
@@ -46,7 +46,6 @@ const typeLabels: Record<string, string> = {
 };
 
 export function AnnouncementAdmin() {
-  const { } = useI18n();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);

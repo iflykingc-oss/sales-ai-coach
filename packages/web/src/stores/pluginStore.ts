@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { api } from '@/services/api';
+import type { ApiPlugin } from '@/types/api';
 
 function getCategoryIcon(category: string): string {
   const icons: Record<string, string> = {
@@ -92,14 +94,12 @@ export const usePluginStore = create<PluginState>()(
     fetchPlugins: async () => {
       set({ loading: true });
       try {
-        const res = await fetch('/api/plugins', { credentials: 'include' });
-        if (!res.ok) throw new Error('API fetch failed');
-        const json = await res.json();
+        const json = await api.get('/api/plugins') as { success: boolean; data: ApiPlugin[] };
         if (json.success && json.data?.length > 0) {
           const { plugins: existingPlugins } = get();
           const existingMap = new Map(existingPlugins.map((p) => [p.id, p]));
           set({
-            plugins: json.data.map((p: any) => {
+            plugins: json.data.map((p: ApiPlugin) => {
               const existing = existingMap.get(p.id);
               const scripts = Array.isArray(p.scripts) ? p.scripts : [];
               const scenarios = Array.isArray(p.scenarios) ? p.scenarios : [];
@@ -166,13 +166,7 @@ export const usePluginStore = create<PluginState>()(
         localStorage.setItem('installed-plugins', JSON.stringify(installed));
       }
       try {
-        const res = await fetch('/api/plugins/install', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ pluginId: id }),
-        });
-        if (!res.ok) throw new Error('Install failed');
+        await api.post('/api/plugins/install', { pluginId: id });
       } catch {
         set((state) => ({
           plugins: state.plugins.map((p) =>
@@ -195,7 +189,7 @@ export const usePluginStore = create<PluginState>()(
       delete installed[id];
       localStorage.setItem('installed-plugins', JSON.stringify(installed));
       try {
-        await fetch(`/api/plugins/${id}/uninstall`, { method: 'POST', credentials: 'include' });
+        await api.post(`/api/plugins/${id}/uninstall`);
       } catch {
         // Silent fail
       }

@@ -10,7 +10,7 @@
  * 多次运行直到所有记录都有 embedding。
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const EMBEDDING_API_KEY = process.env.EMBEDDING_API_KEY || process.env.QWEN_API_KEY || process.env.OPENAI_API_KEY;
 const EMBEDDING_BASE_URL = process.env.EMBEDDING_BASE_URL || process.env.QWEN_BASE_URL || 'https://api.openai.com/v1';

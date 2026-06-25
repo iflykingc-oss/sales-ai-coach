@@ -122,7 +122,7 @@ class IndustrySyncManager {
     try {
       // 动态引入 Supabase 查询函数（避免循环依赖）
       const https = require('https');
-      const SUPABASE_URL = process.env.SUPABASE_URL || 'https://doqcopkqbfpstuavfjsa.supabase.co';
+      const SUPABASE_URL = process.env.SUPABASE_URL;
       const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
       if (!SUPABASE_KEY) {

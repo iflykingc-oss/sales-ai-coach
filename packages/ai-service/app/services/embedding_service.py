@@ -5,26 +5,51 @@ Embedding Service — 统一嵌入服务
 支持 DashScope text-embedding-v3 作为 API 备选。
 
 优先级：BGE-M3 TEI > DashScope > Fallback（字符 bigram）
+
+LRU cache: 使用 OrderedDict 实现异步安全的 LRU 缓存，
+避免相同文本重复调用 API。
 """
 
 import hashlib
 import math
+from collections import OrderedDict
 from app.core.config import get_settings
 from app.core.logging import logger
 
+# Target dimension for pgvector storage (DashScope text-embedding-v3)
+EMBEDDING_DIM = 1024
+
 
 class EmbeddingService:
-    """Unified embedding service with multiple backends."""
+    """Unified embedding service with LRU cache and multiple backends."""
 
-    def __init__(self):
+    def __init__(self, cache_size: int = 2048):
         self.settings = get_settings()
-        self._cache: dict[int, list[float]] = {}
+        self._cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._cache_size = cache_size
+
+    def _cache_get(self, key: str) -> list[float] | None:
+        """Get from LRU cache, promoting to front on hit."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+
+    def _cache_put(self, key: str, value: list[float]) -> None:
+        """Put into LRU cache, evicting oldest if at capacity."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            if len(self._cache) >= self._cache_size:
+                self._cache.popitem(last=False)
+        self._cache[key] = value
 
     async def embed(self, text: str) -> list[float]:
         """Get embedding vector for a single text."""
-        cache_key = hash(text)
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+        cache_key = text.strip()[:2000]  # Normalize for cache key
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         embedding = None
 
@@ -36,8 +61,25 @@ class EmbeddingService:
         if embedding is None:
             embedding = self._fallback_embedding(text)
 
-        self._cache[cache_key] = embedding
+        self._cache_put(cache_key, embedding)
         return embedding
+
+    async def embed_for_storage(self, text: str) -> list[float]:
+        """Get embedding vector normalized to EMBEDDING_DIM for pgvector storage.
+
+        Pads shorter vectors with zeros, truncates longer ones.
+        """
+        embedding = await self.embed(text)
+        return self._normalize_dim(embedding)
+
+    @staticmethod
+    def _normalize_dim(embedding: list[float]) -> list[float]:
+        """Normalize embedding to EMBEDDING_DIM (pad with zeros or truncate)."""
+        if len(embedding) == EMBEDDING_DIM:
+            return embedding
+        if len(embedding) < EMBEDDING_DIM:
+            return embedding + [0.0] * (EMBEDDING_DIM - len(embedding))
+        return embedding[:EMBEDDING_DIM]
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for multiple texts."""

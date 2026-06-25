@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Globe, ChevronDown } from 'lucide-react';
-import { useI18n, LOCALES, type Locale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
+import { LOCALES, setLocale, type Locale } from '@/i18n';
 import { cn } from '@/utils/cn';
 
 interface LanguageSelectorProps {
@@ -9,7 +10,8 @@ interface LanguageSelectorProps {
 }
 
 export function LanguageSelector({ variant = 'default', className }: LanguageSelectorProps) {
-  const { locale, setLocale } = useI18n();
+  const { i18n } = useTranslation();
+  const locale = i18n.language as Locale;
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -23,17 +25,7 @@ export function LanguageSelector({ variant = 'default', className }: LanguageSel
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Auto-detect language on first visit
-  useEffect(() => {
-    const saved = localStorage.getItem('locale');
-    if (!saved) {
-      const browserLang = navigator.language.split('-')[0];
-      const supportedLocales = Object.keys(LOCALES);
-      if (supportedLocales.includes(browserLang)) {
-        setLocale(browserLang as Locale);
-      }
-    }
-  }, [setLocale]);
+  // i18next LanguageDetector handles auto-detection automatically
 
   const currentLocale = LOCALES[locale];
 

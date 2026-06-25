@@ -12,19 +12,23 @@
     "admin": "管理后台",
     "pricing": "套餐升级",
     "logout": "退出登录",
-    "loggedOut": "已退出登录"
+    "loggedOut": "已退出登录",
+    "ariaMainNav": "主导航",
+    "ariaNavMenu": "导航菜单"
   },
   "header": {
     "openMenu": "打开菜单",
-    "welcome": "欢迎回来",
+    "welcome": "欢迎回来，",
     "loading": "加载中...",
-    "notLoggedIn": "未登录"
+    "notLoggedIn": "未登录",
+    "userLabel": "用户"
   },
   "mobile": {
     "sessions": "会话",
     "practice": "陪练",
     "knowledge": "知识",
     "analytics": "数据",
-    "more": "更多"
+    "more": "更多",
+    "ariaLabel": "移动端导航"
   }
 }

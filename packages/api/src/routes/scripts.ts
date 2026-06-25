@@ -1,10 +1,25 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { quotaMiddleware } from '../middleware/quota.js';
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 import { generateScript } from '../services/ai.service.js';
+
+const generateScriptSchema = z.object({
+  input: z.string().min(1, '输入内容不能为空').max(10000),
+  inputType: z.string().max(50).optional(),
+  industry: z.string().max(100).optional(),
+  context: z.string().max(20000).optional(),
+  sessionId: z.string().uuid().optional(),
+  frameworks: z.array(z.string().max(50)).max(10).optional(),
+});
+
+const feedbackSchema = z.object({
+  type: z.enum(['up', 'down']),
+  reason: z.string().max(500).optional(),
+});
 
 /**
  * Simple character-level similarity (Jaccard on bigrams).
@@ -26,7 +41,11 @@ const router = Router();
 
 router.post('/generate', authMiddleware, aiLimiter, quotaMiddleware('scripts'), async (req, res, next) => {
   try {
-    const { input, inputType, industry, context, sessionId, frameworks } = req.body;
+    const parsed = generateScriptSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { input, inputType, industry, context, sessionId, frameworks } = parsed.data;
 
     // RAG: search user's knowledge base for relevant content
     let knowledgeContext = context || '';
@@ -163,7 +182,11 @@ router.get('/', authMiddleware, async (req, res, next) => {
 
 router.post('/:id/feedback', authMiddleware, async (req, res, next) => {
   try {
-    const { type, reason } = req.body as { type: 'up' | 'down'; reason?: string };
+    const parsed = feedbackSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { type, reason } = parsed.data;
     const weightDelta = type === 'up' ? 0.1 : -0.2;
     const script = await prisma.script.findFirst({
       where: { id: req.params.id as string, userId: req.user!.id },

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { useUserStore } from '@/stores/userStore';
 import { useActivityStore } from '@/stores/activityStore';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/useToast';
 import { useFormValidation } from '@/hooks/useFormValidation';
@@ -31,7 +31,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { setUser } = useUserStore();
   const { addActivity } = useActivityStore();
-  const { t } = useI18n();
+  const { t } = useTranslation();
 
   // Handle OAuth callback
   useEffect(() => {

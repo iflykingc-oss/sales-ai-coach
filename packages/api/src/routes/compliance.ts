@@ -12,9 +12,14 @@
  */
 
 import { Router, Request, Response } from 'express';
+import Stripe from 'stripe';
 import { prisma } from '../lib/prisma.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, authMiddlewareVerified } from '../middleware/auth.js';
 import { z } from 'zod';
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 
 const router = Router();
 
@@ -125,11 +130,11 @@ router.get('/consent', authMiddleware, async (req: Request, res: Response) => {
 // ── Data Export (GDPR Art.20 / PIPL Art.45) ───────────────────
 
 // GET /compliance/export — Export all user data
-router.get('/export', authMiddleware, async (req: Request, res: Response) => {
+router.get('/export', authMiddlewareVerified, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
 
-    const [user, sessions, scripts, knowledge, practices, reviews, consents, sharedScripts] =
+    const [user, sessions, scripts, knowledge, practices, reviews, consents, sharedScripts, skillScores, apiUsageLogs, planChanges, subscription] =
       await Promise.all([
         prisma.user.findUnique({
           where: { id: userId },
@@ -154,6 +159,14 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
         prisma.reviewReport.findMany({ where: { userId } }),
         prisma.consentRecord.findMany({ where: { userId } }),
         prisma.sharedScript.findMany({ where: { authorId: userId } }),
+        prisma.skillScore.findMany({ where: { userId } }),
+        prisma.apiUsageLog.findMany({
+          where: { apiKey: { userId } },
+          take: 1000,
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.planChange.findMany({ where: { userId } }),
+        prisma.subscription.findMany({ where: { userId } }),
       ]);
 
     const exportData = {
@@ -170,6 +183,10 @@ router.get('/export', authMiddleware, async (req: Request, res: Response) => {
       reviews,
       consents,
       sharedScripts,
+      skillScores,
+      apiUsageLogs,
+      planChanges,
+      subscription,
       totals: {
         sessions: sessions.length,
         scripts: scripts.length,
@@ -200,7 +217,7 @@ const deletionRequestSchema = z.object({
 });
 
 // POST /compliance/delete — Request account and data deletion
-router.post('/delete', authMiddleware, async (req: Request, res: Response) => {
+router.post('/delete', authMiddlewareVerified, async (req: Request, res: Response) => {
   try {
     const body = deletionRequestSchema.parse(req.body);
     const userId = req.user!.id;
@@ -295,6 +312,68 @@ router.post('/delete/process', authMiddleware, async (req: Request, res: Respons
 
     const userId = request.userId;
 
+    // ── Cancel active Stripe subscription if present ──
+    if (stripe) {
+      const subscriptionRecord = await prisma.subscription.findFirst({
+        where: { userId, status: { in: ['active', 'trialing', 'past_due'] } },
+      });
+      if (subscriptionRecord?.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(subscriptionRecord.stripeSubscriptionId);
+        } catch {
+          // Log but don't block deletion if Stripe call fails
+        }
+      }
+    }
+
+    // ── Shared script: anonymize if liked, otherwise delete ──
+    const userSharedScripts = await prisma.sharedScript.findMany({
+      where: { authorId: userId },
+    });
+
+    const likedScripts = userSharedScripts.filter((s) => s.likes > 0);
+    const unlikedScripts = userSharedScripts.filter((s) => s.likes <= 0);
+
+    if (likedScripts.length > 0) {
+      await prisma.sharedScript.updateMany({
+        where: { id: { in: likedScripts.map((s) => s.id) } },
+        data: { authorId: 'deleted-user' },
+      });
+    }
+
+    // ── Team ownership transfer ──
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { teamId: true },
+    });
+
+    let deleteTeamId: string | null = null;
+
+    if (user?.teamId) {
+      const team = await prisma.team.findUnique({
+        where: { id: user.teamId },
+      });
+
+      if (team && team.ownerId === userId) {
+        // Find earliest joined other member
+        const earliestMember = await prisma.user.findFirst({
+          where: { teamId: user.teamId, id: { not: userId } },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (earliestMember) {
+          // Transfer ownership
+          await prisma.team.update({
+            where: { id: user.teamId },
+            data: { ownerId: earliestMember.id },
+          });
+        } else {
+          // No other members — mark team for deletion
+          deleteTeamId = user.teamId;
+        }
+      }
+    }
+
     // Delete user data in order (respect FKs)
     await prisma.$transaction([
       // Delete practice + review data
@@ -308,9 +387,17 @@ router.post('/delete/process', authMiddleware, async (req: Request, res: Respons
       // Delete messages via sessions
       prisma.message.deleteMany({ where: { session: { userId } } }),
       prisma.session.deleteMany({ where: { userId } }),
-      // Delete shared scripts
+      // Delete shared script likes by this user; delete unliked scripts, keep liked (anonymized above)
       prisma.sharedScriptLike.deleteMany({ where: { userId } }),
-      prisma.sharedScript.deleteMany({ where: { authorId: userId } }),
+      ...(unlikedScripts.length > 0
+        ? [prisma.sharedScript.deleteMany({ where: { id: { in: unlikedScripts.map((s) => s.id) } } })]
+        : []),
+      // Delete skill scores
+      prisma.skillScore.deleteMany({ where: { userId } }),
+      // Delete plan changes
+      prisma.planChange.deleteMany({ where: { userId } }),
+      // Delete subscription record
+      prisma.subscription.deleteMany({ where: { userId } }),
       // Delete usage logs
       prisma.usageLog.deleteMany({ where: { userId } }),
       // Delete consents
@@ -326,6 +413,11 @@ router.post('/delete/process', authMiddleware, async (req: Request, res: Respons
         data: { teamId: null },
       }),
     ]);
+
+    // Delete orphaned team if needed
+    if (deleteTeamId) {
+      await prisma.team.delete({ where: { id: deleteTeamId } });
+    }
 
     // Anonymize user record (keep for audit, remove PII)
     await prisma.user.update({
@@ -358,7 +450,7 @@ router.post('/delete/process', authMiddleware, async (req: Request, res: Respons
 
 // ── Data Import (restore from export) ──────────────────────────
 
-router.post('/import', authMiddleware, async (req: Request, res: Response) => {
+router.post('/import', authMiddlewareVerified, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const data = req.body;

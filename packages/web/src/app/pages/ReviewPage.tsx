@@ -1,8 +1,9 @@
 import { logger } from '@/utils/logger';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ReviewUploader } from '@/components/review/ReviewUploader';
 import { ReviewReportDisplay } from '@/components/review/ReviewReport';
@@ -11,7 +12,8 @@ import { useReviewStore, type ReviewReport, type ConversationUpload } from '@/st
 import { api } from '@/services/api';
 
 export default function ReviewPage() {
-  const { uploads, report, state, setState, setError, setReport } = useReviewStore();
+  const { t } = useTranslation();
+  const { uploads, report, state, setState, setError, setReport, error } = useReviewStore();
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState(false);
   const location = useLocation() as { state?: { practiceSessionId?: string; autoReview?: boolean } };
@@ -26,7 +28,7 @@ export default function ReviewPage() {
           if (res?.data?.transcript) {
             const conversations = [{
               fileName: `practice-${state.practiceSessionId}.txt`,
-              content: res.data.transcript.map((t: { role: string; content: string }) => `${t.role === 'user' ? '销售' : '客户'}：${t.content}`).join('\n'),
+              content: res.data.transcript.map((item: { role: string; content: string }) => `${item.role === 'user' ? t('reviewPage.autoReviewSeller') : t('reviewPage.autoReviewCustomer')}：${item.content}`).join('\n'),
             }];
             generateMutation.mutate({ conversations });
           }
@@ -74,7 +76,7 @@ export default function ReviewPage() {
         id: (rd.id as string) || `review-${Date.now()}`,
         date: (rd.date as string) || new Date().toLocaleDateString('zh-CN'),
         overallScore: (rd.overallScore as number) || computedScore,
-        summary: (rd.summary as string) || 'AI 分析完成，请查看以下维度评分。',
+        summary: (rd.summary as string) || t('reviewPage.defaultSummary'),
         strengths: (rd.strengths as string[]) || [],
         improvements: (rd.improvements as string[]) || [],
         actionItems: (rd.actionItems as string[]) || [],
@@ -87,7 +89,7 @@ export default function ReviewPage() {
       setIsGenerating(false);
     },
     onError: () => {
-      setError('生成复盘报告失败，请稍后重试');
+      setError(t('reviewPage.generatingFailed'));
       setState('idle');
       setIsGenerating(false);
     },
@@ -111,17 +113,44 @@ export default function ReviewPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">每日实战复盘</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t('reviewPage.title')}</h2>
           <p className="mt-1 text-sm text-gray-500">
-            上传今日对话，AI 一键生成复盘报告，追踪成长轨迹
+            {t('reviewPage.subtitle')}
           </p>
         </div>
         {state === 'viewing' && (
           <Button variant="secondary" size="sm" onClick={handleReset}>
-            新复盘
+            {t('reviewPage.newReview')}
           </Button>
         )}
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="flex-1 text-sm text-red-700">{error}</p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setError(null);
+                  handleGenerate();
+                }}
+              >
+                {t('retry')}
+              </Button>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {state === 'idle' && (
         <div className="space-y-6">
@@ -138,12 +167,12 @@ export default function ReviewPage() {
               {isGenerating ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  AI 分析中...
+                  {t('reviewPage.aiAnalyzing')}
                 </>
               ) : (
                 <>
                   <Sparkles className="mr-2 h-5 w-5" />
-                  一键生成复盘报告
+                  {t('reviewPage.generateReport')}
                 </>
               )}
             </Button>
@@ -159,9 +188,9 @@ export default function ReviewPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
             <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900">AI 正在分析你的对话...</h3>
+          <h3 className="text-lg font-medium text-gray-900">{t('reviewPage.analyzingTitle')}</h3>
           <p className="mt-2 text-sm text-gray-500">
-            正在从需求挖掘、异议处理、促单能力等 8 个维度进行深度评估
+            {t('reviewPage.analyzingDesc')}
           </p>
         </div>
       )}

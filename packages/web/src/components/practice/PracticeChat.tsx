@@ -15,7 +15,7 @@ import {
   type PracticeMode,
 } from '@/stores/practiceStore';
 import { useCustomScenarioStore } from '@/stores/customScenarioStore';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
 import { practiceScenarios, industries, getScenariosByIndustry } from '@/data/practiceScenarios';
 import { getFrameworkById } from '@sales-ai-coach/shared/data';
@@ -423,7 +423,7 @@ interface PracticeChatProps {
 
 export function PracticeChat({ onEnd }: PracticeChatProps) {
   const { session, addMessage, incrementRound, setCustomerEmotion, completePractice, setDetectedStage } = usePracticeStore();
-  const { t } = useI18n();
+  const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPsychology, setShowPsychology] = useState(false);
@@ -660,7 +660,19 @@ export function PracticeChat({ onEnd }: PracticeChatProps) {
     onEnd();
   };
 
-  if (!session) return null;
+  if (!session) {
+    return (
+      <div className="flex h-[calc(100vh-12rem)] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+            <Target className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">会话未找到</h3>
+          <p className="text-sm text-gray-500">请重新开始陪练</p>
+        </div>
+      </div>
+    );
+  }
 
   const isMaxRounds = session.round >= session.maxRounds;
   const currentFramework = session.logicFramework ? getFrameworkById(session.logicFramework) : null;

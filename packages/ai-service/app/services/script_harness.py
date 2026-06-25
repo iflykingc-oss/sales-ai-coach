@@ -14,6 +14,7 @@ Quality gate:
 """
 
 import json
+from typing import AsyncIterator
 from app.harness.feature_list import FeatureList, ItemStatus
 from app.harness.planner import TaskPlanner
 from app.harness.executor import TaskExecutor
@@ -205,6 +206,188 @@ class ScriptGenerationHarness:
         )
 
         return result
+
+    async def generate_stream(
+        self,
+        input_text: str,
+        input_type: str,
+        industry: str = "",
+        knowledge_context: str = "",
+        frameworks: list[str] | None = None,
+        raw_knowledge_list: list[str] | None = None,
+        scene_type: str = "价格异议",
+    ) -> AsyncIterator[dict]:
+        """
+        Generate sales scripts with real SSE streaming.
+
+        Yields dicts with an "event" key indicating the event type:
+        - {"event": "step_start", "step": str, "description": str}
+        - {"event": "step_complete", "step": str, ...}
+        - {"event": "token", "content": str}
+        - {"event": "done", "result": dict}
+        - {"event": "error", "message": str}
+        """
+        logger.info(
+            f"ScriptHarness.generate_stream: input_type={input_type}, industry={industry}, "
+            f"scene_type={scene_type}"
+        )
+
+        try:
+            # Phase 1: Knowledge processing
+            knowledge_items = []
+            if raw_knowledge_list:
+                yield {"event": "step_start", "step": "knowledge_processing", "description": "处理知识库..."}
+                knowledge_items = await self.knowledge_processor.process(
+                    raw_knowledge_list, industry, top_k=3
+                )
+                yield {"event": "step_complete", "step": "knowledge_processing", "count": len(knowledge_items)}
+                logger.info(f"Knowledge processed: {len(knowledge_items)} items")
+
+            # Phase 2: Planning
+            yield {"event": "step_start", "step": "planning", "description": "规划生成流程..."}
+            planner = TaskPlanner()
+            fl = await planner.plan_script_generation(
+                input_text=input_text,
+                input_type=input_type,
+                industry=industry,
+                knowledge_context=knowledge_context,
+                frameworks=frameworks,
+            )
+            yield {"event": "step_complete", "step": "planning", "items": len(fl.items)}
+
+            # Phase 3: Execute pre-generation steps (scene_analysis, rag, framework)
+            # These produce structured data, not user-facing text
+            progress = ProgressTracker(fl)
+            progress.start()
+
+            executor = TaskExecutor(fl, max_retries=1)
+            eval_result = None
+
+            # Execute non-speech_generate items in dependency order
+            while not fl.is_complete():
+                ready_items = fl.get_ready_items()
+                if not ready_items:
+                    incomplete = fl.get_incomplete_items()
+                    if incomplete:
+                        for item in incomplete:
+                            if item.status in (ItemStatus.PENDING, ItemStatus.NEEDS_REWORK):
+                                item.status = ItemStatus.SKIPPED
+                    break
+
+                for item in ready_items:
+                    fl.start_item(item.id)
+
+                for item in ready_items:
+                    node_type = item.metadata.get("node_type", "")
+
+                    if node_type == "speech_generate":
+                        # Stream this step with real LLM streaming
+                        yield {"event": "step_start", "step": "generation", "description": "生成话术..."}
+
+                        attempt = 0
+                        max_retries = 2
+                        streamed = False
+
+                        while attempt <= max_retries:
+                            token_buffer = ""
+                            try:
+                                async for token in executor._execute_item_stream(item, attempt=attempt):
+                                    token_buffer += token
+                                    yield {"event": "token", "content": token}
+                                # Stream completed successfully
+                                streamed = True
+                                break
+                            except Exception as e:
+                                logger.warning(f"Streaming attempt {attempt} failed: {e}")
+                                attempt += 1
+                                # Reset item for retry
+                                item.status = ItemStatus.PENDING
+                                fl.start_item(item.id)
+
+                        if not streamed:
+                            # Final fallback: non-streaming
+                            logger.warning("Streaming failed after retries, falling back to non-streaming")
+                            success = await executor._execute_item(item, attempt=0)
+                            if success:
+                                yield {"event": "token", "content": item.result}
+                            else:
+                                fl.fail_item(item.id, error="Generation failed")
+                                yield {"event": "error", "message": "话术生成失败"}
+                                return
+
+                        yield {"event": "step_complete", "step": "generation"}
+
+                    elif node_type == "quality_check":
+                        # Quality check step
+                        yield {"event": "step_start", "step": "quality_check", "description": "质量检查..."}
+
+                        eval_result = await self.evaluator.evaluate(
+                            executor.get_final_result(),
+                            input_text,
+                            knowledge_items,
+                            scene_type,
+                        )
+                        item.result = json.dumps(eval_result, ensure_ascii=False)
+                        fl.complete_item(item.id, result=item.result)
+                        executor.results[item.id] = item.result
+
+                        yield {
+                            "event": "step_complete",
+                            "step": "quality_check",
+                            "score": eval_result.get("overall_score", 0),
+                        }
+
+                    else:
+                        # Regular step — execute synchronously
+                        step_name = node_type or item.description[:20]
+                        yield {"event": "step_start", "step": step_name, "description": item.description}
+
+                        success = await executor._execute_item(item, attempt=0)
+                        if not success:
+                            # Retry once
+                            item.status = ItemStatus.PENDING
+                            fl.start_item(item.id)
+                            success = await executor._execute_item(item, attempt=1)
+
+                        if success:
+                            yield {"event": "step_complete", "step": step_name}
+                        else:
+                            fl.fail_item(item.id, error="Execution failed")
+
+            progress.complete()
+
+            # Phase 4: Parse final result
+            # Note: In generate_stream, quality check runs separately (not via RetryEngine),
+            # so evaluation is NOT embedded in the parsed result — we build it explicitly.
+            script_result = executor.get_final_result()
+            parsed = self._parse_script_result(script_result)
+
+            result = {
+                **parsed,
+                "quality_report": {
+                    "score": eval_result.get("overall_score", 0) if eval_result else 0,
+                    "feedback": eval_result.get("feedback", "") if eval_result else "",
+                    "passed": eval_result.get("passed", False) if eval_result else False,
+                    "level": eval_result.get("level", 0) if eval_result else 0,
+                    "suggestions": eval_result.get("suggestions", []) if eval_result else [],
+                },
+                "execution_report": {
+                    "task_id": fl.task_id,
+                    "elapsed_seconds": progress.get_progress().elapsed_seconds,
+                    "retries": 0,
+                    "status": "SUCCESS",
+                    "total_items": len(fl.items),
+                },
+            }
+
+            score = eval_result.get("overall_score", 0) if eval_result else 0
+            logger.info(f"ScriptHarness stream completed: score={score:.2f}")
+
+            yield {"event": "done", "result": result}
+
+        except Exception as e:
+            logger.error(f"ScriptHarness.generate_stream error: {e}")
+            yield {"event": "error", "message": str(e)}
 
     def _parse_script_result(self, result: str) -> dict:
         """Parse LLM output into structured script data."""

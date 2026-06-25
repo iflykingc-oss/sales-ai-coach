@@ -3,7 +3,7 @@
 
 const https = require('https');
 
-const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // 执行 SQL 的函数

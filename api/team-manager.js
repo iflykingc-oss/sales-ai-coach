@@ -12,7 +12,7 @@ const logger = require('./lib/logger');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
-const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function sbQuery(table, opts = {}) {

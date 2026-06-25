@@ -1,8 +1,13 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { ACHIEVEMENTS, XP_LEVELS, getLevelForXp } from '@sales-ai-coach/shared';
 import type { Achievement, UserProgress } from '@sales-ai-coach/shared';
+
+const checkAchievementsSchema = z.object({
+  previousUnlocked: z.array(z.string().max(100)).max(100).optional(),
+});
 
 const router = Router();
 
@@ -337,7 +342,11 @@ router.get('/analytics', authMiddleware, async (req, res, next) => {
 router.post('/check', authMiddleware, async (req, res, next) => {
   try {
     const userId = req.user!.id;
-    const { previousUnlocked } = req.body as { previousUnlocked?: string[] };
+    const parsed = checkAchievementsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { previousUnlocked } = parsed.data;
 
     const progress = await buildUserProgress(userId);
     const previouslyUnlocked = new Set(previousUnlocked || []);

@@ -12,19 +12,23 @@
     "admin": "Admin",
     "pricing": "Pricing",
     "logout": "Logout",
-    "loggedOut": "Logged out"
+    "loggedOut": "Logged out",
+    "ariaMainNav": "Main navigation",
+    "ariaNavMenu": "Navigation menu"
   },
   "header": {
     "openMenu": "Open menu",
-    "welcome": "Welcome back",
+    "welcome": "Welcome back, ",
     "loading": "Loading...",
-    "notLoggedIn": "Not logged in"
+    "notLoggedIn": "Not logged in",
+    "userLabel": "User"
   },
   "mobile": {
     "sessions": "Sessions",
     "practice": "Practice",
     "knowledge": "Knowledge",
     "analytics": "Data",
-    "more": "More"
+    "more": "More",
+    "ariaLabel": "Mobile navigation"
   }
 }

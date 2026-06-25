@@ -10,9 +10,33 @@ IM 消息路由器 — 将 IM 消息路由到对应的 AI 能力
 """
 
 import re
+import time
 from app.im.context import IMContext
 from app.im.reply import Reply
 from app.core.logging import logger
+
+
+# Module-level session store for active practice harnesses
+# Keyed by session_id, auto-cleaned on access when stale
+_im_sessions: dict[str, dict] = {}
+_SESSION_TTL = 3600  # 1 hour
+
+
+def _get_session(session_id: str) -> dict | None:
+    """Get a session by ID, returning None if expired."""
+    session = _im_sessions.get(session_id)
+    if session and time.time() - session["last_access"] > _SESSION_TTL:
+        del _im_sessions[session_id]
+        return None
+    return session
+
+
+def _cleanup_sessions():
+    """Remove expired sessions."""
+    now = time.time()
+    expired = [sid for sid, s in _im_sessions.items() if now - s["last_access"] > _SESSION_TTL]
+    for sid in expired:
+        del _im_sessions[sid]
 
 
 class IMRouter:
@@ -142,7 +166,39 @@ class IMRouter:
             return Reply.text(f"话术生成失败：{str(e)[:100]}")
 
     async def _handle_practice(self, content: str, context: IMContext) -> Reply:
-        """Handle practice session request."""
+        """Handle practice session request.
+
+        If the user already has an active session, forward the message as a
+        practice round. Otherwise, start a new session and store the harness.
+        """
+        _cleanup_sessions()
+        existing = _get_session(context.session_id)
+
+        if existing and existing.get("harness") and existing["harness"].is_active:
+            # Continue the existing practice session
+            harness = existing["harness"]
+            existing["last_access"] = time.time()
+            try:
+                result = await harness.respond(content)
+                response = result.get("response", "")
+                emotion = result.get("emotion", "中立")
+                round_num = result.get("round", 0)
+                is_complete = result.get("is_complete", False)
+
+                reply_text = f"**第{round_num}轮** | 情绪: {emotion}\n\n{response}"
+                if result.get("evaluation_feedback"):
+                    reply_text += f"\n\n---\n**教练点评**: {result['evaluation_feedback']}"
+                if is_complete:
+                    reply_text += "\n\n---\n练习结束！输入「复盘」查看你的表现报告。"
+                    del _im_sessions[context.session_id]
+
+                return Reply.text(reply_text)
+
+            except Exception as e:
+                logger.error(f"[im] Practice respond failed: {e}")
+                return Reply.text(f"陪练响应失败：{str(e)[:100]}")
+
+        # Start a new practice session
         scenario = self._extract_scenario(content)
 
         try:
@@ -156,8 +212,14 @@ class IMRouter:
                 difficulty="medium",
             )
 
+            # Persist the harness for follow-up messages
+            _im_sessions[context.session_id] = {
+                "harness": harness,
+                "last_access": time.time(),
+            }
+
             greeting = result.get("greeting", "你好，请问有什么可以帮您的？")
-            persona = result.get("persona", {})
+            persona = result.get("customer_persona", {})
 
             persona_desc = f"""
 **客户**: {persona.get('name', '王总')}
@@ -177,8 +239,55 @@ class IMRouter:
             return Reply.text(f"陪练初始化失败：{str(e)[:100]}")
 
     async def _handle_review(self, content: str, context: IMContext) -> Reply:
-        """Handle review analysis request."""
-        return Reply.text("📊 请上传对话截图或粘贴对话文本，我来帮你分析。")
+        """Handle review analysis request.
+
+        Accepts pasted conversation text, parses it into turns, and runs
+        the review analysis pipeline.
+        """
+        # Strip the command keyword to get the actual conversation text
+        convo_text = content
+        for keyword in ["分析", "复盘", "回顾", "对话", "沟通", "聊天", "截图", "记录"]:
+            convo_text = convo_text.replace(keyword, "")
+        convo_text = convo_text.strip("，。！？、 \n")
+
+        if len(convo_text) < 10:
+            return Reply.text("📊 请上传对话截图或粘贴对话文本，我来帮你分析。\n\n示例：\n复盘\n我：你好王总\n客户：你好，请问什么事？\n我：...")
+
+        # Parse conversation into turns
+        conversations = self._parse_conversation(convo_text)
+        if not conversations:
+            # Treat the whole text as a single block
+            conversations = [{"role": "user", "content": convo_text}]
+
+        try:
+            from app.services.review_harness import ReviewAnalyzer
+            analyzer = ReviewAnalyzer()
+            report = await analyzer.analyze(conversations=conversations)
+
+            summary = report.get("summary", "")
+            strengths = report.get("strengths", [])
+            improvements = report.get("improvements", [])
+            scores = report.get("radarScores", {})
+            action_items = report.get("actionItems", [])
+
+            parts = [f"📊 **复盘分析结果**\n"]
+            if summary:
+                parts.append(f"**总结**: {summary}\n")
+            if strengths:
+                parts.append("**亮点**:\n" + "\n".join(f"- {s}" for s in strengths[:3]))
+            if improvements:
+                parts.append("**待改进**:\n" + "\n".join(f"- {i}" for i in improvements[:3]))
+            if scores:
+                avg_score = sum(scores.values()) // max(len(scores), 1)
+                parts.append(f"**综合评分**: {avg_score}/100")
+            if action_items:
+                parts.append("**明日行动**:\n" + "\n".join(f"- {a}" for a in action_items[:3]))
+
+            return Reply.card("📊 复盘分析", "\n\n".join(parts))
+
+        except Exception as e:
+            logger.error(f"[im] Review analysis failed: {e}")
+            return Reply.text(f"复盘分析失败：{str(e)[:100]}")
 
     async def _handle_profile(self, context: IMContext) -> Reply:
         """Handle ability profile request."""
@@ -197,6 +306,12 @@ class IMRouter:
 
     async def _handle_general(self, content: str, context: IMContext) -> Reply:
         """Handle general chat — try to infer intent."""
+        # If user has an active practice session, forward as practice round
+        _cleanup_sessions()
+        existing = _get_session(context.session_id)
+        if existing and existing.get("harness") and existing["harness"].is_active:
+            return await self._handle_practice(content, context)
+
         # Simple keyword-based inference
         if any(kw in content for kw in ["价格", "报价", "多少钱", "优惠"]):
             return await self._handle_script(f"帮我生成一个关于{content}的话术", context)
@@ -213,3 +328,42 @@ class IMRouter:
         # Clean up
         content = content.strip("，。！？、 ")
         return content if len(content) > 3 else ""
+
+    def _parse_conversation(self, text: str) -> list[dict]:
+        """Parse pasted conversation text into role/content pairs.
+
+        Supports common formats:
+        - "我：xxx  客户：xxx"
+        - "销售：xxx  买家：xxx"
+        - "S: xxx  C: xxx"
+        """
+        import re as _re
+        turns = []
+        lines = _re.split(r"[\n\r]+", text)
+        current_role = "user"
+        current_content = ""
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Detect role prefix
+            if _re.match(r"^(?:我|销售|S|rep|代表)[：:]", line, _re.IGNORECASE):
+                if current_content:
+                    turns.append({"role": current_role, "content": current_content.strip()})
+                current_role = "user"
+                current_content = _re.sub(r"^(?:我|销售|S|rep|代表)[：:]\s*", "", line, flags=_re.IGNORECASE)
+            elif _re.match(r"^(?:客户|买家|顾客|C|buyer)[：:]", line, _re.IGNORECASE):
+                if current_content:
+                    turns.append({"role": current_role, "content": current_content.strip()})
+                current_role = "assistant"
+                current_content = _re.sub(r"^(?:客户|买家|顾客|C|buyer)[：:]\s*", "", line, flags=_re.IGNORECASE)
+            else:
+                # Continuation of previous turn
+                current_content += " " + line
+
+        if current_content:
+            turns.append({"role": current_role, "content": current_content.strip()})
+
+        return turns

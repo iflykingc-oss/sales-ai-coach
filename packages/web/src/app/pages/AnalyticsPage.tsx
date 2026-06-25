@@ -1,6 +1,7 @@
 import { logger } from '@/utils/logger';
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, Target, BarChart3, Flame } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { TrendingUp, Target, BarChart3, Flame, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -26,12 +27,12 @@ interface AnalyticsData {
   averageScore: number;
 }
 
-const DIFFICULTY_LABELS: Record<string, string> = {
-  easy: '初级',
-  medium: '中级',
-  hard: '高级',
-  expert: '地狱',
-};
+const getDifficultyLabels = (t: (key: string) => string): Record<string, string> => ({
+  easy: t('analyticsPage.difficulty.easy'),
+  medium: t('analyticsPage.difficulty.medium'),
+  hard: t('analyticsPage.difficulty.hard'),
+  expert: t('analyticsPage.difficulty.expert'),
+});
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: 'bg-green-100 text-green-700',
@@ -41,8 +42,10 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 };
 
 export default function AnalyticsPage() {
+  const { t } = useTranslation();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { progress, fetchProgress } = useAchievementStore();
   const navigate = useNavigate();
 
@@ -58,6 +61,7 @@ export default function AnalyticsPage() {
         setAnalytics(data);
       } catch (err) {
         logger.error('Failed to fetch analytics:', err);
+        setError(t('analyticsPage.loadFailed'));
       } finally {
         setLoading(false);
       }
@@ -89,6 +93,29 @@ export default function AnalyticsPage() {
     return analytics.skillTrend.slice(-6);
   }, [analytics]);
 
+  const handleRetry = () => {
+    setError(null);
+    setLoading(true);
+    const fetchData = async () => {
+      try {
+        const [analyticsRes] = await Promise.all([
+          api.get('/achievements/analytics'),
+          fetchProgress(),
+        ]);
+        const data = analyticsRes.data?.data || analyticsRes.data;
+        setAnalytics(data);
+      } catch (err) {
+        logger.error('Failed to fetch analytics:', err);
+        setError(t('analyticsPage.loadFailed'));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  };
+
+  const DIFFICULTY_LABELS = getDifficultyLabels(t);
+
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl space-y-6">
@@ -105,38 +132,58 @@ export default function AnalyticsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">数据分析</h2>
-        <p className="mt-1 text-sm text-gray-500">追踪你的销售技能成长轨迹</p>
+        <h2 className="text-xl font-semibold text-gray-900">{t('analyticsPage.title')}</h2>
+        <p className="mt-1 text-sm text-gray-500">{t('analyticsPage.subtitle')}</p>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="flex-1 text-sm text-red-700">{error}</p>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={handleRetry}>
+                {t('retry')}
+              </Button>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Stats Row */}
       <div className="grid gap-4 sm:grid-cols-4">
         <StatCard
           icon={<BarChart3 className="h-5 w-5 text-blue-500" />}
-          label="总练习次数"
+          label={t('analyticsPage.totalSessions')}
           value={analytics?.totalSessions ?? 0}
           bg="bg-blue-50"
         />
         <StatCard
           icon={<Target className="h-5 w-5 text-green-500" />}
-          label="平均分数"
+          label={t('analyticsPage.avgScore')}
           value={analytics?.averageScore ?? 0}
-          suffix="分"
+          suffix={t('score')}
           bg="bg-green-50"
         />
         <StatCard
           icon={<TrendingUp className="h-5 w-5 text-amber-500" />}
-          label="近期提升"
+          label={t('analyticsPage.recentImprovement')}
           value={analytics?.recentImprovement ?? 0}
           prefix={analytics?.recentImprovement && analytics.recentImprovement > 0 ? '+' : ''}
-          suffix="分"
+          suffix={t('score')}
           bg="bg-amber-50"
         />
         <StatCard
           icon={<Flame className="h-5 w-5 text-orange-500" />}
-          label="当前连续"
+          label={t('analyticsPage.currentStreak')}
           value={progress?.currentStreak ?? 0}
-          suffix="天"
+          suffix={t('analyticsPage.days')}
           bg="bg-orange-50"
         />
       </div>
@@ -144,7 +191,7 @@ export default function AnalyticsPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Radar Chart + Skill Analysis */}
         <Card className="lg:col-span-2">
-          <h4 className="mb-4 text-sm font-medium text-gray-700">能力雷达图</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.radarChart')}</h4>
           <div className="flex items-center gap-6">
             <div className="flex-1">
               <RadarChart dimensions={radarDimensions} size={220} />
@@ -175,17 +222,17 @@ export default function AnalyticsPage() {
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-medium text-amber-800">建议重点提升</span>
+                <span className="text-sm font-medium text-amber-800">{t('analyticsPage.focusImprove')}</span>
               </div>
               <p className="mt-1 text-sm text-amber-700">
-                「{weakestSkill.label}」得分 {weakestSkill.score}，低于其他维度。
+                {t('analyticsPage.focusImproveDesc', { label: weakestSkill.label, score: weakestSkill.score })}
                 <Button
                   variant="ghost"
                   size="sm"
                   className="ml-1 h-auto p-0 text-amber-700 underline"
                   onClick={() => navigate('/app/practice')}
                 >
-                  前往专项练习
+                  {t('analyticsPage.goToPractice')}
                 </Button>
               </p>
             </div>
@@ -216,17 +263,17 @@ export default function AnalyticsPage() {
       <div className="grid gap-6 sm:grid-cols-2">
         {/* Score Trend (last 10 sessions) */}
         <Card>
-          <h4 className="mb-4 text-sm font-medium text-gray-700">分数趋势（最近练习）</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.scoreTrend')}</h4>
           {analytics?.practiceTrend && analytics.practiceTrend.length > 1 ? (
             <MiniLineChart data={analytics.practiceTrend.slice(-10).map((p) => p.score)} />
           ) : (
-            <p className="text-sm text-gray-400">需要更多练习数据</p>
+            <p className="text-sm text-gray-400">{t('analyticsPage.needMoreData')}</p>
           )}
         </Card>
 
         {/* Difficulty Distribution */}
         <Card>
-          <h4 className="mb-4 text-sm font-medium text-gray-700">难度分布</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.difficultyDistribution')}</h4>
           {analytics?.difficultyDistribution && Object.keys(analytics.difficultyDistribution).length > 0 ? (
             <div className="space-y-3">
               {Object.entries(analytics.difficultyDistribution)
@@ -240,7 +287,7 @@ export default function AnalyticsPage() {
                         <span className={cn('rounded px-2 py-0.5 text-xs font-medium', DIFFICULTY_COLORS[diff] || 'bg-gray-100 text-gray-700')}>
                           {DIFFICULTY_LABELS[diff] || diff}
                         </span>
-                        <span className="text-gray-500">{count}次 ({pct}%)</span>
+                        <span className="text-gray-500">{count}{t('analyticsPage.countSuffix')} ({pct}%)</span>
                       </div>
                       <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                         <div
@@ -256,7 +303,7 @@ export default function AnalyticsPage() {
                 })}
             </div>
           ) : (
-            <p className="text-sm text-gray-400">暂无数据</p>
+            <p className="text-sm text-gray-400">{t('analyticsPage.noData')}</p>
           )}
         </Card>
       </div>
@@ -264,7 +311,7 @@ export default function AnalyticsPage() {
       {/* Skill Progression Over Time */}
       {skillChartData.length > 1 && (
         <Card>
-          <h4 className="mb-4 text-sm font-medium text-gray-700">技能成长趋势（按周）</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.skillGrowthTrend')}</h4>
           <div className="overflow-x-auto">
             <div className="min-w-[500px]">
               <div className="flex items-end gap-1 h-40">
@@ -293,7 +340,7 @@ export default function AnalyticsPage() {
       {/* Top Scenarios + Score by Difficulty */}
       <div className="grid gap-6 sm:grid-cols-2">
         <Card>
-          <h4 className="mb-4 text-sm font-medium text-gray-700">常用场景</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.commonScenarios')}</h4>
           {analytics?.topScenarios && analytics.topScenarios.length > 0 ? (
             <div className="space-y-2">
               {analytics.topScenarios.map((s, i) => (
@@ -302,17 +349,17 @@ export default function AnalyticsPage() {
                     {i + 1}
                   </span>
                   <span className="flex-1 truncate text-sm text-gray-700">{s.name}</span>
-                  <span className="text-xs text-gray-400">{s.count}次</span>
+                  <span className="text-xs text-gray-400">{s.count}{t('analyticsPage.countSuffix')}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400">暂无数据</p>
+            <p className="text-sm text-gray-400">{t('analyticsPage.noData')}</p>
           )}
         </Card>
 
         <Card>
-          <h4 className="mb-4 text-sm font-medium text-gray-700">各难度平均分</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.difficultyAvgScore')}</h4>
           {analytics?.scoreByDifficulty && Object.keys(analytics.scoreByDifficulty).length > 0 ? (
             <div className="space-y-3">
               {Object.entries(analytics.scoreByDifficulty)
@@ -334,13 +381,13 @@ export default function AnalyticsPage() {
                         style={{ width: `${avg}%` }}
                       />
                     </div>
-                    <span className="w-12 text-right text-sm font-medium text-gray-700">{avg}分</span>
-                    <span className="text-xs text-gray-400">({count}次)</span>
+                    <span className="w-12 text-right text-sm font-medium text-gray-700">{avg}{t('score')}</span>
+                    <span className="text-xs text-gray-400">({count}{t('analyticsPage.countSuffix')})</span>
                   </div>
                 ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400">暂无数据</p>
+            <p className="text-sm text-gray-400">{t('analyticsPage.noData')}</p>
           )}
         </Card>
       </div>
@@ -348,7 +395,7 @@ export default function AnalyticsPage() {
       {/* Practice Calendar Heatmap */}
       {analytics?.practiceDates && analytics.practiceDates.length > 0 && (
         <Card>
-          <h4 className="mb-4 text-sm font-medium text-gray-700">练习日历（最近90天）</h4>
+          <h4 className="mb-4 text-sm font-medium text-gray-700">{t('analyticsPage.practiceCalendar')}</h4>
           <PracticeHeatmap dates={analytics.practiceDates} />
         </Card>
       )}
@@ -414,6 +461,7 @@ function MiniLineChart({ data }: { data: number[] }) {
 }
 
 function PracticeHeatmap({ dates }: { dates: string[] }) {
+  const { t } = useTranslation();
   const dateSet = new Set(dates);
   const today = new Date();
   const days: Array<{ date: string; count: number }> = [];
@@ -438,7 +486,7 @@ function PracticeHeatmap({ dates }: { dates: string[] }) {
           {week.map((day) => (
             <div
               key={day.date}
-              title={`${day.date}: ${day.count ? '已练习' : '未练习'}`}
+              title={`${day.date}: ${day.count ? t('analyticsPage.practiced') : t('analyticsPage.notPracticed')}`}
               className={cn(
                 'h-3 w-3 rounded-[2px] transition-colors',
                 day.count > 0 ? 'bg-primary-500' : 'bg-gray-100',

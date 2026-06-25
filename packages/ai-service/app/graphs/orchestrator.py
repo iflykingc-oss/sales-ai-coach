@@ -17,9 +17,11 @@ from typing import AsyncIterator
 
 from app.graphs.coaching_graph import get_coaching_graph
 from app.graphs.state import CoachingState
+from app.graphs.nodes.persona import _build_system_prompt
 from app.data.buyer_personas import select_archetype, get_difficulty_config, get_archetype_by_key
 from app.services.framework_recommender import FrameworkRecommender
 from app.models.router import model_router
+from app.core.sanitization import wrap_user_input
 from app.utils.json_parser import extract_json
 from app.core.logging import logger
 
@@ -114,6 +116,7 @@ class PracticeOrchestrator:
             "logic_framework": logic_framework,
             "session_id": self.session_id,
             "is_complete": False,
+            "knowledge_context": knowledge_context,
         }
 
         self.emotion_history = ["中立"]
@@ -205,25 +208,145 @@ class PracticeOrchestrator:
             }
 
     async def respond_stream(self, user_message: str, logic_framework: str = "") -> AsyncIterator[dict]:
-        """Stream the practice response.
+        """Stream the practice response with real model streaming.
 
         Yields: {type: "token", content: "..."} and {type: "done", data: {...}}
+
+        Uses real streaming from model_router for the persona response, then
+        runs graph evaluation/coaching on the completed response.
         """
-        # For LangGraph, we invoke the full graph (not streaming per-node)
-        # and yield the persona response as tokens, then the full result
-        result = await self.respond(user_message, logic_framework)
+        if not self.state or not self.is_active:
+            yield {"type": "error", "data": {"error": "Session not initialized"}}
+            return
 
-        # Stream the persona response as tokens
-        response = result.get("response", "")
-        chunk_size = 5
-        for i in range(0, len(response), chunk_size):
-            yield {"type": "token", "content": response[i:i+chunk_size]}
-            # Small delay for typewriter effect
-            import asyncio
-            await asyncio.sleep(0.02)
+        self.round_count += 1
+        self.state["turn_count"] = self.round_count
+        self.state["user_input"] = user_message
+        if logic_framework:
+            self.state["logic_framework"] = logic_framework
 
-        # Yield the complete result
-        yield {"type": "done", "data": result}
+        # Add user message to state
+        self.state["messages"] = self.state.get("messages", []) + [
+            {"role": "user", "content": user_message}
+        ]
+
+        try:
+            # --- Phase 1: Stream the persona response in real time ---
+            import json as _json
+            persona_json = self.state.get("customer_persona", "{}")
+            try:
+                persona = _json.loads(persona_json) if isinstance(persona_json, str) else persona_json
+            except (_json.JSONDecodeError, TypeError):
+                persona = {"name": "王总", "role": "采购负责人", "personality": "理性"}
+
+            emotion = self.state.get("persona_emotion", "中立")
+            stage = self.state.get("stage", "")
+            stage_tip = self.state.get("stage_coaching_tip", "")
+            difficulty = self.state.get("difficulty", "medium")
+            framework = self.state.get("logic_framework", "")
+            messages = self.state.get("messages", [])
+            industry = self.state.get("industry", "")
+
+            system_prompt = _build_system_prompt(
+                persona, emotion, stage, stage_tip, difficulty, framework, industry
+            )
+
+            llm_messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"销售说: {wrap_user_input(user_message)}"},
+            ]
+            # Add conversation history (last 6 messages)
+            for msg in messages[-6:]:
+                role = msg.get("role", "user")
+                if role in ("user", "assistant"):
+                    llm_messages.insert(-1, {
+                        "role": "user" if role == "user" else "assistant",
+                        "content": msg.get("content", "")[:200],
+                    })
+
+            full_content = ""
+            async for token in model_router.chat_stream_with_fallback(
+                llm_messages, temperature=0.8, max_tokens=256
+            ):
+                full_content += token
+                yield {"type": "token", "content": token}
+
+            # --- Phase 2: Parse persona response and update state ---
+            from app.graphs.nodes.persona import _parse_emotion, EMOTIONS
+            detected_emotion = _parse_emotion(full_content, emotion)
+            clean_response = full_content.split("[emotion:")[0].strip()
+
+            self.state["persona_response"] = clean_response
+            self.state["persona_emotion"] = detected_emotion
+            self.state["messages"] = self.state.get("messages", []) + [
+                {"role": "assistant", "content": clean_response}
+            ]
+
+            # --- Phase 3: Run evaluation, coaching, knowledge via graph ---
+            # Use the graph nodes directly instead of re-invoking the full graph
+            # (persona already done, run the remaining pipeline)
+            from app.graphs.nodes import stage_detector, evaluator, coach, knowledge
+
+            # Stage detection
+            stage_result = await stage_detector.detect(self.state)
+            self.state.update(stage_result)
+
+            # Evaluation
+            eval_result = await evaluator.evaluate(self.state)
+            self.state.update(eval_result)
+
+            # Conditional coaching
+            from app.graphs.coaching_graph import should_intervene, needs_resources
+            intervention_route = should_intervene(self.state)
+
+            coaching_result = None
+            knowledge_result = None
+            if intervention_route == "intervene":
+                coaching_result = await coach.intervene(self.state)
+                self.state.update(coaching_result)
+
+                resource_route = needs_resources(self.state)
+                if resource_route == "yes":
+                    knowledge_result = await knowledge.suggest(self.state)
+                    self.state.update(knowledge_result)
+
+            # Track emotion and scores
+            self.emotion_history.append(detected_emotion)
+            score = self.state.get("performance_score", 0.5)
+            self.round_scores.append(score)
+            dim_scores = self.state.get("dimension_scores", {})
+            if dim_scores:
+                self.round_dimension_scores.append(dim_scores)
+
+            # Check completion
+            if self.round_count >= self.max_rounds:
+                self.is_active = False
+                self.state["is_complete"] = True
+
+            result = {
+                "response": clean_response,
+                "emotion": detected_emotion,
+                "stage": self.state.get("stage", ""),
+                "stage_confidence": self.state.get("stage_confidence", 0),
+                "stage_coaching_tip": self.state.get("stage_coaching_tip", ""),
+                "eval": {
+                    "score": score,
+                    "dimension_scores": dim_scores,
+                    "feedback": self.state.get("eval_feedback", ""),
+                    "issues": self.state.get("eval_issues", []),
+                },
+                "coaching": self.state.get("coaching_interventions", [])[-1] if self.state.get("coaching_interventions") else None,
+                "knowledge": self.state.get("knowledge_suggestions", []),
+                "is_complete": self.round_count >= self.max_rounds,
+                "round": self.round_count,
+                "max_rounds": self.max_rounds,
+            }
+
+            yield {"type": "done", "data": result}
+
+        except Exception as e:
+            logger.error(f"[orchestrator] Streaming failed: {e}")
+            yield {"type": "error", "data": {"error": str(e)}}
 
     async def generate_report(self) -> dict:
         """Generate a comprehensive session report."""

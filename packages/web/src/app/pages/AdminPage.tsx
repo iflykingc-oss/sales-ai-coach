@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { AdminStats } from '@/components/admin/AdminStats';
@@ -12,12 +13,13 @@ import { SystemSettings } from '@/components/admin/SystemSettings';
 import { UserAdmin } from '@/components/admin/UserAdmin';
 import { RetrievalLogs } from '@/components/admin/RetrievalLogs';
 import { PlanConfig } from '@/components/admin/PlanConfig';
-import { useAdminStore, type AdminTab } from '@/stores/adminStore';
+import { useAdminStore, type AdminTab, type KnowledgeItem } from '@/stores/adminStore';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 
 export default function AdminPage() {
+  const { t } = useTranslation();
   const { activeTab, setActiveTab, loading, setLoading, setStats, setModels, setSystemUsers, setKnowledgeItems } = useAdminStore();
   const user = useUserStore((s) => s.user);
 
@@ -45,18 +47,18 @@ export default function AdminPage() {
       setModels(modelsRes.data || []);
       // Load knowledge items from database
       const knowledgeData = knowledgeRes.data || knowledgeRes || [];
-      setKnowledgeItems(Array.isArray(knowledgeData) ? knowledgeData.map((k: any) => ({
-        id: k.id,
-        title: k.title || k.content?.slice(0, 50) || '未命名',
-        category: k.category || k.industry || '其他',
-        source: k.source || 'manual',
-        status: k.status || 'approved',
-        createdAt: k.createdAt || k.created_at || new Date().toISOString(),
-        content: k.content,
+      setKnowledgeItems(Array.isArray(knowledgeData) ? knowledgeData.map((k: Record<string, unknown>) => ({
+        id: k.id as string,
+        title: (k.title as string) || (k.content as string)?.slice(0, 50) || t('adminPage.unnamed'),
+        category: (k.category as string) || (k.industry as string) || t('adminPage.other'),
+        source: (k.source as string) || 'manual',
+        status: (k.status as KnowledgeItem['status']) || 'approved' as const,
+        createdAt: (k.createdAt as string) || (k.created_at as string) || new Date().toISOString(),
+        content: k.content as string | undefined,
       })) : []);
     } catch (e) {
       logger.error('Failed to fetch admin data:', e);
-      toast.error('加载管理数据失败', { description: '请刷新页面重试' });
+      toast.error(t('adminPage.loadFailed'), { description: t('adminPage.loadFailedDesc') });
     } finally {
       setLoading(false);
     }
@@ -73,8 +75,8 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-6 text-center">
-        <p className="text-sm text-gray-500">管理后台仅对管理员开放</p>
-        <p className="mt-2 text-xs text-gray-400">请联系管理员获取权限</p>
+        <p className="text-sm text-gray-500">{t('adminPage.accessDenied')}</p>
+        <p className="mt-2 text-xs text-gray-400">{t('adminPage.accessDeniedDesc')}</p>
       </div>
     );
   }
@@ -82,9 +84,9 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">管理员后台</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t('adminPage.title')}</h2>
         <p className="mt-1 text-sm text-gray-500">
-          数据统计、知识库管理、模型配置、插件管理和系统设置
+          {t('adminPage.subtitle')}
         </p>
       </div>
 
@@ -152,16 +154,16 @@ export default function AdminPage() {
       ) : (
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)}>
           <TabsList className="w-full justify-start">
-            <TabsTrigger value="stats">数据统计</TabsTrigger>
-            <TabsTrigger value="users">用户管理</TabsTrigger>
-            <TabsTrigger value="knowledge">知识库管理</TabsTrigger>
-            <TabsTrigger value="plans">套餐配置</TabsTrigger>
-            <TabsTrigger value="models">模型配置</TabsTrigger>
-            <TabsTrigger value="announcements">公告管理</TabsTrigger>
-            <TabsTrigger value="sync">数据同步</TabsTrigger>
-            <TabsTrigger value="plugins">插件包管理</TabsTrigger>
-            <TabsTrigger value="settings">系统设置</TabsTrigger>
-            <TabsTrigger value="retrieval-logs">检索日志</TabsTrigger>
+            <TabsTrigger value="stats">{t('adminPage.tabs.stats')}</TabsTrigger>
+            <TabsTrigger value="users">{t('adminPage.tabs.users')}</TabsTrigger>
+            <TabsTrigger value="knowledge">{t('adminPage.tabs.knowledge')}</TabsTrigger>
+            <TabsTrigger value="plans">{t('adminPage.tabs.plans')}</TabsTrigger>
+            <TabsTrigger value="models">{t('adminPage.tabs.models')}</TabsTrigger>
+            <TabsTrigger value="announcements">{t('adminPage.tabs.announcements')}</TabsTrigger>
+            <TabsTrigger value="sync">{t('adminPage.tabs.sync')}</TabsTrigger>
+            <TabsTrigger value="plugins">{t('adminPage.tabs.plugins')}</TabsTrigger>
+            <TabsTrigger value="settings">{t('adminPage.tabs.settings')}</TabsTrigger>
+            <TabsTrigger value="retrieval-logs">{t('adminPage.tabs.retrievalLogs')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="stats">

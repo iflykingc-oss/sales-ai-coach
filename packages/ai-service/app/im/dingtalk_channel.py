@@ -90,9 +90,15 @@ class DingTalkChannel(ChatChannel):
             logger.info("[dingtalk] Stopping Stream listener...")
             self._stream_client = None
 
+    # DingTalk message size limit: 20KB
+    MAX_CONTENT_BYTES = 20 * 1024
+
     async def send(self, reply: Reply, context: IMContext) -> bool:
         """Send reply to DingTalk."""
         try:
+            # Validate message size
+            self._validate_reply_size(reply)
+
             token = await self._get_access_token()
 
             if reply.type == ReplyType.CARD:
@@ -105,6 +111,15 @@ class DingTalkChannel(ChatChannel):
         except Exception as e:
             logger.error(f"[dingtalk] Send failed: {e}")
             return False
+
+    def _validate_reply_size(self, reply: Reply):
+        """Truncate reply content if it exceeds DingTalk's 20KB limit."""
+        suffix = "...(truncated)"
+        content = reply.content
+        if len(content.encode("utf-8")) > self.MAX_CONTENT_BYTES:
+            max_bytes = self.MAX_CONTENT_BYTES - len(suffix.encode("utf-8"))
+            truncated = content.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
+            reply.content = truncated + suffix
 
     async def _send_text(self, reply: Reply, context: IMContext, token: str) -> bool:
         """Send plain text message."""
@@ -161,22 +176,108 @@ class DingTalkChannel(ChatChannel):
                 return bool(data.get("messageId"))
 
     async def _send_stream(self, reply: Reply, context: IMContext, token: str) -> bool:
-        """Send streaming response using AI Card.
+        """Send streaming response using DingTalk AI Card.
 
-        DingTalk AI Card 流程：
-        1. 创建卡片（flowStatus=PROCESSING）
-        2. 增量更新内容
-        3. 设置 flowStatus=DONE
+        Flow:
+        1. Create card with flowStatus=PROCESSING (shows loading animation)
+        2. Incrementally patch card content as chunks arrive
+        3. Set flowStatus=DONE to finalize
         """
-        # For DingTalk, accumulate and send as single card
-        # (DingTalk's streaming API is more complex, simplified here)
+        headers = {
+            "x-acs-dingtalk-access-token": token,
+            "Content-Type": "application/json",
+        }
+
+        # Step 1: Create initial AI Card with PROCESSING status
+        card_instance_id = await self._create_ai_card(reply, context, headers)
+        if not card_instance_id:
+            # Fallback: accumulate and send as plain card
+            accumulated = ""
+            for chunk in reply.stream_chunks:
+                accumulated += chunk
+            reply.type = ReplyType.CARD
+            reply.content = accumulated
+            return await self._send_card(reply, context, token)
+
+        # Step 2: Patch content as chunks arrive
         accumulated = ""
         for chunk in reply.stream_chunks:
             accumulated += chunk
+            await self._patch_ai_card(card_instance_id, accumulated, headers, flow_status="PROCESSING")
+            await asyncio.sleep(0.05)
 
-        reply.type = ReplyType.CARD
-        reply.content = accumulated
-        return await self._send_card(reply, context, token)
+        # Step 3: Finalize with DONE status
+        await self._patch_ai_card(card_instance_id, accumulated, headers, flow_status="DONE")
+        return True
+
+    async def _create_ai_card(self, reply: Reply, context: IMContext, headers: dict) -> str | None:
+        """Create a DingTalk AI Card and send it as a message.
+
+        Returns the cardInstanceId on success, None on failure.
+        """
+        url = f"{self.BASE_URL}/robot/groupMessages/send"
+
+        # Initial card template with PROCESSING flowStatus
+        card_content = json.dumps({
+            "card": {
+                "config": {"wideScreenMode": True},
+                "header": {
+                    "title": {"tag": "markdown", "content": reply.card_title or "🎓 AI 教练"},
+                    "subtitle": {"tag": "markdown", "content": ""},
+                },
+                "elements": [
+                    {"tag": "markdown", "content": "..."},
+                ],
+            },
+            "flowStatus": "PROCESSING",
+        })
+
+        body = {
+            "msgParam": card_content,
+            "msgtype": "aiCard",
+            "openConversationId": context.chat_id,
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=body, headers=headers) as resp:
+                data = await resp.json()
+                card_instance_id = data.get("cardInstanceId") or data.get("messageId")
+                if card_instance_id:
+                    return card_instance_id
+                logger.warning(f"[dingtalk] AI Card creation failed: {data}")
+                return None
+
+    async def _patch_ai_card(
+        self,
+        card_instance_id: str,
+        content: str,
+        headers: dict,
+        flow_status: str = "PROCESSING",
+    ):
+        """Update AI Card content and flowStatus."""
+        url = f"{self.BASE_URL}/robot/messageCards/patch"
+
+        card_patch = json.dumps({
+            "card": {
+                "config": {"wideScreenMode": True},
+                "elements": [
+                    {"tag": "markdown", "content": content},
+                ],
+            },
+            "flowStatus": flow_status,
+        })
+
+        body = {
+            "cardInstanceId": card_instance_id,
+            "cardBizId": card_instance_id,
+            "msgParam": card_patch,
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=body, headers=headers) as resp:
+                data = await resp.json()
+                if resp.status != 200:
+                    logger.warning(f"[dingtalk] AI Card patch failed (status={resp.status}): {data}")
 
     async def _get_access_token(self) -> str:
         """Get or refresh DingTalk access token."""

@@ -5,7 +5,7 @@ import {
   MessageSquare, ChevronDown, ChevronUp, Star, Check,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 
 const FEATURES = [
@@ -108,7 +108,8 @@ const STATS = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { locale } = useI18n();
+  const { i18n } = useTranslation();
+  const locale = i18n.language;
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // 同步 i18n locale 到本地 lang 状态

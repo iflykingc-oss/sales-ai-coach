@@ -3,7 +3,7 @@
 
 const https = require('https');
 
-const SUPABASE_URL = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
 
 console.log('🔍 Sales AI Coach 配置诊断\n');
 

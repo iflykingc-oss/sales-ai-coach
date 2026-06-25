@@ -1,6 +1,19 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
+
+const shareScriptSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  content: z.string().min(1, '内容不能为空').max(50000),
+  industry: z.string().max(100).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  scriptId: z.string().uuid().optional(),
+});
+
+const approveSchema = z.object({
+  approved: z.boolean(),
+});
 
 const router = Router();
 
@@ -55,7 +68,11 @@ router.post('/:teamId', authMiddleware, async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Not a member of this team' });
     }
 
-    const { title, content, industry, tags, scriptId } = req.body;
+    const parsed = shareScriptSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { title, content, industry, tags, scriptId } = parsed.data;
     const script = await prisma.sharedScript.create({
       data: {
         teamId: team.id,

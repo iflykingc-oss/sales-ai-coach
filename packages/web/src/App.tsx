@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary';
+import { ProtectedRoute, AdminRoute } from './components/auth/ProtectedRoute';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { CookieConsent } from './components/compliance/CookieConsent';
 import { UpgradeModalWrapper } from './components/payment/UpgradeModalWrapper';
@@ -72,7 +73,7 @@ export default function App() {
   return (
     <>
       <ErrorBoundary>
-        <Suspense fallback={<div className="flex items-center justify-center h-screen">加载中...</div>}>
+        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -80,7 +81,7 @@ export default function App() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/pricing" element={<PublicPricingPage />} />
-            <Route path="/app" element={<AppLayout />}>
+            <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route index element={<RouteErrorBoundary><DashboardPage /></RouteErrorBoundary>} />
               <Route path="scripts" element={<RouteErrorBoundary><SessionPage /></RouteErrorBoundary>} />
               <Route path="practice" element={<RouteErrorBoundary><PracticePage /></RouteErrorBoundary>} />
@@ -89,7 +90,7 @@ export default function App() {
               <Route path="team" element={<RouteErrorBoundary><TeamPage /></RouteErrorBoundary>} />
               <Route path="plugins" element={<RouteErrorBoundary><PluginPage /></RouteErrorBoundary>} />
               <Route path="analytics" element={<RouteErrorBoundary><AnalyticsPage /></RouteErrorBoundary>} />
-              <Route path="admin" element={<RouteErrorBoundary><AdminPage /></RouteErrorBoundary>} />
+              <Route path="admin" element={<AdminRoute><RouteErrorBoundary><AdminPage /></RouteErrorBoundary></AdminRoute>} />
               <Route path="data-rights" element={<RouteErrorBoundary><DataRightsPage /></RouteErrorBoundary>} />
               <Route path="pricing" element={<RouteErrorBoundary><PricingPage /></RouteErrorBoundary>} />
               <Route path="practice/history" element={<RouteErrorBoundary><PracticeHistoryPage /></RouteErrorBoundary>} />

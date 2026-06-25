@@ -1,4 +1,5 @@
-import { useI18n, type Locale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
+import { setLocale, type Locale } from '@/i18n';
 import { cn } from '@/utils/cn';
 
 interface LanguageSwitcherProps {
@@ -13,7 +14,8 @@ interface LanguageSwitcherProps {
  * - full 模式：显示所有支持的语言（用于注册页、产品页）
  */
 export function LanguageSwitcher({ mode = 'landing', className }: LanguageSwitcherProps) {
-  const { locale, setLocale } = useI18n();
+  const { i18n } = useTranslation();
+  const locale = i18n.language as Locale;
 
   // landing 模式只显示中英文
   const landingLocales: Array<{ key: Locale; label: string; flag: string }> = [

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Lock, CheckCircle2, Play, Star, Target, Flame, Shield, Swords, Crown, Zap, Copy, ArrowRight } from 'lucide-react';
+import { TrendingUp, Lock, CheckCircle2, Play, Star, Target, Flame, Shield, Swords, Crown, Zap, Copy, ArrowRight, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { useUserStore } from '@/stores/userStore';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { cn } from '@/utils/cn';
 import { toast } from '@/hooks/useToast';
@@ -105,10 +105,11 @@ const USER_LEVELS = [
 
 export default function DashboardPage() {
   const user = useUserStore((s) => s.user);
-  const { t } = useI18n();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
@@ -121,13 +122,23 @@ export default function DashboardPage() {
     }
   }, [loading, data]);
 
-  useEffect(() => {
+  const fetchDashboard = () => {
+    setLoading(true);
+    setError(null);
     api.get('/dashboard')
-      .then((res: any) => setData(res.data))
+      .then((res: { data: DashboardData }) => {
+        setData(res.data);
+        setError(null);
+      })
       .catch(() => {
-        toast.error(t('msg.loadingFailed'), { description: t('common.retry') });
+        setError(t('msg.loadingFailed'));
+        toast.error(t('msg.loadingFailed'), { description: t('retry') });
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDashboard();
   }, []);
 
   // 计算用户等级
@@ -211,6 +222,22 @@ export default function DashboardPage() {
     );
   }
 
+  if (error && !data) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6">
+        <AnnouncementBanner />
+        <Card className="text-center py-12">
+          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('dashboard.loadFailed')}</h3>
+          <p className="text-sm text-gray-500 mb-4">{error}</p>
+          <Button onClick={fetchDashboard}>
+            {t('dashboard.reload')}
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-8">
       {/* 公告横幅 */}
@@ -221,17 +248,15 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              {getGreeting()}，{user?.name || t('common.user', 'User')}
+              {t(getGreetingKey())}，{user?.name || t('user')}
             </h1>
             <div className="mt-2 flex items-center gap-3">
               <span className="text-2xl">{userLevel.icon}</span>
               <div>
-                <p className="text-sm font-medium text-gray-700">{t(`level.${userLevel.key}`, userLevel.name)}</p>
+                <p className="text-sm font-medium text-gray-700">{t(`level.${userLevel.key}`)}</p>
                 {nextLevel && (
                   <p className="text-xs text-gray-500">
-                    {t('dashboard.level.progress', `Complete ${nextLevel.minPractices - totalPractices} more practices to reach ${nextLevel.name}`)
-                      .replace('{count}', String(nextLevel.minPractices - totalPractices))
-                      .replace('{level}', t(`level.${nextLevel.key}`, nextLevel.name))}
+                    {t('dashboard.levelProgress', { count: nextLevel.minPractices - totalPractices, level: t(`level.${nextLevel.key}`) })}
                   </p>
                 )}
               </div>
@@ -266,8 +291,8 @@ export default function DashboardPage() {
       <Card className="border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50">
         <div className="flex items-center gap-2 mb-3">
           <Zap className="h-5 w-5 text-orange-500" />
-          <h2 className="text-lg font-bold text-gray-900">成单助手</h2>
-          <span className="text-xs text-gray-500">客户说了什么？立刻拿话术</span>
+          <h2 className="text-lg font-bold text-gray-900">{t('dashboard.salesAssistant')}</h2>
+          <span className="text-xs text-gray-500">{t('dashboard.salesAssistantHint')}</span>
         </div>
         <div
           className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-orange-300 bg-white p-4 transition-all hover:border-orange-400 hover:shadow-md"
@@ -277,8 +302,8 @@ export default function DashboardPage() {
             <Swords className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-gray-700">输入客户的原话，生成即用话术</p>
-            <p className="text-xs text-gray-500">支持异议处理、竞品比较、价格谈判等场景</p>
+            <p className="text-sm font-medium text-gray-700">{t('dashboard.salesAssistantDesc')}</p>
+            <p className="text-xs text-gray-500">{t('dashboard.salesAssistantSubdesc')}</p>
           </div>
           <ArrowRight className="h-5 w-5 text-gray-400" />
         </div>
@@ -292,7 +317,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs text-gray-600 border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-all"
               >
                 <Copy className="h-3 w-3" />
-                {p.scenario?.slice(0, 15) || '销售场景'}
+                {p.scenario?.slice(0, 15) || t('dashboard.salesScenario')}
               </button>
             ))}
           </div>
@@ -369,7 +394,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-gray-700">{progress.completed}/{progress.total}</p>
-                    <p className="text-xs text-gray-400">{t('common.completed', 'Completed')}</p>
+                    <p className="text-xs text-gray-400">{t('completed')}</p>
                   </div>
                 </div>
 
@@ -424,7 +449,7 @@ export default function DashboardPage() {
                               variant="secondary"
                               onClick={() => navigate(`/app/practice?scenario=${lesson.scenario}&quick=true`)}
                             >
-                              {t('common.start', 'Start')}
+                              {t('start')}
                             </Button>
                           )}
                           {status === 'completed' && (
@@ -459,26 +484,26 @@ export default function DashboardPage() {
         <Card>
           <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-gray-500" />
-            本周成单辅助
+            {t('dashboard.weeklyAssist')}
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="text-center">
               <p className="text-2xl font-bold text-blue-600">{data.stats.weeklyScripts}</p>
-              <p className="text-xs text-gray-500">话术使用</p>
+              <p className="text-xs text-gray-500">{t('dashboard.scriptUsage')}</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-purple-600">{data.stats.weeklyPractices}</p>
-              <p className="text-xs text-gray-500">陪练次数</p>
+              <p className="text-xs text-gray-500">{t('dashboard.practiceCount')}</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-emerald-600">{data.stats.totalReviews}</p>
-              <p className="text-xs text-gray-500">复盘分析</p>
+              <p className="text-xs text-gray-500">{t('dashboard.reviewAnalysis')}</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-amber-600">
                 {data.stats.avgPracticeScore > 0 ? Math.round(data.stats.avgPracticeScore) : '-'}
               </p>
-              <p className="text-xs text-gray-500">平均练习分</p>
+              <p className="text-xs text-gray-500">{t('dashboard.avgPracticeScore')}</p>
             </div>
 
           {/* 练习分数趋势 */}
@@ -486,11 +511,11 @@ export default function DashboardPage() {
             <div className="col-span-2 sm:col-span-4 mt-2 pt-3 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">本周平均分</span>
+                  <span className="text-xs text-gray-500">{t('dashboard.thisWeekAvg')}</span>
                   <span className="text-sm font-semibold text-gray-800">{data.stats.thisWeekAvg}</span>
                   {(data.stats.lastWeekAvg ?? 0) > 0 && (
                     <>
-                      <span className="text-xs text-gray-400">vs 上周 {data.stats.lastWeekAvg}</span>
+                      <span className="text-xs text-gray-400">{t('dashboard.vsLastWeek')} {data.stats.lastWeekAvg}</span>
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${(data.stats.recentImprovement ?? 0) > 0 ? 'bg-green-100 text-green-700' : (data.stats.recentImprovement ?? 0) < 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>
                         {(data.stats.recentImprovement ?? 0) > 0 ? '+' : ''}{data.stats.recentImprovement}%
                       </span>
@@ -499,7 +524,7 @@ export default function DashboardPage() {
                 </div>
                 {data.stats.weakDimension && (
                   <a href="/app/practice" className="text-xs text-orange-600 hover:text-orange-700 flex items-center gap-1">
-                    弱项：{data.stats.weakDimension}，去练习 →
+                    {t('dashboard.weakDimension')}：{data.stats.weakDimension}，{t('dashboard.goPractice')} →
                   </a>
                 )}
               </div>
@@ -514,14 +539,14 @@ export default function DashboardPage() {
         <Card>
           <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
             <Target className="h-4 w-4 text-gray-500" />
-            销售漏斗
+            {t('dashboard.funnel')}
           </h3>
           <div className="flex items-center gap-2">
             {[
-              { key: 'SCRIPT', label: '话术', color: 'bg-blue-500' },
-              { key: 'PRACTICE', label: '陪练', color: 'bg-purple-500' },
-              { key: 'REVIEW', label: '复盘', color: 'bg-emerald-500' },
-              { key: 'CLOSED', label: '成交', color: 'bg-amber-500' },
+              { key: 'SCRIPT', label: t('dashboard.funnelScript'), color: 'bg-blue-500' },
+              { key: 'PRACTICE', label: t('dashboard.funnelPractice'), color: 'bg-purple-500' },
+              { key: 'REVIEW', label: t('dashboard.funnelReview'), color: 'bg-emerald-500' },
+              { key: 'CLOSED', label: t('dashboard.funnelClosed'), color: 'bg-amber-500' },
             ].map(({ key, label, color }, i) => (
               <div key={key} className="flex-1 text-center">
                 <div className={cn('h-1.5 rounded-full mb-1', color)} style={{ opacity: 1 - i * 0.15 }} />
@@ -537,7 +562,7 @@ export default function DashboardPage() {
       {data?.recentSessions && data.recentSessions.length > 0 && (
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-700">最近会话</h3>
+            <h3 className="text-sm font-medium text-gray-700">{t('dashboard.recentSessions')}</h3>
           </div>
           <div className="space-y-2">
             {data.recentSessions.slice(0, 5).map((s) => (
@@ -545,7 +570,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm text-gray-800">{s.name}</p>
                   <p className="text-xs text-gray-400">
-                    {s.industry || '通用'} · {s.customerName || '未知客户'} · {new Date(s.createdAt).toLocaleDateString()}
+                    {s.industry || t('dashboard.generalIndustry')} · {s.customerName || t('dashboard.unknownCustomer')} · {new Date(s.createdAt).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -556,7 +581,7 @@ export default function DashboardPage() {
                     s.stage === 'PRACTICE' ? 'bg-blue-100 text-blue-700' :
                     'bg-gray-100 text-gray-600',
                   )}>
-                    {s.stage === 'SCRIPT' ? '话术' : s.stage === 'PRACTICE' ? '陪练' : s.stage === 'REVIEW' ? '复盘' : '成交'}
+                    {s.stage === 'SCRIPT' ? t('dashboard.stageScript') : s.stage === 'PRACTICE' ? t('dashboard.stagePractice') : s.stage === 'REVIEW' ? t('dashboard.stageReview') : t('dashboard.stageClosed')}
                   </span>
                 </div>
               </div>
@@ -574,8 +599,8 @@ export default function DashboardPage() {
                 <Target className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">成单薄弱环节：{data.stats.weakDimension}</p>
-                <p className="text-xs text-gray-500">针对这个技能练习，可以显著提升成单率</p>
+                <p className="text-sm font-medium text-gray-900">{t('dashboard.weakAreaTitle', { dimension: data.stats.weakDimension })}</p>
+                <p className="text-xs text-gray-500">{t('dashboard.weakAreaDesc')}</p>
               </div>
             </div>
             <Button
@@ -583,7 +608,7 @@ export default function DashboardPage() {
               onClick={() => navigate('/app/practice')}
               className="bg-orange-500 hover:bg-orange-600"
             >
-              针对练习
+              {t('dashboard.targetPractice')}
             </Button>
           </div>
         </Card>
@@ -604,7 +629,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm text-gray-800">{p.scenario}</p>
                   <p className="text-xs text-gray-400">
-                    {new Date(p.createdAt).toLocaleDateString()} · {p.rounds} {t('common.rounds', 'rounds')}
+                    {new Date(p.createdAt).toLocaleDateString()} · {p.rounds} {t('rounds')}
                   </p>
                 </div>
                 <span className={cn(
@@ -613,7 +638,7 @@ export default function DashboardPage() {
                   p.score >= 60 ? 'bg-yellow-100 text-yellow-700' :
                   p.score > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500',
                 )}>
-                  {p.score > 0 ? `${Math.round(p.score)}${t('review.score')}` : t('common.inProgress', 'In Progress')}
+                  {p.score > 0 ? `${Math.round(p.score)}${t('review.score')}` : t('inProgress')}
                 </span>
               </div>
             ))}
@@ -646,11 +671,11 @@ export default function DashboardPage() {
   );
 }
 
-function getGreeting() {
+function getGreetingKey(): string {
   const h = new Date().getHours();
-  if (h < 6) return '夜深了';
-  if (h < 12) return '早上好';
-  if (h < 14) return '中午好';
-  if (h < 18) return '下午好';
-  return '晚上好';
+  if (h < 6) return 'greeting.night';
+  if (h < 12) return 'greeting.morning';
+  if (h < 14) return 'greeting.noon';
+  if (h < 18) return 'greeting.afternoon';
+  return 'greeting.evening';
 }

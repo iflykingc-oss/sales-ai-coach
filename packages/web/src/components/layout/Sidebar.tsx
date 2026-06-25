@@ -48,7 +48,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       // Even if API fails, still clear local state
     }
     clearUser();
-    toast.info('已退出登录');
+    toast.info(t('sidebar.loggedOut'));
     navigate('/login');
   };
 
@@ -73,12 +73,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
         role="navigation"
-        aria-label="主导航"
+        aria-label={t('sidebar.ariaMainNav')}
       >
         <div className="flex h-14 items-center border-b border-gray-200 px-4">
           <h1 className="text-lg font-bold text-primary-600">销冠AI教练</h1>
         </div>
-        <nav className="flex-1 space-y-1 p-2" aria-label="导航菜单">
+        <nav className="flex-1 space-y-1 p-2" aria-label={t('sidebar.ariaNavMenu')}>
           {navItems.map(({ path, icon: Icon, label, end }) => (
             <NavLink
               key={path}
@@ -98,7 +98,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
                   {label}
-                  {isActive && <span className="sr-only">(当前页面)</span>}
+                  {isActive && <span className="sr-only">{t('common:sidebar.currentpage')}</span>}
                 </span>
               )}
             </NavLink>

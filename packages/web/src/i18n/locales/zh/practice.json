@@ -36,5 +36,39 @@
     "recommendations": "建议",
     "practiceAgain": "再练一次",
     "viewHistory": "查看历史"
+  },
+  "bestScript": "最佳话术",
+  "customerPsychology": "客户心理",
+  "end": "结束陪练",
+  "framework": "销售框架",
+  "startChat": "与AI客户开始对话",
+  "inputPlaceholder": "输入你的回复...",
+  "skillFocus": {
+    "objection": "异议处理",
+    "closing": "促单技巧",
+    "discovery": "需求挖掘",
+    "rapport": "建立信任",
+    "negotiation": "价格谈判",
+    "presentation": "产品演示"
+  },
+  "difficulty": {
+    "easy": "初级",
+    "easyDesc": "友善型买家，少异议",
+    "medium": "中级",
+    "mediumDesc": "分析/表现型买家，适度异议",
+    "hard": "高级",
+    "hardDesc": "驱动/怀疑型买家，强烈异议",
+    "expert": "地狱",
+    "expertDesc": "组合型买家，多重异议"
+  },
+  "coaching": {
+    "feedback": "第{{round}}轮评估",
+    "hint": "教练提示",
+    "emotionWarning": "情绪预警",
+    "progress": "进度",
+    "customerGreeting": "您好，我是您的{{scenario}}练习客户。请开始您的销售话术。",
+    "maxRounds": "对话已进行 {{round}} 轮，可以结束了",
+    "continue": "继续练习 5 轮",
+    "endAndView": "结束陪练，查看结果"
   }
 }

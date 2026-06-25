@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { UserPlus, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -16,6 +17,7 @@ interface CreateMemberDialogProps {
 }
 
 export function CreateMemberDialog({ open, onOpenChange, teamId, onSuccess }: CreateMemberDialogProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,7 +26,7 @@ export function CreateMemberDialog({ open, onOpenChange, teamId, onSuccess }: Cr
 
   const handleCreate = async () => {
     if (!name || !email) {
-      toast.error('请填写姓名和邮箱');
+      toast.error(t('createMember.validationError'));
       return;
     }
 
@@ -36,14 +38,14 @@ export function CreateMemberDialog({ open, onOpenChange, teamId, onSuccess }: Cr
         password: password || '123456', // 默认密码
       });
 
-      toast.success('成员创建成功');
+      toast.success(t('createMember.createSuccess'));
       setName('');
       setEmail('');
       setPassword('');
       onOpenChange(false);
       onSuccess();
     } catch (err: any) {
-      const msg = err?.response?.data?.error || '创建失败';
+      const msg = err?.response?.data?.error || t('createMember.createFailed');
       toast.error(msg);
     } finally {
       setCreating(false);
@@ -56,25 +58,25 @@ export function CreateMemberDialog({ open, onOpenChange, teamId, onSuccess }: Cr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            添加团队成员
+            {t('createMember.title')}
           </DialogTitle>
           <DialogDescription>
-            直接创建团队成员账号，无需邀请
+            {t('createMember.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">姓名 *</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('createMember.nameLabel')} *</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="成员姓名"
+              placeholder={t('createMember.namePlaceholder')}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">邮箱 *</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('createMember.emailLabel')} *</label>
             <Input
               type="email"
               value={email}
@@ -84,13 +86,13 @@ export function CreateMemberDialog({ open, onOpenChange, teamId, onSuccess }: Cr
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">密码</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">{t('createMember.passwordLabel')}</label>
             <div className="relative">
               <Input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="留空则默认密码 123456"
+                placeholder={t('createMember.passwordPlaceholder')}
               />
               <button
                 type="button"
@@ -100,14 +102,14 @@ export function CreateMemberDialog({ open, onOpenChange, teamId, onSuccess }: Cr
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500">留空则使用默认密码 123456</p>
+            <p className="mt-1 text-xs text-gray-500">{t('createMember.passwordHint')}</p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>{t('cancel')}</Button>
           <Button onClick={handleCreate} disabled={creating}>
-            {creating ? '创建中...' : '创建成员'}
+            {creating ? t('createMember.creating') : t('createMember.createMember')}
           </Button>
         </DialogFooter>
       </DialogContent>

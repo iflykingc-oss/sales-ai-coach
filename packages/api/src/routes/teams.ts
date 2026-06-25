@@ -7,6 +7,21 @@ const createTeamSchema = z.object({
   name: z.string().min(1).max(100),
 });
 
+const createTaskSchema = z.object({
+  assigneeId: z.string().uuid().optional(),
+  type: z.string().min(1),
+  scenario: z.string().min(1),
+  deadline: z.string().datetime(),
+});
+
+const updateTaskStatusSchema = z.object({
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE']),
+});
+
+const transferOwnershipSchema = z.object({
+  newOwnerId: z.string().uuid(),
+});
+
 const router = Router();
 
 router.post('/', authMiddleware, async (req, res, next) => {
@@ -53,9 +68,19 @@ router.post('/:id/tasks', authMiddleware, async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Not a member of this team' });
     }
 
-    const { assigneeId, type, scenario, deadline } = req.body;
+    const { assigneeId, type, scenario, deadline } = createTaskSchema.parse(req.body);
+
+    if (assigneeId) {
+      const assignee = await prisma.user.findFirst({
+        where: { id: assigneeId, teamId: team.id },
+      });
+      if (!assignee) {
+        return res.status(400).json({ success: false, error: 'Assignee is not a member of this team' });
+      }
+    }
+
     const task = await prisma.teamTask.create({
-      data: { teamId: req.params.id as string, assigneeId, type, scenario, deadline: new Date(deadline) },
+      data: { teamId: req.params.id as string, assigneeId: assigneeId ?? req.user!.id, type, scenario, deadline: new Date(deadline) },
     });
     res.status(201).json({ success: true, data: task });
   } catch (err) { next(err); }
@@ -88,7 +113,7 @@ router.patch('/:id/tasks/:taskId', authMiddleware, async (req, res, next) => {
       return res.status(403).json({ success: false, error: 'Not a member of this team' });
     }
 
-    const { status } = req.body;
+    const { status } = updateTaskStatusSchema.parse(req.body);
     const task = await prisma.teamTask.update({
       where: { id: req.params.taskId as string },
       data: { status },
@@ -219,6 +244,78 @@ router.get('/:id/stats', authMiddleware, async (req, res, next) => {
         weakScenarios,
       },
     });
+  } catch (err) { next(err); }
+});
+
+// Remove a member from the team (owner only)
+router.delete('/:id/members/:userId', authMiddleware, async (req, res, next) => {
+  try {
+    const team = await prisma.team.findUnique({ where: { id: req.params.id as string } });
+    if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
+    if (team.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Only the team owner can remove members' });
+    }
+
+    const userId = req.params.userId as string;
+    if (userId === team.ownerId) {
+      return res.status(400).json({ success: false, error: 'Cannot remove the team owner' });
+    }
+
+    const member = await prisma.user.findFirst({ where: { id: userId, teamId: team.id } });
+    if (!member) {
+      return res.status(404).json({ success: false, error: 'User is not a member of this team' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { teamId: null } });
+      await tx.team.update({ where: { id: team.id }, data: { memberCount: { decrement: 1 } } });
+    });
+
+    res.json({ success: true, data: { message: 'Member removed successfully' } });
+  } catch (err) { next(err); }
+});
+
+// Delete/dissolve a team (owner only)
+router.delete('/:id', authMiddleware, async (req, res, next) => {
+  try {
+    const team = await prisma.team.findUnique({ where: { id: req.params.id as string } });
+    if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
+    if (team.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Only the team owner can dissolve the team' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.updateMany({ where: { teamId: team.id }, data: { teamId: null } });
+      await tx.team.delete({ where: { id: team.id } });
+    });
+
+    res.json({ success: true, data: { message: 'Team dissolved successfully' } });
+  } catch (err) { next(err); }
+});
+
+// Transfer team ownership to another member
+router.patch('/:id/transfer', authMiddleware, async (req, res, next) => {
+  try {
+    const team = await prisma.team.findUnique({ where: { id: req.params.id as string } });
+    if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
+    if (team.ownerId !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Only the team owner can transfer ownership' });
+    }
+
+    const { newOwnerId } = transferOwnershipSchema.parse(req.body);
+
+    const newOwner = await prisma.user.findFirst({ where: { id: newOwnerId, teamId: team.id } });
+    if (!newOwner) {
+      return res.status(400).json({ success: false, error: 'New owner must be a member of this team' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.team.update({ where: { id: team.id }, data: { ownerId: newOwnerId } });
+      await tx.user.update({ where: { id: req.user!.id }, data: { role: 'USER' } });
+      await tx.user.update({ where: { id: newOwnerId }, data: { role: 'TEAM_OWNER' } });
+    });
+
+    res.json({ success: true, data: { message: 'Ownership transferred successfully' } });
   } catch (err) { next(err); }
 });
 

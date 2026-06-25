@@ -1,11 +1,22 @@
 import { Router } from 'express';
-import { authMiddleware, requireAdmin } from '../middleware/auth.js';
+import { z } from 'zod';
+import { authMiddlewareVerified, requireAdmin } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { decrypt, isEncrypted } from '../lib/encryption.js';
 
+const createPluginSchema = z.object({
+  name: z.string().min(1).max(200),
+  industry: z.string().min(1).max(100),
+  scripts: z.record(z.unknown()).optional(),
+  scenarios: z.record(z.unknown()).optional(),
+  knowledge: z.record(z.unknown()).optional(),
+  customerProfiles: z.record(z.unknown()).optional(),
+  bestPractices: z.record(z.unknown()).optional(),
+});
+
 const router = Router();
 
-router.use(authMiddleware, requireAdmin);
+router.use(authMiddlewareVerified, requireAdmin);
 
 router.get('/stats', async (req, res, next) => {
   try {
@@ -95,16 +106,20 @@ router.put('/users/:id/plan', async (req, res, next) => {
 
 router.post('/plugins', async (req, res, next) => {
   try {
-    const { name, industry, scripts, scenarios, knowledge, customerProfiles, bestPractices } = req.body;
+    const parsed = createPluginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { name, industry, scripts, scenarios, knowledge, customerProfiles, bestPractices } = parsed.data;
     const plugin = await prisma.industryPlugin.create({
       data: {
         name, industry,
         version: '1.0.0',
-        scripts: scripts || {},
-        scenarios: scenarios || {},
-        knowledge: knowledge || {},
-        customerProfiles: customerProfiles || {},
-        bestPractices: bestPractices || {},
+        scripts: scripts || [],
+        scenarios: scenarios || [],
+        knowledge: knowledge || [],
+        customerProfiles: customerProfiles || [],
+        bestPractices: bestPractices || [],
       },
     });
     res.status(201).json({ success: true, data: plugin });

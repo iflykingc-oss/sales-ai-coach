@@ -2,7 +2,7 @@ import { logger } from '@/utils/logger';
 import { useState, useEffect, useCallback } from 'react';
 import { X, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 
@@ -19,7 +19,8 @@ interface Announcement {
 }
 
 export function AnnouncementBanner() {
-  const { locale } = useI18n();
+  const { i18n } = useTranslation();
+  const locale = i18n.language;
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);

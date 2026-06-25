@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PluginMarketplace } from '@/components/plugin/PluginMarketplace';
 import { InstalledPlugins } from '@/components/plugin/InstalledPlugins';
@@ -7,6 +8,7 @@ import { usePluginStore } from '@/stores/pluginStore';
 import { cn } from '@/utils/cn';
 
 export default function PluginPage() {
+  const { t } = useTranslation();
   const { loading, selectedPlugin, setSelectedPlugin } = usePluginStore();
   const [activeView, setActiveView] = useState<'marketplace' | 'installed'>('marketplace');
 
@@ -17,9 +19,9 @@ export default function PluginPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">行业插件</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t('pluginPage.title')}</h2>
         <p className="mt-1 text-sm text-gray-500">
-          浏览和安装行业插件包，一键切换适配不同销售场景
+          {t('pluginPage.subtitle')}
         </p>
       </div>
 
@@ -76,7 +78,7 @@ export default function PluginPage() {
               )}
               aria-pressed={activeView === 'marketplace'}
             >
-              插件市场
+              {t('pluginPage.marketplace')}
             </button>
             <button
               type="button"
@@ -89,7 +91,7 @@ export default function PluginPage() {
               )}
               aria-pressed={activeView === 'installed'}
             >
-              已安装
+              {t('pluginPage.installed')}
             </button>
           </div>
 

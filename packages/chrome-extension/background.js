@@ -1,8 +1,14 @@
 // 销冠AI教练 - Background Service Worker
 
+const CONFIG = {
+  API_BASE: 'https://www.aisalecoach.work/api',
+  MAX_RETRIES: 2,
+  RETRY_DELAY: 1000,
+};
+
 // 安装事件
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('销冠AI教练扩展已安装');
+  console.log('[SalesCoach] 扩展已安装');
 
   // 设置默认配置
   chrome.storage.local.set({
@@ -12,25 +18,122 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// 监听消息
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'ANALYZE_TRANSCRIPT') {
-    // 分析对话内容
-    const analysis = analyzeTranscript(message.transcript);
-    sendResponse({ analysis });
+// ============================================================================
+// API调用（带重试）
+// ============================================================================
+
+async function fetchWithRetry(url, options, retries = CONFIG.MAX_RETRIES) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+      }
+
+      // 检查是否是流式响应
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/event-stream') || contentType.includes('text/plain')) {
+        // 流式响应 - 读取全部文本
+        const text = await response.text();
+        return { ok: true, data: text, stream: true };
+      }
+
+      const data = await response.json();
+      return { ok: true, data: data };
+    } catch (err) {
+      console.warn('[SalesCoach] API attempt ' + (attempt + 1) + ' failed:', err.message);
+
+      if (attempt < retries) {
+        // 等待后重试
+        await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY * (attempt + 1)));
+      } else {
+        return { ok: false, error: err.message };
+      }
+    }
+  }
+}
+
+// 调用后端分析API
+async function callAnalysisAPI(transcript, context) {
+  const url = CONFIG.API_BASE + '/practices/message/stream';
+
+  const body = {
+    message: transcript,
+    context: context || {},
+    timestamp: Date.now(),
+  };
+
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  };
+
+  const result = await fetchWithRetry(url, options);
+
+  if (!result.ok) {
+    console.error('[SalesCoach] API call failed:', result.error);
+    return null;
   }
 
-  if (message.type === 'GET_COACHING_TIPS') {
-    // 获取教练建议
-    const tips = getCoachingTips(message.context);
-    sendResponse({ tips });
+  // 解析响应
+  if (result.stream) {
+    // 流式响应 - 尝试解析最后一行JSON
+    return parseStreamResponse(result.data);
   }
 
-  return true; // 保持消息通道开放
-});
+  return result.data;
+}
 
-// 分析对话内容
-function analyzeTranscript(transcript) {
+// 解析流式响应（SSE格式或纯文本）
+function parseStreamResponse(text) {
+  try {
+    // 尝试直接解析为JSON
+    return JSON.parse(text);
+  } catch (e) {
+    // 尝试从SSE格式中提取最后一个data块
+    const lines = text.split('\n');
+    let lastData = '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const payload = line.slice(6).trim();
+        if (payload && payload !== '[DONE]') {
+          lastData = payload;
+        }
+      }
+    }
+
+    if (lastData) {
+      try {
+        return JSON.parse(lastData);
+      } catch (e2) {
+        // 返回原始文本作为建议
+        return { suggestions: [lastData] };
+      }
+    }
+
+    // 如果文本非空，作为建议返回
+    if (text.trim()) {
+      // 提取有意义的文本行
+      const meaningfulLines = text.split('\n')
+        .map(l => l.trim())
+        .filter(l => l && !l.startsWith('data:') && !l.startsWith(':') && l !== '[DONE]');
+
+      if (meaningfulLines.length > 0) {
+        return { suggestions: [meaningfulLines.join(' ')] };
+      }
+    }
+
+    return null;
+  }
+}
+
+// 本地分析（降级方案）
+function analyzeTranscriptLocal(transcript) {
   const result = {
     objections: [],
     buyingSignals: [],
@@ -47,10 +150,10 @@ function analyzeTranscript(transcript) {
     { pattern: /不需要|没兴趣/, type: 'rejection', tip: '客户拒绝，尝试重新定位价值' },
   ];
 
-  objectionPatterns.forEach(({ pattern, type, tip }) => {
-    if (pattern.test(transcript)) {
-      result.objections.push({ type, tip });
-      result.suggestions.push(tip);
+  objectionPatterns.forEach(function(ref) {
+    if (ref.pattern.test(transcript)) {
+      result.objections.push({ type: ref.type, tip: ref.tip });
+      result.suggestions.push(ref.tip);
     }
   });
 
@@ -62,9 +165,9 @@ function analyzeTranscript(transcript) {
     { pattern: /签约|合同|付款/, signal: 'closing' },
   ];
 
-  buyingPatterns.forEach(({ pattern, signal }) => {
-    if (pattern.test(transcript)) {
-      result.buyingSignals.push(signal);
+  buyingPatterns.forEach(function(ref) {
+    if (ref.pattern.test(transcript)) {
+      result.buyingSignals.push(ref.signal);
     }
   });
 
@@ -84,7 +187,7 @@ function analyzeTranscript(transcript) {
   return result;
 }
 
-// 获取教练建议
+// 获取教练建议（基于上下文）
 function getCoachingTips(context) {
   const tips = [];
 
@@ -118,4 +221,79 @@ function getCoachingTips(context) {
   }
 
   return tips;
+}
+
+// ============================================================================
+// 消息监听
+// ============================================================================
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // content.js 请求分析对话
+  if (message.action === 'ANALYZE_TRANSCRIPT') {
+    handleAnalyzeTranscript(message, sendResponse);
+    return true; // 异步响应
+  }
+
+  // content.js 请求教练建议
+  if (message.action === 'GET_COACHING_TIPS' || message.type === 'GET_COACHING_TIPS') {
+    const tips = getCoachingTips(message.context || {});
+    sendResponse({ tips: tips });
+    return true;
+  }
+
+  // content.js 发送状态更新 -> 转发到所有监听者（sidepanel等）
+  if (message.type === 'STATE_UPDATE') {
+    // 广播给所有扩展页面
+    chrome.runtime.sendMessage({
+      type: 'STATE_UPDATE',
+      data: message.data
+    }).catch(() => {
+      // 没有接收者时忽略
+    });
+    return false;
+  }
+
+  // content.js 发送提示更新 -> 转发
+  if (message.type === 'TIP_UPDATE') {
+    chrome.runtime.sendMessage({
+      type: 'TIP_UPDATE',
+      data: message.data
+    }).catch(() => {
+      // 忽略
+    });
+    return false;
+  }
+
+  // 本地分析（作为ANALYZE_TRANSCRIPT的降级）
+  if (message.type === 'ANALYZE_TRANSCRIPT') {
+    const analysis = analyzeTranscriptLocal(message.transcript || '');
+    sendResponse({ analysis: analysis });
+    return true;
+  }
+
+  return false;
+});
+
+// 处理对话分析请求
+async function handleAnalyzeTranscript(message, sendResponse) {
+  const transcript = message.transcript;
+  const context = message.context;
+
+  if (!transcript || transcript.trim().length < 3) {
+    sendResponse({ analysis: null, error: 'Transcript too short' });
+    return;
+  }
+
+  // 先尝试调用后端API
+  const apiResult = await callAnalysisAPI(transcript, context);
+
+  if (apiResult) {
+    // API调用成功
+    sendResponse({ analysis: apiResult });
+  } else {
+    // API调用失败，使用本地分析降级
+    console.log('[SalesCoach] API unavailable, using local analysis');
+    const localResult = analyzeTranscriptLocal(transcript);
+    sendResponse({ analysis: localResult, fallback: true });
+  }
 }

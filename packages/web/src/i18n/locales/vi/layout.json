@@ -1,0 +1,30 @@
+{
+  "brand": "Sales AI Coach",
+  "sidebar": {
+    "home": "Dashboard",
+    "scripts": "Scripts",
+    "practice": "Practice",
+    "knowledge": "Knowledge",
+    "review": "Review",
+    "team": "Team",
+    "plugins": "Plugins",
+    "analytics": "Analytics",
+    "admin": "Admin",
+    "pricing": "Pricing",
+    "logout": "Logout",
+    "loggedOut": "Logged out"
+  },
+  "header": {
+    "openMenu": "Open menu",
+    "welcome": "Welcome back",
+    "loading": "Loading...",
+    "notLoggedIn": "Not logged in"
+  },
+  "mobile": {
+    "sessions": "Sessions",
+    "practice": "Practice",
+    "knowledge": "Knowledge",
+    "analytics": "Data",
+    "more": "More"
+  }
+}

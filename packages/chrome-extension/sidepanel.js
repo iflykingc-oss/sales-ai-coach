@@ -35,7 +35,10 @@ function updateUI() {
 
     info.innerHTML = '';
     const name = document.createElement('div');
-    name.innerHTML = `<strong>${state.persona.name || '客户'}</strong> - ${state.persona.role || ''}`;
+    const nameStrong = document.createElement('strong');
+    nameStrong.textContent = state.persona.name || '客户';
+    name.appendChild(nameStrong);
+    name.appendChild(document.createTextNode(' - ' + (state.persona.role || '')));
     info.appendChild(name);
 
     if (state.persona.personality) {

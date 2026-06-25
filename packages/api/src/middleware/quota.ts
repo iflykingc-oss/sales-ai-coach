@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 
 export const PLAN_LIMITS: Record<string, Record<string, number>> = {
   FREE: { scripts: 5, practices: 3, reviews: 1 },
@@ -29,14 +30,18 @@ export function quotaMiddleware(action: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
-      if (!userId) return next();
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Authentication required for quota check' });
+      }
 
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { plan: true },
       });
 
-      if (!user) return next();
+      if (!user) {
+        return res.status(401).json({ success: false, error: 'User not found' });
+      }
 
       const limits = PLAN_LIMITS[user.plan] || PLAN_LIMITS.FREE;
       const limit = limits[action];
@@ -70,8 +75,12 @@ export function quotaMiddleware(action: string) {
 
       next();
     } catch (err) {
-      // Don't block on quota check failure
-      next();
+      // Fail-closed: block request on quota check failure to prevent abuse
+      logger.error('Quota check failed, blocking request', { error: err, action, userId: req.user?.id });
+      return res.status(503).json({
+        success: false,
+        error: 'Service temporarily unavailable, please try again',
+      });
     }
   };
 }

@@ -48,3 +48,6 @@ class CoachingState(TypedDict):
     logic_framework: str                             # Sales framework in use
     session_id: str                                  # Session ID
     is_complete: bool                                # Whether session is done
+
+    # Knowledge context (product/industry knowledge for dynamic lookup)
+    knowledge_context: str                           # Knowledge base content

@@ -57,15 +57,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <div className="flex flex-col items-center justify-center min-h-[200px] p-8">
           <div className="text-center max-w-md">
             <h2 className="text-lg font-semibold text-red-600 mb-2">
-              出现错误
+              Something went wrong
             </h2>
             <p className="text-gray-600 mb-2 text-sm">
-              {this.state.error?.message || '未知错误'}
+              {this.state.error?.message || 'Unknown error'}
             </p>
             {import.meta.env.DEV && this.state.errorInfo && (
               <details className="mb-4 text-left">
                 <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">
-                  组件堆栈 (开发模式)
+                  Component Stack (Dev)
                 </summary>
                 <pre className="mt-2 text-xs text-gray-500 bg-gray-50 p-3 rounded overflow-auto max-h-48">
                   {this.state.errorInfo.componentStack}
@@ -77,13 +77,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 onClick={this.handleRetry}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
               >
-                重试
+                Retry
               </button>
               <button
                 onClick={this.handleReload}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
               >
-                刷新页面
+                Reload
               </button>
             </div>
           </div>

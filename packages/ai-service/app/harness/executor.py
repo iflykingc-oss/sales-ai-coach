@@ -19,6 +19,7 @@ Enhanced with:
 
 import asyncio
 import json
+from typing import AsyncIterator
 from app.harness.feature_list import FeatureList, ItemStatus
 from app.models.router import model_router
 from app.core.logging import logger
@@ -79,7 +80,9 @@ class TaskExecutor:
                     retries = self._retry_count.get(item.id, 0)
                     if retries < self.max_retries:
                         self._retry_count[item.id] = retries + 1
-                        self.fl.start_item(item.id)  # Reset to in_progress
+                        # Reset status to PENDING so start_item can transition to IN_PROGRESS
+                        item.status = ItemStatus.PENDING
+                        self.fl.start_item(item.id)
                         logger.info(f"Retrying item {item.id} (attempt {retries + 1})")
                         success = await self._execute_item(item, attempt=retries + 1)
                 return (item, success)
@@ -97,9 +100,11 @@ class TaskExecutor:
                     *[_execute_with_retry(item) for item in ready_items],
                     return_exceptions=True,
                 )
-                for result in results:
+                for i, result in enumerate(results):
                     if isinstance(result, Exception):
                         logger.error(f"Parallel execution error: {result}")
+                        # Mark the corresponding item as failed
+                        self.fl.fail_item(ready_items[i].id, error=str(result))
                         continue
                     item, success = result
                     if not success:
@@ -109,6 +114,39 @@ class TaskExecutor:
         logger.info(f"Executor finished task {self.fl.task_id}: {done}/{total} complete")
         return self.fl
 
+    def build_messages_for_item(self, item, attempt: int = 0) -> tuple[list[dict], float]:
+        """Build the messages list and temperature for an item.
+
+        Used by both _execute_item (non-streaming) and external streaming callers.
+
+        Returns:
+            (messages, temperature) tuple
+        """
+        prompt = self._build_execution_prompt(item)
+
+        dep_results = {}
+        for dep_id in item.dependencies:
+            dep_item = self.fl.get_item(dep_id)
+            if dep_item:
+                dep_results[dep_item.description] = dep_item.result
+
+        config = item.metadata.get("config", DEFAULT_CONFIG)
+        system_prompt = self._build_system_prompt(item, config)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+
+        if dep_results:
+            ctx = json.dumps(dep_results, ensure_ascii=False)
+            messages.append({"role": "user", "content": f"前置任务结果:\n{ctx}"})
+
+        base_temp = item.metadata.get("temperature", config.base_temperature)
+        temperature = max(config.min_temperature, base_temp - attempt * config.temperature_decay)
+
+        return messages, temperature
+
     async def _execute_item(self, item, attempt: int = 0) -> bool:
         """Execute a single FeatureList item. Returns True on success.
 
@@ -117,34 +155,7 @@ class TaskExecutor:
             attempt: Current retry attempt (for temperature decay)
         """
         try:
-            # Build execution prompt based on item description and context
-            prompt = self._build_execution_prompt(item)
-
-            # Gather results from dependencies
-            dep_results = {}
-            for dep_id in item.dependencies:
-                dep_item = self.fl.get_item(dep_id)
-                if dep_item:
-                    dep_results[dep_item.description] = dep_item.result
-
-            # Get config from metadata or use default
-            config = item.metadata.get("config", DEFAULT_CONFIG)
-
-            # Build stacked system prompt based on item type
-            system_prompt = self._build_system_prompt(item, config)
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ]
-
-            if dep_results:
-                ctx = json.dumps(dep_results, ensure_ascii=False)
-                messages.append({"role": "user", "content": f"前置任务结果:\n{ctx}"})
-
-            # Temperature with decay support
-            base_temp = item.metadata.get("temperature", config.base_temperature)
-            temperature = max(config.min_temperature, base_temp - attempt * config.temperature_decay)
+            messages, temperature = self.build_messages_for_item(item, attempt)
 
             result = await model_router.chat_with_fallback(
                 messages,
@@ -159,6 +170,25 @@ class TaskExecutor:
         except Exception as e:
             logger.error(f"Executor failed on item {item.id}: {e}")
             return False
+
+    async def _execute_item_stream(self, item, attempt: int = 0) -> AsyncIterator[str]:
+        """Execute a FeatureList item with streaming. Yields tokens as they arrive.
+
+        After the stream completes, the item is marked complete with the full content.
+        Caller must consume the entire iterator to ensure item completion.
+        """
+        messages, temperature = self.build_messages_for_item(item, attempt)
+        max_tokens = item.metadata.get("max_tokens", 2048)
+
+        full_content = ""
+        async for token in model_router.chat_stream_with_fallback(
+            messages, temperature=temperature, max_tokens=max_tokens
+        ):
+            full_content += token
+            yield token
+
+        self.fl.complete_item(item.id, result=full_content)
+        self.results[item.id] = full_content
 
     def _build_system_prompt(self, item, config: SpeechGenConfig) -> str:
         """
@@ -292,11 +322,11 @@ class TaskExecutor:
                 f"4. 不得出现重复内容，三种风格必须有实质差异"
             )
 
-        # Add dependency results as context
+        # Add dependency results as context (2000 chars to preserve framework analysis detail)
         for dep_id in item.dependencies:
             dep = self.fl.get_item(dep_id)
             if dep and dep.result:
-                parts.append(f"前置任务[{dep.description}]结果:\n{dep.result[:500]}")
+                parts.append(f"前置任务[{dep.description}]结果:\n{dep.result[:2000]}")
 
         return "\n\n".join(parts)
 

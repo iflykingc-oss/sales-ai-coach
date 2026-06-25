@@ -5,6 +5,7 @@ import { useSessionStore } from '@/stores/sessionStore';
 import { useScriptStore } from '@/stores/scriptStore';
 import type { InputType, GenerateScriptOutput } from '@sales-ai-coach/shared';
 import type { Session as SessionType } from '@sales-ai-coach/shared';
+import type { ScriptStateData } from '@/stores/scriptStore';
 import SessionTabBar from '@/components/session/SessionTabBar';
 import MessageList, { type AppendMessageFn } from '@/components/session/MessageList';
 import InputBar from '@/components/session/InputBar';
@@ -46,7 +47,7 @@ export default function SessionPage() {
   useEffect(() => {
     if (sessionsData && sessionsData.length === 0 && !activeSessionId) {
       api.post('/sessions', { name: '新对话', industry: null, tags: [] })
-        .then((res: any) => {
+        .then((res: { data: SessionType }) => {
           if (res.data?.id) {
             setSessions([res.data]);
             setActiveSessionId(res.data.id);
@@ -90,7 +91,7 @@ export default function SessionPage() {
 
         if (result?.success && result?.data) {
           const data = result.data as GenerateScriptOutput;
-          setCurrentScript(data as any);
+          setCurrentScript(data as unknown as ScriptStateData);
           setGeneratedScriptIds(result.scriptIds || []);
           addActivity({
             type: 'script_generate',

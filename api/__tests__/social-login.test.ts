@@ -84,12 +84,12 @@ describe('Social Login API', () => {
 
 describe('Supabase Integration', () => {
   it('should use correct Supabase URL', () => {
-    const supabaseUrl = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+    const supabaseUrl = process.env.SUPABASE_URL || '';
     expect(supabaseUrl).toContain('supabase.co');
   });
 
   it('should verify user with Supabase auth endpoint', () => {
-    const supabaseUrl = 'https://doqcopkqbfpstuavfjsa.supabase.co';
+    const supabaseUrl = process.env.SUPABASE_URL || '';
     const endpoint = `${supabaseUrl}/auth/v1/user`;
     expect(endpoint).toContain('/auth/v1/user');
   });

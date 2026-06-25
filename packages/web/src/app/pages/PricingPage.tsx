@@ -3,7 +3,7 @@ import { Check, Crown, Zap, Users, Building2, ArrowRight, Loader2, AlertCircle, 
 import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { cn } from '@/utils/cn';
 import { useUserStore } from '@/stores/userStore';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { PayPalCheckout } from '@/components/payment/PayPalCheckout';
 import { formatPrice } from '@/utils/currency';
@@ -45,7 +45,8 @@ const ACTION_LABELS: Record<string, string> = {
 
 export function PricingPage() {
   const user = useUserStore((s) => s.user);
-  const { locale } = useI18n();
+  const { i18n } = useTranslation();
+  const locale = i18n.language;
   const [tiers, setTiers] = useState<PlanTier[]>([]);
   const [currentPlan, setCurrentPlan] = useState<CurrentPlan | null>(null);
   const [loading, setLoading] = useState(true);

@@ -2,23 +2,43 @@ import { create } from 'zustand';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  plan: string;
+}
+
 interface UserState {
-  user: { id: string; name: string; email: string; role: string; plan: string } | null;
-  setUser: (user: UserState['user']) => void;
+  user: User | null;
+  setUser: (user: User | null) => void;
   clearUser: () => void;
   validateSession: () => Promise<boolean>;
 }
 
-function getInitialUser() {
+function isValidUser(obj: unknown): obj is User {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof (obj as User).id === 'string' &&
+    typeof (obj as User).email === 'string' &&
+    typeof (obj as User).role === 'string' &&
+    ['USER', 'ADMIN', 'TEAM_OWNER'].includes((obj as User).role)
+  );
+}
+
+function getInitialUser(): User | null {
   try {
     const stored = localStorage.getItem('user');
     if (stored) {
       const user = JSON.parse(stored);
-      if (user?.id) return user;
+      if (isValidUser(user)) return user;
     }
   } catch {
-    localStorage.removeItem('user');
+    // corrupted data
   }
+  localStorage.removeItem('user');
   return null;
 }
 
@@ -45,9 +65,11 @@ export const useUserStore = create<UserState>((set) => ({
         return false;
       }
       const json = await res.json();
-      if (json.success && json.data?.user) {
-        localStorage.setItem('user', JSON.stringify(json.data.user));
-        set({ user: json.data.user });
+      // /auth/me returns { success: true, data: user } (not data.user)
+      const userData = json.data?.user || json.data;
+      if (json.success && isValidUser(userData)) {
+        localStorage.setItem('user', JSON.stringify(userData));
+        set({ user: userData });
         return true;
       }
       localStorage.removeItem('user');

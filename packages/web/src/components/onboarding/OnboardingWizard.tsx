@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Target, BookOpen, Dumbbell, Shield, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useI18n } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
 
 interface OnboardingStep {
@@ -54,7 +54,8 @@ interface OnboardingWizardProps {
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
-  const { locale } = useI18n();
+  const { i18n } = useTranslation();
+  const locale = i18n.language;
   const t = (zh: string, en: string) => locale === 'zh' ? zh : en;
 
   const step = STEPS[currentStep];

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from fastapi import APIRouter
@@ -9,22 +10,33 @@ from app.core.config import get_settings
 
 router = APIRouter()
 
-# In-memory session store (replace with Redis/DB in production)
-_sessions: dict[str, dict] = {}  # {session_id: {"harness": PracticeHarness, "last_access": float}}
+# In-memory session store with thread safety
+_sessions: dict[str, dict] = {}  # {session_id: {"harness": PracticeHarness, "last_access": float, "lock": asyncio.Lock}}
+_store_lock = asyncio.Lock()
 _MAX_SESSIONS = 500
 _SESSION_TTL = 3600  # 1 hour
 
 
-def _cleanup_sessions():
-    now = time.time()
-    # Remove expired sessions
-    expired = [sid for sid, data in _sessions.items() if now - data["last_access"] > _SESSION_TTL]
-    for sid in expired:
-        del _sessions[sid]
-    # If still over limit, remove oldest
-    while len(_sessions) > _MAX_SESSIONS:
-        oldest = min(_sessions, key=lambda k: _sessions[k]["last_access"])
-        del _sessions[oldest]
+async def _cleanup_sessions():
+    async with _store_lock:
+        now = time.time()
+        expired = [sid for sid, data in _sessions.items() if now - data["last_access"] > _SESSION_TTL]
+        for sid in expired:
+            del _sessions[sid]
+        while len(_sessions) > _MAX_SESSIONS:
+            oldest = min(_sessions, key=lambda k: _sessions[k]["last_access"])
+            del _sessions[oldest]
+
+
+def _get_session(session_id: str) -> dict | None:
+    """Get session data (caller must hold _store_lock or use _get_session_with_lock)."""
+    return _sessions.get(session_id)
+
+
+async def _get_session_with_lock(session_id: str) -> dict | None:
+    """Get session data with store lock."""
+    async with _store_lock:
+        return _sessions.get(session_id)
 
 
 class PracticeInitRequest(BaseModel):
@@ -129,8 +141,9 @@ async def init_session(req: PracticeInitRequest):
 
     result = await harness.init_session(**init_kwargs)
 
-    _cleanup_sessions()
-    _sessions[session_id] = {"harness": harness, "last_access": time.time()}
+    await _cleanup_sessions()
+    async with _store_lock:
+        _sessions[session_id] = {"harness": harness, "last_access": time.time(), "lock": asyncio.Lock()}
     logger.info(f"Practice session initialized: {session_id} (langgraph={settings.use_langgraph_coaching})")
     return PracticeResponse(success=True, data=result)
 
@@ -138,22 +151,24 @@ async def init_session(req: PracticeInitRequest):
 @router.post("/message", response_model=PracticeResponse)
 async def send_message(req: PracticeMessageRequest):
     """Send a message in an active practice session."""
-    _cleanup_sessions()
-    session_data = _sessions.get(req.sessionId)
+    await _cleanup_sessions()
+    session_data = await _get_session_with_lock(req.sessionId)
     if not session_data:
         return PracticeResponse(success=False, data={"error": "会话不存在或已结束"})
 
     session_data["last_access"] = time.time()
     harness = session_data["harness"]
-    result = await harness.respond(req.message, logic_framework=req.logicFramework)
+    # Per-session lock prevents concurrent respond() calls from corrupting state
+    async with session_data["lock"]:
+        result = await harness.respond(req.message, logic_framework=req.logicFramework)
     return PracticeResponse(success=True, data=result)
 
 
 @router.post("/message/stream")
 async def send_message_stream(req: PracticeMessageRequest):
     """Stream a practice message response via SSE."""
-    _cleanup_sessions()
-    session_data = _sessions.get(req.sessionId)
+    await _cleanup_sessions()
+    session_data = await _get_session_with_lock(req.sessionId)
     if not session_data:
         return PracticeResponse(success=False, data={"error": "会话不存在或已结束"})
 
@@ -161,8 +176,10 @@ async def send_message_stream(req: PracticeMessageRequest):
     harness = session_data["harness"]
 
     async def event_generator():
-        async for event in harness.respond_stream(req.message, logic_framework=req.logicFramework):
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        async with session_data["lock"]:
+            async for event in harness.respond_stream(req.message, logic_framework=req.logicFramework):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        # Send heartbeat every 15s during long operations is handled by the proxy
 
     return StreamingResponse(
         event_generator(),
@@ -174,8 +191,8 @@ async def send_message_stream(req: PracticeMessageRequest):
 @router.post("/report", response_model=PracticeResponse)
 async def generate_report(req: PracticeReportRequest):
     """Generate a comprehensive practice session report."""
-    _cleanup_sessions()
-    session_data = _sessions.get(req.sessionId)
+    await _cleanup_sessions()
+    session_data = await _get_session_with_lock(req.sessionId)
     if not session_data:
         return PracticeResponse(success=False, data={"error": "会话不存在"})
 
@@ -189,8 +206,8 @@ async def generate_report(req: PracticeReportRequest):
 @router.post("/hint", response_model=PracticeResponse)
 async def get_coaching_hint(req: PracticeHintRequest):
     """Generate a contextual coaching hint based on conversation history."""
-    _cleanup_sessions()
-    session_data = _sessions.get(req.sessionId)
+    await _cleanup_sessions()
+    session_data = await _get_session_with_lock(req.sessionId)
     if not session_data:
         return PracticeResponse(success=False, data={"error": "会话不存在或已结束"})
 
@@ -203,8 +220,8 @@ async def get_coaching_hint(req: PracticeHintRequest):
 @router.get("/session/{session_id}")
 async def get_session_state(session_id: str):
     """Get current state of a practice session."""
-    _cleanup_sessions()
-    session_data = _sessions.get(session_id)
+    await _cleanup_sessions()
+    session_data = await _get_session_with_lock(session_id)
     if not session_data:
         return {"success": False, "data": {"error": "会话不存在"}}
     session_data["last_access"] = time.time()

@@ -27,6 +27,28 @@ const messageSchema = z.object({
   logicFramework: z.string().max(100).optional(),
 });
 
+const analyzeDocumentSchema = z.object({
+  fileName: z.string().min(1).max(200),
+  content: z.string().min(1).max(50000),
+});
+
+const savePracticeSchema = z.object({
+  sessionId: z.string().uuid().optional(),
+  scriptId: z.string().uuid().optional(),
+  scenario: z.string().max(500).optional(),
+  industry: z.string().max(100).optional(),
+  rounds: z.number().int().min(0).max(100).optional(),
+  score: z.number().min(0).max(100).optional(),
+  feedback: z.record(z.unknown()).optional(),
+  transcript: z.unknown().optional(),
+});
+
+const startPracticeSchema = z.object({
+  scenario: z.string().min(1).max(500),
+  industry: z.string().max(100).optional(),
+  mode: z.string().max(50).optional(),
+});
+
 // Auto-select logic framework based on skill focus or scenario
 function autoSelectFramework(skillFocus?: string, scenario?: string): string {
   // Skill-based recommendations (internal logic, not exposed to frontend)
@@ -109,11 +131,11 @@ router.post('/message', authMiddleware, aiLimiter, async (req, res, next) => {
 // Analyze uploaded document for practice context
 router.post('/analyze-document', authMiddleware, async (req, res, next) => {
   try {
-    const { fileName, content } = req.body;
-
-    if (!fileName || !content) {
-      return res.status(400).json({ success: false, error: '缺少文件名或内容' });
+    const parsed = analyzeDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
     }
+    const { fileName, content } = parsed.data;
 
     // Call AI service to analyze document
     const result = await callAiService({
@@ -128,7 +150,11 @@ router.post('/analyze-document', authMiddleware, async (req, res, next) => {
 // Streaming practice message (SSE proxy)
 router.post('/message/stream', authMiddleware, aiLimiter, async (req, res, next) => {
   try {
-    const { sessionId, message, logicFramework } = req.body;
+    const parsed = messageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { sessionId, message, logicFramework } = parsed.data;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -198,7 +224,11 @@ router.post('/hint', authMiddleware, async (req, res, next) => {
 // Save completed practice session to DB with pipeline linkage
 router.post('/save', authMiddleware, async (req, res, next) => {
   try {
-    const { sessionId, scriptId, scenario, industry, rounds, score, feedback, transcript } = req.body;
+    const parsed = savePracticeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { sessionId, scriptId, scenario, industry, rounds, score, feedback, transcript } = parsed.data;
 
     const practice = await prisma.practiceSession.create({
       data: {
@@ -210,7 +240,7 @@ router.post('/save', authMiddleware, async (req, res, next) => {
         rounds: rounds || 0,
         score: score || 0,
         feedback: feedback || {},
-        transcript: transcript || null,
+        transcript: transcript ? JSON.parse(JSON.stringify(transcript)) : null,
       },
     });
 
@@ -229,7 +259,11 @@ router.post('/save', authMiddleware, async (req, res, next) => {
 // Legacy DB-backed endpoints (still available)
 router.post('/start', authMiddleware, async (req, res, next) => {
   try {
-    const { scenario, industry, mode } = req.body;
+    const parsed = startPracticeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { scenario, industry, mode } = parsed.data;
     const practice = await prisma.practiceSession.create({
       data: {
         userId: req.user!.id,

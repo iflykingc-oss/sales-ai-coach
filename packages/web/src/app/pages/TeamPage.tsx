@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TeamDashboard } from '@/components/team/TeamDashboard';
 import { MemberList } from '@/components/team/MemberList';
@@ -11,8 +12,10 @@ import { useUserStore } from '@/stores/userStore';
 import { api } from '@/services/api';
 import { toast } from '@/hooks/useToast';
 import { AlertCircle } from 'lucide-react';
+import type { TeamMember, TeamTask } from '@/stores/teamStore';
 
 export default function TeamPage() {
+  const { t } = useTranslation();
   const { loading, setLoading, setMembers, setTasks, setTeamStats, setWeakScenarios } = useTeamStore();
   const user = useUserStore((s) => s.user);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -26,8 +29,7 @@ export default function TeamPage() {
     setLoading(true);
     setError(null);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const teamRes: any = await api.get('/teams/my');
+      const teamRes = await api.get('/teams/my') as { data: { id: string; name: string } };
       const team = teamRes?.data;
       if (!team?.id) {
         setNoTeam(true);
@@ -37,8 +39,7 @@ export default function TeamPage() {
       setTeamId(team.id);
       setNoTeam(false);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const statsRes: any = await api.get(`/teams/${team.id}/stats`);
+      const statsRes = await api.get(`/teams/${team.id}/stats`) as { data: { members: TeamMember[]; stats: { totalMembers: number; activeToday: number; totalScriptsGenerated: number; avgPracticeScore: number }; weakScenarios: Array<{ name: string; weakness: number }> } };
       const statsData = statsRes?.data;
       if (statsData) {
         setMembers(statsData.members || []);
@@ -46,24 +47,22 @@ export default function TeamPage() {
         setWeakScenarios(statsData.weakScenarios || []);
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tasksRes: any = await api.get(`/teams/${team.id}/tasks`);
+      const tasksRes = await api.get(`/teams/${team.id}/tasks`) as { data: Array<Record<string, unknown>> };
       const tasks = tasksRes?.data || [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setTasks(tasks.map((t: any) => ({
-        id: t.id,
-        title: t.title || t.type || '任务',
-        type: t.type || 'practice',
-        assigneeId: t.assigneeId || '',
-        assigneeName: t.assigneeName || '',
-        deadline: t.deadline ? new Date(t.deadline).toISOString().split('T')[0] : '',
-        status: t.status || 'pending',
-        createdAt: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '',
-        description: t.description || '',
+      setTasks(tasks.map((task) => ({
+        id: task.id as string,
+        title: (task.title as string) || (task.type as string) || t('teamPage.task'),
+        type: (task.type as TeamTask['type']) || 'practice' as const,
+        assigneeId: (task.assigneeId as string) || '',
+        assigneeName: (task.assigneeName as string) || '',
+        deadline: task.deadline ? new Date(task.deadline as string).toISOString().split('T')[0] : '',
+        status: (task.status as TeamTask['status']) || 'pending' as const,
+        createdAt: task.createdAt ? new Date(task.createdAt as string).toISOString().split('T')[0] : '',
+        description: (task.description as string) || '',
       })));
     } catch (err) {
       logger.error('Failed to fetch team data:', err);
-      setError('加载团队数据失败，请稍后重试');
+      setError(t('teamPage.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -81,19 +80,19 @@ export default function TeamPage() {
       await api.post('/teams', { name: teamName.trim() });
       setShowCreateTeam(false);
       setTeamName('');
-      toast.success('团队创建成功');
+      toast.success(t('teamPage.createSuccess'));
       fetchTeamData();
     } catch (err) {
       logger.error('Failed to create team:', err);
-      toast.error('创建团队失败');
+      toast.error(t('teamPage.createFailed'));
     }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">团队管理</h2>
-        <p className="mt-1 text-sm text-gray-500">管理团队数据看板、任务分配和话术共享</p>
+        <h2 className="text-xl font-semibold text-gray-900">{t('teamPage.title')}</h2>
+        <p className="mt-1 text-sm text-gray-500">{t('teamPage.subtitle')}</p>
       </div>
 
       {error && (
@@ -116,13 +115,13 @@ export default function TeamPage() {
         </div>
       ) : noTeam ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-          <h3 className="text-lg font-medium text-gray-900">还没有加入团队</h3>
-          <p className="mt-2 text-sm text-gray-500">创建一个团队，邀请成员一起训练</p>
+          <h3 className="text-lg font-medium text-gray-900">{t('teamPage.noTeamTitle')}</h3>
+          <p className="mt-2 text-sm text-gray-500">{t('teamPage.noTeamDesc')}</p>
           <button
             onClick={() => setShowCreateTeam(true)}
             className="mt-4 rounded-lg bg-primary-600 px-6 py-2 text-sm font-medium text-white hover:bg-primary-700"
           >
-            创建团队
+            {t('teamPage.createTeam')}
           </button>
         </div>
       ) : isOwner ? (
@@ -143,12 +142,12 @@ export default function TeamPage() {
       {showCreateTeam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">创建团队</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">{t('teamPage.createTeamTitle')}</h3>
             <input
               type="text"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              placeholder="请输入团队名称"
+              placeholder={t('teamPage.teamNamePlaceholder')}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleCreateTeam()}
@@ -158,14 +157,14 @@ export default function TeamPage() {
                 onClick={() => { setShowCreateTeam(false); setTeamName(''); }}
                 className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
               >
-                取消
+                {t('cancel')}
               </button>
               <button
                 onClick={handleCreateTeam}
                 disabled={!teamName.trim()}
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
               >
-                创建
+                {t('teamPage.create')}
               </button>
             </div>
           </div>

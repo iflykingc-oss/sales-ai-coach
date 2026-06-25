@@ -9,6 +9,18 @@ import zhPractice from './locales/zh/practice.json';
 import enCommon from './locales/en/common.json';
 import enLayout from './locales/en/layout.json';
 import enPractice from './locales/en/practice.json';
+import thCommon from './locales/th/common.json';
+import thLayout from './locales/th/layout.json';
+import thPractice from './locales/th/practice.json';
+import viCommon from './locales/vi/common.json';
+import viLayout from './locales/vi/layout.json';
+import viPractice from './locales/vi/practice.json';
+import msCommon from './locales/ms/common.json';
+import msLayout from './locales/ms/layout.json';
+import msPractice from './locales/ms/practice.json';
+import idCommon from './locales/id/common.json';
+import idLayout from './locales/id/layout.json';
+import idPractice from './locales/id/practice.json';
 
 const resources = {
   zh: {
@@ -20,6 +32,26 @@ const resources = {
     common: enCommon,
     layout: enLayout,
     practice: enPractice,
+  },
+  th: {
+    common: thCommon,
+    layout: thLayout,
+    practice: thPractice,
+  },
+  vi: {
+    common: viCommon,
+    layout: viLayout,
+    practice: viPractice,
+  },
+  ms: {
+    common: msCommon,
+    layout: msLayout,
+    practice: msPractice,
+  },
+  id: {
+    common: idCommon,
+    layout: idLayout,
+    practice: idPractice,
   },
 };
 

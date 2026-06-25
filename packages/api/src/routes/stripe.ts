@@ -103,6 +103,8 @@ router.post('/create-checkout', authMiddleware, async (req: Request, res: Respon
       subscription_data: {
         metadata: { userId, targetPlan },
       },
+    }, {
+      idempotencyKey: `checkout_${userId}_${targetPlan}_${interval}`,
     });
 
     res.json({ success: true, data: { url: session.url } });
@@ -194,10 +196,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });
   }
 
-  // Return 200 immediately, process async
-  res.json({ received: true });
-
-  // Process event asynchronously
+  // Process event synchronously so Stripe retries on failure
   try {
     switch (event.type) {
       case 'checkout.session.completed':
@@ -209,16 +208,33 @@ router.post('/webhook', async (req: Request, res: Response) => {
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
+      case 'customer.subscription.paused':
+        console.log(`[Stripe] Subscription paused: ${(event.data.object as Stripe.Subscription).id}`);
+        break;
+      case 'customer.subscription.resumed':
+        console.log(`[Stripe] Subscription resumed: ${(event.data.object as Stripe.Subscription).id}`);
+        break;
       case 'invoice.paid':
         await handleInvoicePaid(event.data.object as Stripe.Invoice);
         break;
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object as Stripe.Invoice);
         break;
+      case 'charge.refunded':
+        console.log(`[Stripe] Charge refunded: ${(event.data.object as Stripe.Charge).id}`);
+        break;
+      case 'charge.dispute.created':
+        console.log(`[Stripe] Dispute created: ${(event.data.object as Stripe.Dispute).id}`);
+        break;
+      default:
+        console.log(`[Stripe] Unhandled event type: ${event.type}`);
     }
   } catch (err) {
     console.error(`[Stripe] Error processing ${event.type}:`, err);
+    return res.status(500).json({ error: `Error processing ${event.type}` });
   }
+
+  res.json({ received: true });
 });
 
 // ============================================================

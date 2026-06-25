@@ -1,6 +1,7 @@
 import { logger } from '@/utils/logger';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, History } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -16,7 +17,7 @@ import { cn } from '@/utils/cn';
 type PracticeView = 'setup' | 'chat' | 'auto-report' | 'summary';
 
 // 预定义场景配置（用于快速开始）
-const QUICK_SCENARIOS: Record<string, {
+const getQuickScenarios = (t: (key: string, opts?: Record<string, unknown>) => unknown): Record<string, {
   id: string;
   title: string;
   desc: string;
@@ -25,151 +26,152 @@ const QUICK_SCENARIOS: Record<string, {
   customerProfile: string;
   objectives: string[];
   industry: string;
-}> = {
+}> => ({
   'cold-call': {
     id: 'cold-call',
-    title: '冷启动电话',
-    desc: '首次联系潜在客户，建立初步印象',
+    title: t('practicePage.scenarios.coldCall.title') as string,
+    desc: t('practicePage.scenarios.coldCall.desc') as string,
     difficulty: 'medium',
-    greeting: '喂，您好，请问哪位？',
-    customerProfile: '忙碌的中层管理者，对陌生来电有防备心理',
-    objectives: ['引起兴趣', '获得进一步沟通机会'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.coldCall.greeting') as string,
+    customerProfile: t('practicePage.scenarios.coldCall.profile') as string,
+    objectives: t('practicePage.scenarios.coldCall.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'needs-analysis': {
     id: 'needs-analysis',
-    title: '需求诊断',
-    desc: '深入了解客户痛点和真实需求',
+    title: t('practicePage.scenarios.needsAnalysis.title') as string,
+    desc: t('practicePage.scenarios.needsAnalysis.desc') as string,
     difficulty: 'medium',
-    greeting: '我们确实有些问题想解决，你先介绍一下吧。',
-    customerProfile: '有明确问题但不确定解决方案的客户',
-    objectives: ['挖掘核心痛点', '建立需求共识'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.needsAnalysis.greeting') as string,
+    customerProfile: t('practicePage.scenarios.needsAnalysis.profile') as string,
+    objectives: t('practicePage.scenarios.needsAnalysis.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'product-demo': {
     id: 'product-demo',
-    title: '产品演示',
-    desc: '向客户展示产品功能和价值',
+    title: t('practicePage.scenarios.productDemo.title') as string,
+    desc: t('practicePage.scenarios.productDemo.desc') as string,
     difficulty: 'medium',
-    greeting: '我对你们的产品挺感兴趣，演示一下吧。',
-    customerProfile: '有兴趣但担心实施风险的技术负责人',
-    objectives: ['展示核心价值', '处理技术疑虑'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.productDemo.greeting') as string,
+    customerProfile: t('practicePage.scenarios.productDemo.profile') as string,
+    objectives: t('practicePage.scenarios.productDemo.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'price-negotiation': {
     id: 'price-negotiation',
-    title: '价格谈判',
-    desc: '客户对价格有异议，需要价值塑造',
+    title: t('practicePage.scenarios.priceNegotiation.title') as string,
+    desc: t('practicePage.scenarios.priceNegotiation.desc') as string,
     difficulty: 'hard',
-    greeting: '你们的报价太高了，能不能便宜点？',
-    customerProfile: '价格敏感型客户，善于比价',
-    objectives: ['价值塑造', '灵活报价策略'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.priceNegotiation.greeting') as string,
+    customerProfile: t('practicePage.scenarios.priceNegotiation.profile') as string,
+    objectives: t('practicePage.scenarios.priceNegotiation.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'terms-negotiation': {
     id: 'terms-negotiation',
-    title: '条款协商',
-    desc: '合同条款、付款方式等细节谈判',
+    title: t('practicePage.scenarios.termsNegotiation.title') as string,
+    desc: t('practicePage.scenarios.termsNegotiation.desc') as string,
     difficulty: 'hard',
-    greeting: '合同条款我们需要再讨论一下，有几个点不能接受。',
-    customerProfile: '法务参与，对条款要求严格',
-    objectives: ['平衡双方利益', '促成签约'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.termsNegotiation.greeting') as string,
+    customerProfile: t('practicePage.scenarios.termsNegotiation.profile') as string,
+    objectives: t('practicePage.scenarios.termsNegotiation.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'urgency-close': {
     id: 'urgency-close',
-    title: '紧迫感促单',
-    desc: '创造紧迫感，推动客户快速决策',
+    title: t('practicePage.scenarios.urgencyClose.title') as string,
+    desc: t('practicePage.scenarios.urgencyClose.desc') as string,
     difficulty: 'hard',
-    greeting: '方案不错，但我还需要再考虑一下。',
-    customerProfile: '犹豫不决，需要临门一脚',
-    objectives: ['制造紧迫感', '消除决策障碍'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.urgencyClose.greeting') as string,
+    customerProfile: t('practicePage.scenarios.urgencyClose.profile') as string,
+    objectives: t('practicePage.scenarios.urgencyClose.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'referral-visit': {
     id: 'referral-visit',
-    title: '转介绍拜访',
-    desc: '通过老客户介绍，拜访新客户',
+    title: t('practicePage.scenarios.referralVisit.title') as string,
+    desc: t('practicePage.scenarios.referralVisit.desc') as string,
     difficulty: 'medium',
-    greeting: '你好，老王跟我提过你，说说你们的情况吧。',
-    customerProfile: '对介绍人信任，愿意了解但保持谨慎',
-    objectives: ['利用信任背书', '深入了解需求'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.referralVisit.greeting') as string,
+    customerProfile: t('practicePage.scenarios.referralVisit.profile') as string,
+    objectives: t('practicePage.scenarios.referralVisit.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'follow-up': {
     id: 'follow-up',
-    title: '跟进回访',
-    desc: '维护关系，挖掘新需求',
+    title: t('practicePage.scenarios.followUp.title') as string,
+    desc: t('practicePage.scenarios.followUp.desc') as string,
     difficulty: 'easy',
-    greeting: '你好，上次的事情我们内部讨论了一下。',
-    customerProfile: '老客户，有合作基础',
-    objectives: ['深化关系', '挖掘新机会'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.followUp.greeting') as string,
+    customerProfile: t('practicePage.scenarios.followUp.profile') as string,
+    objectives: t('practicePage.scenarios.followUp.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'solution-proposal': {
     id: 'solution-proposal',
-    title: '方案提报',
-    desc: '提交完整的解决方案',
+    title: t('practicePage.scenarios.solutionProposal.title') as string,
+    desc: t('practicePage.scenarios.solutionProposal.desc') as string,
     difficulty: 'hard',
-    greeting: '方案我看了，但我还需要对比一下其他家的。',
-    customerProfile: '多方对比的决策者，关注ROI',
-    objectives: ['突出差异化', '量化价值'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.solutionProposal.greeting') as string,
+    customerProfile: t('practicePage.scenarios.solutionProposal.profile') as string,
+    objectives: t('practicePage.scenarios.solutionProposal.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'final-objection': {
     id: 'final-objection',
-    title: '最后异议',
-    desc: '处理成交前的最后顾虑',
+    title: t('practicePage.scenarios.finalObjection.title') as string,
+    desc: t('practicePage.scenarios.finalObjection.desc') as string,
     difficulty: 'expert',
-    greeting: '其实我还有一个顾虑...',
-    customerProfile: '即将签约但有最后担忧',
-    objectives: ['化解最后异议', '锁定成交'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.finalObjection.greeting') as string,
+    customerProfile: t('practicePage.scenarios.finalObjection.profile') as string,
+    objectives: t('practicePage.scenarios.finalObjection.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   'complaint-handling': {
     id: 'complaint-handling',
-    title: '投诉处理',
-    desc: '处理客户投诉，挽回客户关系',
+    title: t('practicePage.scenarios.complaintHandling.title') as string,
+    desc: t('practicePage.scenarios.complaintHandling.desc') as string,
     difficulty: 'hard',
-    greeting: '你们这个产品太让人失望了！我要投诉！',
-    customerProfile: '不满的客户，情绪激动',
-    objectives: ['平息情绪', '解决问题', '挽回关系'],
-    industry: '通用',
+    greeting: t('practicePage.scenarios.complaintHandling.greeting') as string,
+    customerProfile: t('practicePage.scenarios.complaintHandling.profile') as string,
+    objectives: t('practicePage.scenarios.complaintHandling.objectives', { returnObjects: true }) as string[],
+    industry: t('practicePage.general') as string,
   },
   // Southeast Asia scenarios
   'sea-lazada': {
     id: 'sea-lazada',
-    title: 'Lazada卖家入驻',
-    desc: '向中国卖家推荐Lazada平台入驻服务',
+    title: t('practicePage.scenarios.seaLazada.title') as string,
+    desc: t('practicePage.scenarios.seaLazada.desc') as string,
     difficulty: 'medium',
-    greeting: '我们确实想做东南亚市场，但对Lazada不太了解，你能介绍一下吗？',
-    customerProfile: '想拓展东南亚市场的中国电商卖家',
-    objectives: ['消除跨境顾虑', '展示平台优势'],
+    greeting: t('practicePage.scenarios.seaLazada.greeting') as string,
+    customerProfile: t('practicePage.scenarios.seaLazada.profile') as string,
+    objectives: t('practicePage.scenarios.seaLazada.objectives', { returnObjects: true }) as string[],
     industry: '跨境电商',
   },
   'sea-saas-local': {
     id: 'sea-saas-local',
-    title: '本地化SaaS销售',
-    desc: '向东南亚企业销售SaaS产品',
+    title: t('practicePage.scenarios.seaSaasLocal.title') as string,
+    desc: t('practicePage.scenarios.seaSaasLocal.desc') as string,
     difficulty: 'hard',
-    greeting: '你们的数据中心在哪里？符合新加坡的PDPA合规要求吗？',
-    customerProfile: '新加坡企业IT负责人',
-    objectives: ['解决合规顾虑', '展示本地化能力'],
+    greeting: t('practicePage.scenarios.seaSaasLocal.greeting') as string,
+    customerProfile: t('practicePage.scenarios.seaSaasLocal.profile') as string,
+    objectives: t('practicePage.scenarios.seaSaasLocal.objectives', { returnObjects: true }) as string[],
     industry: 'SaaS',
   },
   'sea-payment': {
     id: 'sea-payment',
-    title: '跨境支付方案',
-    desc: '向电商卖家推广东南亚本地支付',
+    title: t('practicePage.scenarios.seaPayment.title') as string,
+    desc: t('practicePage.scenarios.seaPayment.desc') as string,
     difficulty: 'medium',
-    greeting: '现在用的支付方式在东南亚成功率很低，客户经常付不了款。',
-    customerProfile: '跨境电商卖家',
-    objectives: ['展示本地支付覆盖', '比较费率优势'],
+    greeting: t('practicePage.scenarios.seaPayment.greeting') as string,
+    customerProfile: t('practicePage.scenarios.seaPayment.profile') as string,
+    objectives: t('practicePage.scenarios.seaPayment.objectives', { returnObjects: true }) as string[],
     industry: '金融',
   },
-};
+});
 
 export default function PracticePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation() as { state?: { fromScript?: boolean; scenario?: string; scriptContent?: string; industry?: string; style?: string; coachingDirectives?: { pacingAndTone?: string; microBehaviors?: string } } };
@@ -187,7 +189,7 @@ export default function PracticePage() {
 
     if (scenarioId && isQuick && !quickStartRef.current) {
       quickStartRef.current = true;
-      const scenarioConfig = QUICK_SCENARIOS[scenarioId];
+      const scenarioConfig = getQuickScenarios(t)[scenarioId];
       if (scenarioConfig) {
         handleStartPractice({
           scenarioId: scenarioConfig.id,
@@ -211,22 +213,22 @@ export default function PracticePage() {
       const { scenario, scriptContent, industry, style, coachingDirectives } = location.state;
 
       // Build a richer description that includes coaching directives
-      let desc = scriptContent ? `基于生成的话术进行实战练习。\n\n参考话术：\n${scriptContent.slice(0, 500)}` : '基于生成的话术进行实战练习';
+      let desc = scriptContent ? `${t('practicePage.scriptBased')}。\n\n${t('practicePage.refScript')}\n${scriptContent.slice(0, 500)}` : t('practicePage.scriptBased');
       if (coachingDirectives) {
-        desc += '\n\n【教练指令】';
-        if (coachingDirectives.pacingAndTone) desc += `\n语速语调：${coachingDirectives.pacingAndTone}`;
-        if (coachingDirectives.microBehaviors) desc += `\n微行为：${coachingDirectives.microBehaviors}`;
+        desc += `\n\n${t('practicePage.coachingDirectives')}`;
+        if (coachingDirectives.pacingAndTone) desc += `\n${t('practicePage.pacingTone')}${coachingDirectives.pacingAndTone}`;
+        if (coachingDirectives.microBehaviors) desc += `\n${t('practicePage.microBehavior')}${coachingDirectives.microBehaviors}`;
       }
 
       handleStartPractice({
         scenarioId: 'from-script',
-        scenarioTitle: `话术练习: ${(scenario || '销售场景').slice(0, 30)}`,
+        scenarioTitle: `${t('practicePage.scriptPractice')}: ${(scenario || t('practicePage.salesScenario')).slice(0, 30)}`,
         scenarioDesc: desc,
         difficulty: 'medium',
-        greeting: '你好，请问有什么事吗？',
-        customerProfile: scenario || '普通客户',
-        objectives: ['运用话术完成销售对话'],
-        industry: industry || '通用',
+        greeting: t('practicePage.defaultGreeting'),
+        customerProfile: scenario || t('practicePage.salesScenario'),
+        objectives: [t('practicePage.useScript')],
+        industry: industry || t('practicePage.general'),
         mode: 'scenario',
         scriptStyle: style,
         coachingDirectives,
@@ -252,17 +254,20 @@ export default function PracticePage() {
 
     try {
       // Build scenario description with context
-      const scenarioDesc = `
-场景: ${config.scenarioTitle} - ${config.scenarioDesc}
-客户画像: ${config.customerProfile}
-练习目标: ${config.objectives.join('、')}
-${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
-      `.trim();
+      const parts = [
+        `${t('practicePage.scenarioLabel')}: ${config.scenarioTitle} - ${config.scenarioDesc}`,
+        `${t('practicePage.profileLabel')}: ${config.customerProfile}`,
+        `${t('practicePage.objectivesLabel')}: ${config.objectives.join(t('practicePage.objSeparator') as string)}`,
+      ];
+      if (config.documentContext) {
+        parts.push(`${t('practicePage.refLabel')}:\n${config.documentContext}`);
+      }
+      const scenarioDesc = parts.join('\n');
 
       // Initialize session with the API
       const response = await api.post('/practices/init', {
         scenario: scenarioDesc,
-        industry: config.industry || '通用',
+        industry: config.industry || t('practicePage.general'),
         mode: config.mode || 'scenario',
         maxRounds: 10,
         difficulty: config.difficulty,
@@ -296,7 +301,7 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
         messages.push({
           id: `fw-${Date.now()}`,
           role: 'assistant' as const,
-          content: `🎯 AI分析: 基于你的场景，推荐使用「${fwName}」销售框架${reason ? ` - ${reason}` : ''}`,
+          content: `${t('practicePage.aiAnalysis')}: ${t('practicePage.recommendFramework', { name: fwName })}${reason ? ` - ${reason}` : ''}`,
           timestamp: Date.now() + 1,
         });
       }
@@ -323,12 +328,12 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
       setView('chat');
       addActivity({
         type: 'practice_session',
-        title: '开始陪练',
+        title: t('practicePage.startActivity'),
         description: config.scenarioTitle,
       });
     } catch (error) {
       logger.error('Failed to start practice:', error);
-      toast.error('AI服务连接失败', { description: '无法连接AI陪练服务，请稍后重试' });
+      toast.error(t('practicePage.aiServiceFailed'), { description: t('practicePage.aiServiceFailedDesc') });
     } finally {
       setIsStarting(false);
     }
@@ -376,11 +381,11 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
           <div className="flex flex-col items-center justify-center space-y-4">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
             <div className="text-center">
-              <p className="text-lg font-medium text-gray-900">正在准备练习...</p>
-              <p className="text-sm text-gray-500">AI客户正在加载中</p>
+              <p className="text-lg font-medium text-gray-900">{t('practicePage.preparing')}</p>
+              <p className="text-sm text-gray-500">{t('practicePage.aiLoading')}</p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => { setIsStarting(false); setView('setup'); }}>
-              取消
+              {t('cancel')}
             </Button>
           </div>
         </Card>
@@ -393,19 +398,19 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">AI 陪练</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t('practicePage.title')}</h2>
           <p className="mt-1 text-sm text-gray-500">
-            {view === 'setup' && '选择场景，开始与AI客户对话练习'}
-            {view === 'chat' && '与AI客户对话中'}
-            {view === 'auto-report' && '练习完成'}
-            {view === 'summary' && '查看详细报告'}
+            {view === 'setup' && t('practicePage.setupDesc')}
+            {view === 'chat' && t('practicePage.chatDesc')}
+            {view === 'auto-report' && t('practicePage.reportDesc')}
+            {view === 'summary' && t('practicePage.summaryDesc')}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {view !== 'setup' && (
             <Button variant="ghost" size="sm" onClick={handleRestart}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              返回
+              {t('back')}
             </Button>
           )}
           <Button
@@ -414,7 +419,7 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
             onClick={() => navigate('/app/practice/history')}
           >
             <History className="mr-1.5 h-4 w-4" />
-            历史记录
+            {t('practicePage.history')}
           </Button>
         </div>
       </div>
@@ -438,8 +443,8 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
               <div className="text-center">
-                <p className="text-lg font-medium text-gray-900">AI 正在分析你的表现...</p>
-                <p className="text-sm text-gray-500">正在从8个维度评估你的销售技巧</p>
+                <p className="text-lg font-medium text-gray-900">{t('practicePage.analyzing')}</p>
+                <p className="text-sm text-gray-500">{t('practicePage.analyzingDesc')}</p>
               </div>
             </div>
           ) : autoReport ? (
@@ -452,15 +457,15 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
                   </span>
                 </div>
                 <p className="text-lg font-medium text-gray-900">
-                  {(autoReport.overall_score ?? 0.65) >= 0.8 ? '优秀！' :
-                   (autoReport.overall_score ?? 0.65) >= 0.6 ? '表现良好' : '继续加油'}
+                  {(autoReport.overall_score ?? 0.65) >= 0.8 ? t('practicePage.excellent') :
+                   (autoReport.overall_score ?? 0.65) >= 0.6 ? t('practicePage.good') : t('practicePage.keepGoing')}
                 </p>
               </div>
 
               {/* 优势 */}
               {autoReport.strengths && autoReport.strengths.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-green-700 mb-2">✅ 优势</h3>
+                  <h3 className="text-sm font-medium text-green-700 mb-2">{t('practicePage.strengths')}</h3>
                   <div className="space-y-1">
                     {autoReport.strengths.map((s: string, i: number) => (
                       <p key={i} className="text-sm text-gray-700 bg-green-50 rounded-lg px-3 py-2">{s}</p>
@@ -472,7 +477,7 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
               {/* 待改进 */}
               {autoReport.improvements && autoReport.improvements.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-amber-700 mb-2">💡 待改进</h3>
+                  <h3 className="text-sm font-medium text-amber-700 mb-2">{t('practicePage.improvements')}</h3>
                   <div className="space-y-1">
                     {autoReport.improvements.map((s: string, i: number) => (
                       <p key={i} className="text-sm text-gray-700 bg-amber-50 rounded-lg px-3 py-2">{s}</p>
@@ -484,7 +489,7 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
               {/* 雷达图分数 */}
               {autoReport.radarScores && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">📊 维度评分</h3>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">{t('practicePage.dimensionScores')}</h3>
                   <div className="grid grid-cols-2 gap-2">
                     {Object.entries(autoReport.radarScores).map(([key, value]) => {
                       // Normalize score: if 0-1 range, multiply by 100; if already 0-100, use as-is
@@ -498,7 +503,7 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
                             displayScore >= 70 ? 'text-green-600' :
                             displayScore >= 50 ? 'text-amber-600' : 'text-red-600'
                           )}>
-                            {displayScore}分
+                            {displayScore}{t('score')}
                           </span>
                         </div>
                       );
@@ -510,22 +515,22 @@ ${config.documentContext ? `\n参考资料:\n${config.documentContext}` : ''}
               {/* 操作按钮 */}
               <div className="flex gap-3 pt-4">
                 <Button variant="secondary" className="flex-1" onClick={handleRestart}>
-                  再练一次
+                  {t('practicePage.practiceAgain')}
                 </Button>
                 <Button className="flex-1" onClick={handleViewFullSummary}>
-                  查看详细报告
+                  {t('practicePage.viewDetailedReport')}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">报告生成失败，但你仍可查看详细报告</p>
+              <p className="text-gray-500 mb-4">{t('practicePage.reportFailed')}</p>
               <div className="flex gap-3 justify-center">
                 <Button variant="secondary" onClick={handleEndPractice}>
-                  重新生成
+                  {t('practicePage.regenerate')}
                 </Button>
                 <Button onClick={handleViewFullSummary}>
-                  查看详细报告
+                  {t('practicePage.viewDetailedReport')}
                 </Button>
               </div>
             </div>
