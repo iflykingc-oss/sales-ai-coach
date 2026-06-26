@@ -53,3 +53,8 @@ coverage/
 test-all-features.js
 e2e-test.js
 e2e-debug.js
+
+# E2E debug artifacts (contain screenshots, may include sensitive UI state)
+e2e-error.png
+e2e-login.png
+product-demo.html

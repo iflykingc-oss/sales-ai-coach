@@ -44,6 +44,10 @@ class DingTalkChannel(ChatChannel):
 
     async def start(self):
         """Start DingTalk Stream listener."""
+        if not self.client_id or not self.client_secret:
+            raise RuntimeError(
+                "[dingtalk] client_id and client_secret are required."
+            )
         try:
             import dingtalk_stream
 

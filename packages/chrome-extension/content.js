@@ -72,9 +72,13 @@
           persona: state.persona,
           talkRatio: getTalkRatioText(),
         }
+      }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SalesCoach] state broadcast:', chrome.runtime.lastError.message);
+        }
       });
     } catch (err) {
-      // sidepanel可能未打开，忽略错误
+      console.warn('[SalesCoach] state broadcast exception:', err);
     }
   }
 
@@ -88,9 +92,13 @@
           type: type,
           time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
         }
+      }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SalesCoach] tip broadcast:', chrome.runtime.lastError.message);
+        }
       });
     } catch (err) {
-      // 忽略
+      console.warn('[SalesCoach] tip broadcast exception:', err);
     }
   }
 

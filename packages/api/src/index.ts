@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import crypto from 'crypto';
+import { logger as _encLogger } from './lib/logger.js';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -20,6 +21,16 @@ process.on('uncaughtException', (err: Error) => {
   logger.error('Uncaught exception', err);
   process.exit(1);
 });
+
+// Fail-fast on startup if ENCRYPTION_KEY is missing or wrong length.
+// In production, hard-exit; in dev, log a warning so the operator notices.
+if (!process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_KEY.length !== 64) {
+  _encLogger.error(
+    'ENCRYPTION_KEY is missing or not 64 hex chars (32 bytes). ' +
+    'Generate with: openssl rand -hex 32'
+  );
+  if (process.env.NODE_ENV === 'production') process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;

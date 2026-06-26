@@ -55,6 +55,14 @@ class FeishuChannel(ChatChannel):
 
     async def start(self):
         """Start Feishu WebSocket listener."""
+        # Security: refuse to start without signing material. An empty
+        # verification_token / encrypt_key would make the SDK accept
+        # unverified events silently.
+        if not self.verification_token or not self.encrypt_key:
+            raise RuntimeError(
+                "[feishu] verification_token and encrypt_key are required. "
+                "Refusing to start an unsigned listener."
+            )
         try:
             import lark_oapi as lark
             from lark_oapi.ws import Client as WsClient

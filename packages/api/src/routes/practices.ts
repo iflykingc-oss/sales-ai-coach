@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { prisma } from '../lib/prisma.js';
-import { sendPracticeMessage, callAiService } from '../services/ai.service.js';
+import { sendPracticeMessage, callAiService, aiServiceHeaders } from '../services/ai.service.js';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 const router = Router();
@@ -163,7 +163,7 @@ router.post('/message/stream', authMiddleware, aiLimiter, async (req, res, next)
 
     const aiRes = await fetch(`${AI_SERVICE_URL}/api/practices/message/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: aiServiceHeaders(),
       body: JSON.stringify({ sessionId, message, logicFramework: logicFramework || '' }),
     });
 

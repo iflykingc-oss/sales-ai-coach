@@ -8,3 +8,5 @@ anthropic==0.42.0
 python-multipart==0.0.20
 python-dotenv==1.0.1
 redis==5.2.1
+lark-oapi==1.4.5
+cryptography>=42.0.0

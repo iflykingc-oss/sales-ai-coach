@@ -19,6 +19,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { apiKeyAuth, requirePermission, logApiUsage } from '../middleware/apiKey.js';
+import { aiServiceHeaders } from '../services/ai.service.js';
 import { salesLogicFrameworks } from '@sales-ai-coach/shared';
 
 const router = Router();

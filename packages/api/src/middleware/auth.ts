@@ -75,6 +75,13 @@ export async function authMiddlewareVerified(req: Request, res: Response, next: 
   }
 }
 
+/**
+ * SECURITY WARNING: this middleware does NOT reject unauthenticated
+ * requests. It only tries to parse a token if one is present. If you
+ * use this, you MUST check `req.user` inside the route handler and
+ * return 401 if it is missing. Used in routes that work for both anon
+ * and authenticated users (e.g. public landing pages with personalization).
+ */
 export function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
   if (token) {

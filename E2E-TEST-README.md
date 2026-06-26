@@ -87,3 +87,23 @@ pnpm test:e2e
 - 失败的测试用例
 - 错误截图（自动保存在 `e2e-error.png`）
 - 浏览器控制台日志
+
+
+## Environment Variables
+
+E2E tests now require credentials from CI; no hardcoded admin passwords.
+
+- `E2E_BASE_URL` - target domain, defaults to `http://localhost:5173`. Do not point at production.
+- `E2E_TEST_EMAIL` - login email for the test account. Use a dedicated low-privilege test user.
+- `E2E_TEST_PASSWORD` - matching password.
+
+### GitHub Actions example
+
+```yaml
+- name: Run E2E
+  env:
+    E2E_BASE_URL: https://staging.aisalecoach.work
+    E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+    E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+  run: pnpm test:e2e
+```

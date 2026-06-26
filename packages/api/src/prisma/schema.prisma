@@ -93,6 +93,7 @@ model User {
   assignedTasks   TeamTask[]
   apiKeys         ApiKey[]
   planChanges     PlanChange[]
+  refreshTokens   RefreshToken[]
   subscription    Subscription?
   skillScores     SkillScore[]
 
@@ -414,6 +415,27 @@ model ConsentRecord {
 
   @@index([userId, type])
   @@map("consent_records")
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique @map("token_hash")
+  // family ties rotated tokens together so reuse of an old token can
+  // revoke the entire family (defense against stolen refresh tokens).
+  family      String
+  expiresAt   DateTime @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  replacedBy  String?  @map("replaced_by")
+  userAgent   String?  @map("user_agent")
+  ip          String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([family])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
 
 enum ConsentType {

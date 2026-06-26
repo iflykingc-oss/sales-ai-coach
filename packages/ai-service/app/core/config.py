@@ -37,11 +37,17 @@ class Settings(BaseSettings):
     feishu_app_secret: str = ""
     feishu_verification_token: str = ""
     feishu_encrypt_key: str = ""
+    feishu_allow_unencrypted: bool = False
+
     dingtalk_client_id: str = ""
     dingtalk_client_secret: str = ""
+    dingtalk_app_secret: str = ""
 
     # Feature flags
     use_langgraph_coaching: bool = False
+
+    # AI Service auth (shared secret for inbound API calls, separate from cookies)
+    ai_service_api_key: str = ""
 
     class Config:
         env_file = ".env"
